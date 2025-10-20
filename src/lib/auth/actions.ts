@@ -20,7 +20,7 @@ const emailSchema = z.string().email();
 const passwordSchema = z.string().min(8).max(128);
 const nameSchema = z.string().min(1).max(100);
 
-// Guest sessions
+// ------------------ Guest sessions ------------------
 export async function createGuestSession() {
   const cookieStore = await cookies();
   const existing = (await cookieStore).get("guest_session");
@@ -41,11 +41,14 @@ export async function guestSession() {
   if (!token) return { sessionToken: null };
 
   const now = new Date();
-  await db.delete(guests).where(and(eq(guests.sessionToken, token), lt(guests.expiresAt, now)));
+  await db
+    .delete(guests)
+    .where(and(eq(guests.sessionToken, token), lt(guests.expiresAt, now)));
+
   return { sessionToken: token };
 }
 
-// Sign-up / Sign-in
+// ------------------ Sign up / Sign in ------------------
 const signUpSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
@@ -60,9 +63,9 @@ export async function signUp(formData: FormData) {
   };
   const data = signUpSchema.parse(raw);
 
-  const res = await auth.api.signUpEmail({ body: data });
+  const result = await auth.api.signUpEmail({ body: data });
   await migrateGuestToUser();
-  return { ok: true, userId: res.user?.id };
+  return { ok: true, userId: result.user?.id };
 }
 
 const signInSchema = z.object({
@@ -77,9 +80,9 @@ export async function signIn(formData: FormData) {
   };
   const data = signInSchema.parse(raw);
 
-  const res = await auth.api.signInEmail({ body: data });
+  const result = await auth.api.signInEmail({ body: data });
   await migrateGuestToUser();
-  return { ok: true, userId: res.user?.id };
+  return { ok: true, userId: result.user?.id };
 }
 
 export async function getCurrentUser() {
@@ -93,8 +96,8 @@ export async function getCurrentUser() {
 
 export async function signOut() {
   // Forward cookies so better-auth clears the session token
-  const h = new Headers(await headers());
-  const res = await auth.api.signOut({ headers: h as any });
+  const forwardedHeaders = new Headers(await headers());
+  await auth.api.signOut({ headers: forwardedHeaders });
   return { ok: true };
 }
 
