@@ -5,8 +5,19 @@ import { useEffect, useState } from "react";
 import { getCurrentUser, signOut } from "@/lib/auth/actions";
 import Link from "next/link";
 
+/** 
+ * Type for user returned by BetterAuth getCurrentUser()
+ */
+type User = {
+  id: string;
+  name: string | null;
+  email: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
 export default function AccountPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
