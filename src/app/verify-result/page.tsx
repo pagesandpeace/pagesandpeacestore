@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
+// ✅ disable static prerendering
+export const dynamic = "force-dynamic";
+
 export default function VerifyResult() {
   const params = useSearchParams();
   const error = params.get("error");
