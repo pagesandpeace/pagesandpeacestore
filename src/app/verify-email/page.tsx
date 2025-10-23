@@ -1,14 +1,14 @@
 // src/app/verify-email/page.tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-export default async function VerifyEmailPage(props: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
-  const token = typeof props.searchParams?.token === "string" ? props.searchParams.token : undefined;
+export default async function VerifyEmailPage({ searchParams }: any) {
+  const token =
+    typeof searchParams?.token === "string" ? searchParams.token : undefined;
   const callbackURL =
-    typeof props.searchParams?.callbackURL === "string"
-      ? props.searchParams.callbackURL
+    typeof searchParams?.callbackURL === "string"
+      ? searchParams.callbackURL
       : "/verify-success";
 
   if (!token) {
