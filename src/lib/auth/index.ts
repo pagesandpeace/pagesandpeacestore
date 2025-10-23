@@ -9,8 +9,8 @@ import { Resend } from "resend";
 // ✅ Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
-// ✅ Use correct domain depending on environment
-const baseUrl =
+// ✅ Detect correct base URL depending on environment
+const BASE_URL =
   process.env.NODE_ENV === "production"
     ? "https://pagesandpeace.co.uk"
     : "http://localhost:3000";
@@ -30,17 +30,18 @@ export const auth = betterAuth({
   /* ---------- Email + Password Auth ---------- */
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true, // must verify before sign-in
+    requireEmailVerification: true,
   },
 
   /* ---------- Email Verification ---------- */
   emailVerification: {
-    sendOnSignUp: true, // automatically send when signing up
+    enabled: true,
+    sendOnSignUp: true,
+    sendOnSignIn: false,
+    requireVerificationBeforeSignIn: true,
 
     async sendVerificationEmail({ user, url }) {
-      // ✅ Construct absolute URL and ensure proper redirect
-      const verifyUrl = `${baseUrl}${url}&callbackURL=/verify-success`;
-
+      const verifyUrl = `${BASE_URL}${url}`;
       try {
         await resend.emails.send({
           from: "Pages & Peace <hello@pagesandpeace.co.uk>",
@@ -62,8 +63,6 @@ export const auth = betterAuth({
             </div>
           `,
         });
-
-        console.log(`📧 Verification email sent to ${user.email}`);
       } catch (err) {
         console.error("❌ Failed to send verification email:", err);
       }
