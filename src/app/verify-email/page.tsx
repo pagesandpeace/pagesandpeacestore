@@ -2,13 +2,14 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-export default async function VerifyEmailPage({
-  searchParams,
-}: {
-  searchParams: { token?: string; callbackURL?: string };
+export default async function VerifyEmailPage(props: {
+  searchParams?: Record<string, string | string[] | undefined>;
 }) {
-  const token = searchParams?.token;
-  const callbackURL = searchParams?.callbackURL || "/verify-success";
+  const token = typeof props.searchParams?.token === "string" ? props.searchParams.token : undefined;
+  const callbackURL =
+    typeof props.searchParams?.callbackURL === "string"
+      ? props.searchParams.callbackURL
+      : "/verify-success";
 
   if (!token) {
     return (
