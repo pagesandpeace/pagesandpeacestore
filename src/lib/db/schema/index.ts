@@ -54,17 +54,15 @@ export const accounts = pgTable("accounts", {
 });
 
 /* ---------------- VERIFICATIONS ---------------- */
-export const verifications = pgTable("verifications", {
+export const verifications = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
-  value: text("value").notNull(),
+  value: text("value").notNull().unique(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
+
 
 /* ---------------- GUESTS ---------------- */
 export const guests = pgTable("guests", {
