@@ -30,7 +30,7 @@ export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Pr
         if (result && typeof result === "object" && "ok" in result && result.ok) {
           // ✅ If backend specifies a custom redirect (like verify-pending), use it
           if ("redirectTo" in result && result.redirectTo) {
-            router.push(result.redirectTo);
+            router.push(result.redirectTo ?? "/account");
           } else {
             router.push(redirectTo);
           }

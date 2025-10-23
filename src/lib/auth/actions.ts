@@ -56,25 +56,23 @@ const signUpSchema = z.object({
 });
 
 export async function signUp(formData: FormData) {
-  const raw = {
+  const data = signUpSchema.parse({
     name: formData.get("name") as string,
     email: formData.get("email") as string,
     password: formData.get("password") as string,
-  };
-  const data = signUpSchema.parse(raw);
+  });
 
   const result = await auth.api.signUpEmail({ body: data });
 
-  // Clean up any temporary guest session
   await migrateGuestToUser();
 
-  // ✅ Return a signal so the client can redirect to the verification page
   return {
     ok: true,
     userId: result.user?.id,
-    redirectTo: "/verify-pending",
+    redirectTo: "/verify-pending", // ✅ handled client-side
   };
 }
+
 
 
 const signInSchema = z.object({
