@@ -62,7 +62,13 @@ export async function signUp(formData: FormData) {
     password: formData.get("password") as string,
   });
 
-  const result = await auth.api.signUpEmail({ body: data });
+  const result = await auth.api.signUpEmail({
+  body: {
+    ...data,
+    callbackURL: "/verify-success", // ✅ redirect here after verification
+  },
+});
+
 
   await migrateGuestToUser();
 
