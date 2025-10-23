@@ -12,15 +12,15 @@ if (!connectionString) {
 // ✅ Log once when loaded
 console.log("📡 Connecting to DB:", connectionString);
 
-const globalForDb = global as unknown as { pgPool?: Pool; db?: ReturnType<typeof drizzle> };
+const globalForDb = global as unknown as {
+  pgPool?: Pool;
+  db?: ReturnType<typeof drizzle>;
+};
 
 if (!globalForDb.pgPool) {
   globalForDb.pgPool = new Pool({
     connectionString,
-    ssl: {
-      require: true,
-      rejectUnauthorized: false, // 👈 critical: allows self-signed certs
-    },
+    ssl: { rejectUnauthorized: false }, // ✅ correct syntax for SSL in pg
   });
 }
 
