@@ -143,13 +143,18 @@ export async function changePassword(currentPassword: string, newPassword: strin
       return { ok: true, message: "Password changed successfully (empty response)." };
     }
 
-    if (result?.user || result?.status === 200) {
+    // ✅ Type-safe check (no `.status` unless result has it)
+    if ("user" in result || ("status" in result && (result as { status?: number }).status === 200)) {
       return { ok: true, message: "Password updated successfully." };
     }
 
     return { ok: false, message: "Unexpected response from API." };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("❌ Password change error:", err);
-    return { ok: false, message: err?.message || "Password change failed." };
+
+    let message = "Password change failed.";
+    if (err instanceof Error) message = err.message;
+
+    return { ok: false, message };
   }
 }
