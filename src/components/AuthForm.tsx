@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 
 type Props = {
   mode: "sign-in" | "sign-up";
@@ -26,9 +27,7 @@ export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Pr
     startTransition(async () => {
       try {
         const result = await onSubmit(formData);
-
         if (result && typeof result === "object" && "ok" in result && result.ok) {
-          // ✅ If backend specifies a custom redirect (like verify-pending), use it
           if ("redirectTo" in result && result.redirectTo) {
             router.push(result.redirectTo ?? "/account");
           } else {
@@ -45,43 +44,36 @@ export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Pr
   };
 
   return (
-    <div className="space-y-8 font-[Montserrat] text-[#111]">
-      {/* Header */}
-      <div className="text-center">
-        <p className="text-sm text-[#111]/70">
-          {mode === "sign-in" ? "Don’t have an account? " : "Already have an account? "}
-          <Link
-            href={mode === "sign-in" ? "/sign-up" : "/sign-in"}
-            className="underline text-[#5DA865] font-medium hover:opacity-80"
-          >
-            {mode === "sign-in" ? "Sign Up" : "Sign In"}
-          </Link>
-        </p>
-
-        <h1 className="mt-4 text-3xl sm:text-4xl font-semibold text-[#111] tracking-wide">
-          {mode === "sign-in" ? "Welcome Back ☕" : "Join Pages & Peace 📚"}
-        </h1>
-        <p className="mt-2 text-base text-[#111]/70">
+    <div className="space-y-10 font-[Montserrat] text-[var(--foreground)]">
+      {/* Header — clean and minimal */}
+      <div className="text-center space-y-4">
+        <h1 className="text-3xl sm:text-4xl font-semibold tracking-wide text-[var(--accent)]">
           {mode === "sign-in"
-            ? "Sign in to continue your story."
-            : "Create your account and start your next chapter."}
-        </p>
+            ? "Don’t have an account?"
+            : "Already have an account?"}
+        </h1>
+        <Link
+          href={mode === "sign-in" ? "/sign-up" : "/sign-in"}
+          className="inline-block text-lg font-semibold underline text-[var(--foreground)] hover:text-[var(--accent)] transition"
+        >
+          {mode === "sign-in" ? "Sign Up" : "Sign In"}
+        </Link>
       </div>
 
       {/* Divider */}
-      <div className="flex items-center gap-4">
-        <hr className="h-px w-full border-0 bg-[#d6d1cb]" />
-        <span className="text-sm text-[#777]">
+      <div className="flex items-center gap-3 text-sm text-[#777]">
+        <hr className="flex-1 border-t border-[#d6d1cb]" />
+        <span className="px-2 whitespace-nowrap">
           Or {mode === "sign-in" ? "sign in" : "sign up"} with
         </span>
-        <hr className="h-px w-full border-0 bg-[#d6d1cb]" />
+        <hr className="flex-1 border-t border-[#d6d1cb]" />
       </div>
 
       {/* Form */}
-      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+      <form className="space-y-6" onSubmit={handleSubmit} noValidate>
         {mode === "sign-up" && (
           <div className="space-y-1">
-            <label htmlFor="name" className="text-sm font-medium text-[#111]">
+            <label htmlFor="name" className="text-sm font-medium">
               Name
             </label>
             <input
@@ -89,7 +81,7 @@ export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Pr
               name="name"
               type="text"
               placeholder="Your name"
-              className="w-full rounded-md border border-[#ccc] bg-white px-4 py-3 text-[#111] placeholder:text-[#777] focus:outline-none focus:ring-2 focus:ring-[#5DA865]/40"
+              className="w-full rounded-md border border-[#ccc] bg-white px-4 py-3 text-[#111] placeholder:text-[#777] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
               autoComplete="name"
               required
             />
@@ -97,7 +89,7 @@ export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Pr
         )}
 
         <div className="space-y-1">
-          <label htmlFor="email" className="text-sm font-medium text-[#111]">
+          <label htmlFor="email" className="text-sm font-medium">
             Email
           </label>
           <input
@@ -105,14 +97,14 @@ export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Pr
             name="email"
             type="email"
             placeholder="you@example.com"
-            className="w-full rounded-md border border-[#ccc] bg-white px-4 py-3 text-[#111] placeholder:text-[#777] focus:outline-none focus:ring-2 focus:ring-[#5DA865]/40"
+            className="w-full rounded-md border border-[#ccc] bg-white px-4 py-3 text-[#111] placeholder:text-[#777] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
             autoComplete="email"
             required
           />
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="password" className="text-sm font-medium text-[#111]">
+          <label htmlFor="password" className="text-sm font-medium">
             Password
           </label>
           <div className="relative">
@@ -121,17 +113,17 @@ export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Pr
               name="password"
               type={show ? "text" : "password"}
               placeholder="Minimum 8 characters"
-              className="w-full rounded-md border border-[#ccc] bg-white px-4 py-3 pr-12 text-[#111] placeholder:text-[#777] focus:outline-none focus:ring-2 focus:ring-[#5DA865]/40"
+              className="w-full rounded-md border border-[#ccc] bg-white px-4 py-3 pr-12 text-[#111] placeholder:text-[#777] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
               autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
               minLength={8}
               required
             />
             <button
               type="button"
-              className="absolute inset-y-0 right-0 px-3 text-sm text-[#555] hover:text-[#111]"
+              className="absolute inset-y-0 right-3 flex items-center text-[#777] hover:text-[#111] focus:outline-none"
               onClick={() => setShow((v) => !v)}
             >
-              {show ? "Hide" : "Show"}
+              {show ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </div>
@@ -145,19 +137,19 @@ export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Pr
         <button
           type="submit"
           disabled={isPending}
-          className="w-full rounded-full bg-[#5DA865] text-[#FAF6F1] px-6 py-3 font-semibold text-base hover:bg-[#4e9156] focus:outline-none focus:ring-2 focus:ring-[#5DA865]/40 disabled:opacity-60"
+          className="w-full rounded-full bg-[var(--accent)] text-[var(--background)] px-6 py-3 font-semibold text-base hover:bg-[#4e9156] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 disabled:opacity-60 transition"
         >
           {isPending ? "Please wait…" : mode === "sign-in" ? "Sign In" : "Create Account"}
         </button>
 
         {mode === "sign-up" && (
-          <p className="text-center text-xs text-[#777] mt-2">
+          <p className="text-center text-xs text-[#777] mt-3">
             By signing up, you agree to our{" "}
-            <a href="#" className="underline text-[#5DA865]">
+            <a href="#" className="underline text-[var(--accent)]">
               Terms of Service
             </a>{" "}
             and{" "}
-            <a href="#" className="underline text-[#5DA865]">
+            <a href="#" className="underline text-[var(--accent)]">
               Privacy Policy
             </a>
             .

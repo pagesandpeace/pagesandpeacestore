@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#FAF6F1] flex flex-col items-center justify-between px-6 py-16 text-center">
+    <main className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-between px-6 py-16 text-center">
       {/* --- Logo Section --- */}
       <section className="flex flex-col items-center mt-10">
         <Image
@@ -13,10 +13,10 @@ export default function Home() {
           height={140}
           className="mb-6"
         />
-        <h1 className="font-montserrat text-4xl sm:text-6xl tracking-widest text-[#111111]">
+        <h1 className="font-montserrat text-4xl sm:text-6xl tracking-widest text-[var(--foreground)]">
           PAGES & PEACE
         </h1>
-        <p className="mt-4 text-[#111111]/80 text-lg max-w-md leading-relaxed">
+        <p className="mt-4 text-[color:var(--foreground)]/80 text-lg max-w-md leading-relaxed">
           ☕ Every community needs a chapter.
         </p>
       </section>
@@ -25,13 +25,13 @@ export default function Home() {
       <section className="flex flex-col sm:flex-row gap-4 mt-10">
         <Link
           href="/shop"
-          className="px-8 py-3 bg-[#5DA865] text-[#FAF6F1] rounded-full font-semibold text-lg hover:bg-[#4e9156] transition-all shadow-sm"
+          className="btn-primary text-lg font-semibold shadow-sm"
         >
           🛍️ Browse the Shop
         </Link>
         <Link
           href="/book-club"
-          className="px-8 py-3 border-2 border-[#5DA865] text-[#111111] rounded-full font-semibold text-lg hover:bg-[#5DA865]/10 transition-all"
+          className="btn-outline text-lg font-semibold"
         >
           📚 Join the Book Club
         </Link>
@@ -39,18 +39,20 @@ export default function Home() {
 
       {/* --- Auth Links --- */}
       <section className="mt-20">
-        <p className="text-[#111111]/70 mb-3">Ready to make it personal?</p>
+        <p className="text-[color:var(--foreground)]/70 mb-3">
+          Ready to make it personal?
+        </p>
         <div className="flex gap-4 justify-center">
           <Link
             href="/sign-in"
-            className="text-[#5DA865] font-semibold hover:underline"
+            className="text-[color:var(--accent)] font-semibold hover:underline"
           >
             Sign In
           </Link>
-          <span className="text-[#5DA865]/50">|</span>
+          <span className="text-[color:var(--accent)]/50">|</span>
           <Link
             href="/sign-up"
-            className="text-[#5DA865] font-semibold hover:underline"
+            className="text-[color:var(--accent)] font-semibold hover:underline"
           >
             Create Account
           </Link>
@@ -58,10 +60,12 @@ export default function Home() {
       </section>
 
       {/* --- Footer --- */}
-      <footer className="mt-24 text-sm text-[#111111]/60">
+      <footer className="mt-24 text-sm text-[color:var(--foreground)]/60">
         © {new Date().getFullYear()}{" "}
-        <span className="text-[#111] font-medium">Pages & Peace</span> · Crafted
-        with ☕ & 📚
+        <span className="text-[color:var(--foreground)] font-medium">
+          Pages & Peace
+        </span>{" "}
+        · Crafted with ☕ & 📚
       </footer>
     </main>
   );
