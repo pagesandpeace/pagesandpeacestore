@@ -30,7 +30,7 @@ export default function VerifyPending() {
 
       <Link
         href="/"
-        className="mt-10 px-8 py-3 bg-[#5DA865] text-[#FAF6F1] rounded-full font-semibold text-lg hover:opacity-90 transition-all"
+        className="mt-10 inline-block px-8 py-3 rounded-full bg-[#5DA865] !text-[#FAF6F1] font-semibold text-lg hover:opacity-90 transition-all"
       >
         🏡 Return Home
       </Link>

@@ -13,7 +13,7 @@ type Props = {
   redirectTo?: string;
 };
 
-export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Props) {
+export default function AuthForm({ mode, onSubmit, redirectTo = "/dashboard" }: Props) {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -29,7 +29,7 @@ export default function AuthForm({ mode, onSubmit, redirectTo = "/account" }: Pr
         const result = await onSubmit(formData);
         if (result && typeof result === "object" && "ok" in result && result.ok) {
           if ("redirectTo" in result && result.redirectTo) {
-            router.push(result.redirectTo ?? "/account");
+            router.push(result.redirectTo ?? "/dashboard");
           } else {
             router.push(redirectTo);
           }

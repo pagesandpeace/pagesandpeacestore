@@ -2,15 +2,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema/index";
 
-// ✅ Choose DATABASE_URL first, fallback to DIRECT_URL if needed
-const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
+const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
   throw new Error("❌ DATABASE_URL is not defined. Check your .env.local file.");
 }
 
-// ✅ Log once when loaded
-console.log("📡 Connecting to DB:", connectionString);
+console.log("📡 Connecting to Supabase DB...");
 
 const globalForDb = global as unknown as {
   pgPool?: Pool;
@@ -18,9 +16,19 @@ const globalForDb = global as unknown as {
 };
 
 if (!globalForDb.pgPool) {
+  // 🩵 Supabase PgBouncer fix:
+  // Remove sslmode and pgbouncer params from the connection string
+  // because we handle SSL manually below.
+  const cleanUrl = connectionString
+    .replace("?pgbouncer=true&sslmode=require", "")
+    .replace("&pgbouncer=true", "")
+    .replace("?sslmode=require", "");
+
   globalForDb.pgPool = new Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false }, // ✅ correct syntax for SSL in pg
+    connectionString: cleanUrl,
+    ssl: {
+      rejectUnauthorized: false, // ✅ Trust self-signed Supabase SSL
+    },
   });
 }
 

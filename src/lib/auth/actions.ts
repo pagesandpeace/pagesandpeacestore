@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { z } from "zod";
 import { auth } from ".";
 import { db } from "../db";
-import { guests } from "../db/schema/index";
+import { guests } from "../db/schema";
 import { and, eq, lt } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -13,9 +13,10 @@ const COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === "production",
   sameSite: "strict" as const,
   path: "/" as const,
-  maxAge: 60 * 60 * 24 * 7,
+  maxAge: 60 * 60 * 24 * 7, // 7 days
 };
 
+// ✅ Validation Schemas
 const emailSchema = z.string().email();
 const passwordSchema = z.string().min(8).max(128);
 const nameSchema = z.string().min(1).max(100);
@@ -23,7 +24,7 @@ const nameSchema = z.string().min(1).max(100);
 // ------------------ Guest sessions ------------------
 export async function createGuestSession() {
   const cookieStore = await cookies();
-  const existing = (await cookieStore).get("guest_session");
+  const existing = cookieStore.get("guest_session");
   if (existing?.value) return { ok: true, sessionToken: existing.value };
 
   const sessionToken = randomUUID();
@@ -31,13 +32,13 @@ export async function createGuestSession() {
   const expiresAt = new Date(now.getTime() + COOKIE_OPTIONS.maxAge * 1000);
 
   await db.insert(guests).values({ sessionToken, expiresAt });
-  (await cookieStore).set("guest_session", sessionToken, COOKIE_OPTIONS);
+  cookieStore.set("guest_session", sessionToken, COOKIE_OPTIONS);
   return { ok: true, sessionToken };
 }
 
 export async function guestSession() {
   const cookieStore = await cookies();
-  const token = (await cookieStore).get("guest_session")?.value;
+  const token = cookieStore.get("guest_session")?.value;
   if (!token) return { sessionToken: null };
 
   const now = new Date();
@@ -63,23 +64,20 @@ export async function signUp(formData: FormData) {
   });
 
   const result = await auth.api.signUpEmail({
-  body: {
-    ...data,
-    callbackURL: "/verify-success", // ✅ redirect here after verification
-  },
-});
-
+    body: {
+      ...data,
+      callbackURL: "/verify-success", // ✅ redirect after verification
+    },
+  });
 
   await migrateGuestToUser();
 
   return {
     ok: true,
     userId: result.user?.id,
-    redirectTo: "/verify-pending", // ✅ handled client-side
+    redirectTo: "/verify-pending",
   };
 }
-
-
 
 const signInSchema = z.object({
   email: emailSchema,
@@ -87,17 +85,19 @@ const signInSchema = z.object({
 });
 
 export async function signIn(formData: FormData) {
-  const raw = {
+  const data = signInSchema.parse({
     email: formData.get("email") as string,
     password: formData.get("password") as string,
-  };
-  const data = signInSchema.parse(raw);
+  });
 
   const result = await auth.api.signInEmail({ body: data });
   await migrateGuestToUser();
-  return { ok: true, userId: result.user?.id };
+
+  // ✅ Redirect users to /dashboard now
+  return { ok: true, userId: result.user?.id, redirectTo: "/dashboard" };
 }
 
+// ------------------ Session / Auth helpers ------------------
 export async function getCurrentUser() {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -108,7 +108,6 @@ export async function getCurrentUser() {
 }
 
 export async function signOut() {
-  // Forward cookies so better-auth clears the session token
   const forwardedHeaders = new Headers(await headers());
   await auth.api.signOut({ headers: forwardedHeaders });
   return { ok: true };
@@ -121,8 +120,36 @@ export async function mergeGuestCartWithUserCart() {
 
 async function migrateGuestToUser() {
   const cookieStore = await cookies();
-  const token = (await cookieStore).get("guest_session")?.value;
+  const token = cookieStore.get("guest_session")?.value;
   if (!token) return;
+
   await db.delete(guests).where(eq(guests.sessionToken, token));
-  (await cookieStore).delete("guest_session");
+  cookieStore.delete("guest_session");
+}
+
+// ------------------ Change Password ------------------
+export async function changePassword(currentPassword: string, newPassword: string) {
+  try {
+    const forwardedHeaders = new Headers(await headers());
+    const result = await auth.api.changePassword({
+      body: { currentPassword, newPassword },
+      headers: forwardedHeaders,
+    });
+
+    console.log("🔍 Password change response:", result);
+
+    // Sometimes Better Auth returns empty response on success
+    if (!result || Object.keys(result).length === 0) {
+      return { ok: true, message: "Password changed successfully (empty response)." };
+    }
+
+    if (result?.user || result?.status === 200) {
+      return { ok: true, message: "Password updated successfully." };
+    }
+
+    return { ok: false, message: "Unexpected response from API." };
+  } catch (err: any) {
+    console.error("❌ Password change error:", err);
+    return { ok: false, message: err?.message || "Password change failed." };
+  }
 }

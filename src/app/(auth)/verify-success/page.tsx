@@ -24,11 +24,12 @@ export default function VerifySuccess() {
       </p>
 
       <Link
-        href="/sign-in"
-        className="mt-10 px-8 py-3 bg-[#5DA865] text-[#FAF6F1] rounded-full font-semibold text-lg hover:opacity-90 transition-all"
-      >
-        ✨ Continue to Sign In
-      </Link>
+  href="/sign-in"
+  className="mt-10 inline-block px-8 py-3 rounded-full bg-[#5DA865] !text-[#FAF6F1] font-semibold text-lg hover:opacity-90 transition-all"
+>
+  ✨ Continue to Sign In
+</Link>
+
 
       <footer className="mt-16 text-sm text-[#111111]/60">
         © {new Date().getFullYear()} Pages & Peace · Crafted with ☕ & 📚
