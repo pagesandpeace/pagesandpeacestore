@@ -57,12 +57,12 @@ export default function MenuPage() {
             title="Drinks"
             items={[
               ["Espresso", "£2.00"],
+              ["Americano", "£2.60"],
+              ["Latte", "£3.50"],
               ["Cappuccino", "£3.50"],
-              ["Latte", "£3.00"],
-              ["Americano", "£3.00"],
               ["Flat White", "£3.20"],
-              ["Mocha", "£3.20"],
-              ["Hot Chocolate", "£2.60"],
+              ["Mocha", "£3.70"],
+              ["Hot Chocolate", "£3.20"],
               ["Luxury Hot Chocolate", "£4.20"],
               ["Yorkshire Tea", "£2.50"],
             ]}
@@ -145,10 +145,10 @@ export default function MenuPage() {
             title="Savoury"
             items={[
               ["Pork, Apple & Red Onion Chutney Sausage Roll", "£3.50"],
-              ["Curried Jackfruit, Aloo Gobi Bubble & Squeak", "£3.25"],
+              ["Curried Jackfruit, Aloo Gobi Bubble & Squeak", "£3.50"],
               [
                 "Ploughman’s Roll with Cheddar, Onion & Tomato Relish",
-                "£3.25",
+                "£3.50",
               ],
             ]}
           />
