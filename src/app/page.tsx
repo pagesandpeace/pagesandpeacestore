@@ -35,6 +35,13 @@ export default function Home() {
         >
           📚 Join the Book Club
         </Link>
+        {/* Added Menu Link */}
+        <Link
+          href="/menu"
+          className="btn-primary text-lg font-semibold shadow-sm"
+        >
+          🍽️ View the Menu
+        </Link>
       </section>
 
       {/* --- Auth Links --- */}
