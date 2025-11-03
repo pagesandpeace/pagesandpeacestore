@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
 
 /* ---------------- USERS ---------------- */
 export const users = pgTable("users", {
@@ -31,7 +31,7 @@ export const sessions = pgTable("sessions", {
     .notNull(),
 });
 
-/* ---------------- ACCOUNTS (Better Auth Compatible) ---------------- */
+/* ---------------- ACCOUNTS ---------------- */
 export const accounts = pgTable("accounts", {
   id: text("id").primaryKey(),
   accountId: text("account_id").notNull(),
@@ -66,8 +66,6 @@ export const verifications = pgTable("verification", {
     .notNull(),
 });
 
-
-
 /* ---------------- GUESTS ---------------- */
 export const guests = pgTable("guests", {
   sessionToken: text("session_token").primaryKey(),
@@ -75,8 +73,8 @@ export const guests = pgTable("guests", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-/* ---------------- CATEGORIES ---------------- */
-export const categories = pgTable("categories", {
+/* ---------------- GENRES (formerly categories) ---------------- */
+export const genres = pgTable("genres", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
   description: text("description"),
@@ -89,9 +87,19 @@ export const products = pgTable("products", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   description: text("description"),
-  price: text("price").notNull(),
+  price: numeric("price", { precision: 10, scale: 2 }).$type<number>().notNull(),
   imageUrl: text("image_url"),
-  categoryId: text("category_id").references(() => categories.id, { onDelete: "set null" }),
+  genreId: text("genre_id").references(() => genres.id, { onDelete: "set null" }),
+
+  author: text("author"),
+  format: text("format"),
+  language: text("language"),
+
+  stripeProductId: text("stripe_product_id"),
+  stripePriceId: text("stripe_price_id"),
+  inventoryCount: integer("inventory_count").default(0).notNull(),
+  isSubscription: boolean("is_subscription").default(false).notNull(),
+
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
@@ -102,7 +110,7 @@ export const orders = pgTable("orders", {
   userId: text("user_id")
     .references(() => users.id, { onDelete: "cascade" })
     .notNull(),
-  total: text("total").notNull(),
+  total: numeric("total", { precision: 10, scale: 2 }).$type<number>().notNull(),
   status: text("status").default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
@@ -116,6 +124,6 @@ export const orderItems = pgTable("order_items", {
   productId: text("product_id")
     .references(() => products.id, { onDelete: "cascade" })
     .notNull(),
-  quantity: text("quantity").notNull(),
-  price: text("price").notNull(),
+  quantity: integer("quantity").$type<number>().notNull(),
+  price: numeric("price", { precision: 10, scale: 2 }).$type<number>().notNull(),
 });
