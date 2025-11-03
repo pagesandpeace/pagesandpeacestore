@@ -115,10 +115,10 @@ export default function MenuPage() {
             title="Traybakes & Cookie Bars"
             items={[
               ["Rocky Road", "£3.60"],
-              ["Salted Caramel Brownie", "£3.40"],
-              ["Banoffee Cookie Bar", "£3.90"],
-              ["Brownie", "£3.70"],
               ["Bakewell Slice", "£2.90"],
+              ["Brownie", "£3.40"],
+              ["Salted Caramel Brownie", "£3.90"],
+              ["Banoffee Cookie Bar", "£3.70"],
             ]}
             note={
               <>
@@ -162,8 +162,8 @@ export default function MenuPage() {
               ["Cinnamon Swirl", "£2.70"],
               ["Seasonal Danish", "£3.20"],
               ["Almond Pain Suisse", "£3.30"],
-              ["Kronuts", "£3.50"],
               ["Patas Cro Nata", "£2.50"],
+              ["Kronuts", "£3.50"],
             ]}
           />
 
