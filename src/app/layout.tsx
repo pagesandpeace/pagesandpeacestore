@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
 import { UserProvider } from "@/context/UserContext";
+import { CartProvider } from "@/context/CartContext"; // ✅ import added
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -14,12 +15,18 @@ export const metadata: Metadata = {
   description: "Books, coffee & calm ☕📚",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body className={`${montserrat.variable} antialiased`}>
-        {/* ✅ Wrap entire app */}
-        <UserProvider>{children}</UserProvider>
+        {/* ✅ Wrap the entire app with both contexts */}
+        <UserProvider>
+          <CartProvider>{children}</CartProvider>
+        </UserProvider>
       </body>
     </html>
   );

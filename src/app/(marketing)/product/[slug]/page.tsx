@@ -1,59 +1,103 @@
-import { db } from "@/lib/db";
-import { products } from "@/lib/db/schema/index";
-import { eq } from "drizzle-orm";
+"use client";
+import { handleBuyNow } from "@/lib/checkout";
+import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 
-export default async function ProductPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params; // ✅ unpack from Promise
-  const [product] = await db.select().from(products).where(eq(products.slug, slug));
+interface Product {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  image_url?: string;
+  genre_id?: string;
+}
+
+export default function ProductPage() {
+  const { slug } = useParams();
+  const [product, setProduct] = useState<Product | null>(null);
+
+  // ✅ Local fallback data
+  const seedProducts: Product[] = [
+    {
+      id: "1",
+      name: "Pages & Peace Tote Bag",
+      slug: "pages-peace-tote",
+      description:
+        "Eco-friendly tote bag with our logo. Perfect for carrying your next read or coffee beans.",
+      price: 12.99,
+      image_url: "/coming_soon.svg",
+    },
+    {
+      id: "2",
+      name: "House Blend Coffee Beans 250g",
+      slug: "house-blend-250g",
+      description:
+        "Smooth, balanced blend roasted locally. Notes of chocolate, nuts, and caramel sweetness.",
+      price: 9.99,
+      image_url: "/coming_soon.svg",
+    },
+    {
+      id: "3",
+      name: "Monthly Book Club Membership",
+      slug: "book-club-membership",
+      description:
+        "Join our book club and receive one new read each month, plus early access to events.",
+      price: 29.99,
+      image_url: "/coming_soon.svg",
+    },
+  ];
+
+  useEffect(() => {
+    const found = seedProducts.find((p) => p.slug === slug);
+    setProduct(found || null);
+  }, [slug]);
 
   if (!product) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#FAF6F1] text-[#111]">
-        <p>Sorry, this book couldn’t be found.</p>
+      <main className="min-h-screen flex flex-col justify-center items-center text-center bg-[var(--background)] text-[var(--foreground)] px-6">
+        <h2 className="text-2xl font-semibold mb-4">Product not found</h2>
+        <Link href="/shop" className="btn-outline">
+          ← Back to Shop
+        </Link>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#FAF6F1] text-[#111] font-[Montserrat] px-6 py-12">
-      <section className="max-w-5xl mx-auto grid md:grid-cols-2 gap-10">
-        <div className="relative w-full h-[500px]">
+    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] px-6 py-16">
+      <section className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        {/* ---- Product Image ---- */}
+        <div className="flex justify-center">
           <Image
-            src={product.imageUrl || "/book_placeholder.jpg"}
+            src={product.image_url || "/Coming soon.svg"}
             alt={product.name}
-            fill
-            className="object-cover rounded-xl border border-[#e0dcd6]"
+            width={500}
+            height={500}
+            className="rounded-2xl shadow-md object-contain bg-white p-4"
           />
         </div>
 
-        <div className="space-y-6">
-          <h1 className="text-3xl font-semibold">{product.name}</h1>
-          {product.author && (
-            <p className="text-lg text-[#111]/80">by {product.author}</p>
-          )}
-          <p className="text-xl font-semibold text-[#5DA865]">
+        {/* ---- Product Details ---- */}
+        <div className="flex flex-col space-y-6">
+          <h1 className="text-4xl font-semibold">{product.name}</h1>
+          <p className="text-[color:var(--foreground)]/80 leading-relaxed">
+            {product.description}
+          </p>
+          <p className="text-2xl font-bold text-[var(--accent)]">
             £{Number(product.price).toFixed(2)}
           </p>
-          {product.description && (
-            <p className="text-[#111]/80 leading-relaxed">
-              {product.description}
-            </p>
-          )}
 
-          <form action="/api/checkout" method="POST">
-            <input type="hidden" name="item" value={product.id} />
-            <button
-              type="submit"
-              className="px-8 py-3 rounded-full bg-[#5DA865] text-[#FAF6F1] font-semibold hover:opacity-90 transition-all"
-            >
-              Buy Now
-            </button>
-          </form>
+          <button className="btn-primary w-full md:w-auto">
+            🛒 Buy Now
+          </button>
+
+          <button onClick={() => handleBuyNow(product)} className="btn-primary">
+  Buy Now
+</button>
+
         </div>
       </section>
     </main>
