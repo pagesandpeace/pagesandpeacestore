@@ -1,4 +1,5 @@
 "use client";
+
 import { handleBuyNow } from "@/lib/checkout";
 import { useEffect, useState } from "react";
 import Image from "next/image";
@@ -50,11 +51,14 @@ export default function ProductPage() {
     },
   ];
 
+  // ✅ Find matching product by slug
   useEffect(() => {
     const found = seedProducts.find((p) => p.slug === slug);
     setProduct(found || null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
+  // ✅ Product not found
   if (!product) {
     return (
       <main className="min-h-screen flex flex-col justify-center items-center text-center bg-[var(--background)] text-[var(--foreground)] px-6">
@@ -66,13 +70,14 @@ export default function ProductPage() {
     );
   }
 
+  // ✅ Product display
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] px-6 py-16">
       <section className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
         {/* ---- Product Image ---- */}
         <div className="flex justify-center">
           <Image
-            src={product.image_url || "/Coming soon.svg"}
+            src={product.image_url || "/coming_soon.svg"}
             alt={product.name}
             width={500}
             height={500}
@@ -90,14 +95,16 @@ export default function ProductPage() {
             £{Number(product.price).toFixed(2)}
           </p>
 
-          <button className="btn-primary w-full md:w-auto">
+          <button
+            onClick={() => handleBuyNow(product)}
+            className="btn-primary w-full md:w-auto"
+          >
             🛒 Buy Now
           </button>
 
-          <button onClick={() => handleBuyNow(product)} className="btn-primary">
-  Buy Now
-</button>
-
+          <Link href="/shop" className="btn-outline w-full md:w-auto text-center">
+            ← Back to Shop
+          </Link>
         </div>
       </section>
     </main>
