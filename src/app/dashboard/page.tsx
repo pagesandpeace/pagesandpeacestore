@@ -23,11 +23,11 @@ export default function DashboardPage() {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#FAF6F1] text-[#111] font-[Montserrat]">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--background)] text-[var(--foreground)] font-[Montserrat]">
         <p className="text-lg">🔐 Please sign in to view your dashboard.</p>
         <Link
           href="/sign-in"
-          className="mt-4 px-6 py-2 rounded-full bg-[#5DA865] text-[#FAF6F1] font-semibold hover:opacity-90 transition-all"
+          className="mt-4 px-6 py-2 rounded-full bg-[var(--accent)] text-[var(--background)] font-semibold border-2 border-[var(--secondary)] hover:bg-[var(--secondary)] hover:border-[var(--accent)] hover:text-[var(--background)] transition-all"
         >
           Sign In
         </Link>
@@ -36,78 +36,77 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAF6F1] text-[#111] px-6 py-12 font-[Montserrat]">
-      {/* ---- Header ---- */}
-      <header className="mb-12">
-        <h1 className="text-3xl font-semibold tracking-widest mb-2">
-          Welcome back, {user.name || "Reader"} ☕
-        </h1>
-        <p className="text-[#111]/70 text-sm max-w-xl">
-          Here’s what’s happening in your Pages & Peace account.
-        </p>
-      </header>
+    <div className="flex-1 w-full bg-[var(--background)] text-[var(--foreground)] font-[Montserrat]">
+      <div className="max-w-4xl mx-auto px-6 py-10 md:py-16">
+        {/* ---- Header ---- */}
+        <header className="mb-12">
+          <h1 className="text-3xl font-semibold tracking-widest mb-2">
+            Welcome back, {user.name || "Reader"} ☕
+          </h1>
+          <p className="text-[var(--foreground)]/70 text-sm max-w-xl">
+            Here’s what’s happening in your Pages & Peace account.
+          </p>
+        </header>
 
-      {/* ---- Dashboard Overview ---- */}
-      <section className="space-y-10 max-w-3xl">
-        {/* Recent Orders Summary */}
-        <div className="pb-6 border-b border-[#dcd6cf] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-[#777] font-medium mb-2">
-              Recent Orders
-            </p>
-            <p className="text-sm text-[#555] max-w-sm">
-              Track your latest purchases and see their current status.
-            </p>
+        {/* ---- Dashboard Overview ---- */}
+        <section className="space-y-10">
+          {/* Recent Orders Summary */}
+          <div className="pb-6 border-b border-[#dcd6cf] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-[#777] font-medium mb-2">
+                Recent Orders
+              </p>
+              <p className="text-sm text-[#555] max-w-sm">
+                Track your latest purchases and see their current status.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/orders"
+              className="inline-block px-6 py-3 rounded-full border-2 border-[var(--accent)] text-[var(--accent)] font-semibold text-sm transition-all hover:border-[var(--secondary)] hover:text-[var(--secondary)] hover:bg-[var(--secondary)]/10"
+            >
+              View Orders →
+            </Link>
           </div>
-          <Link
-            href="/dashboard/orders"
-            className="inline-block px-6 py-3 rounded-full border border-[#5DA865] text-[#5DA865] font-semibold text-sm hover:bg-[#5DA865]/10 transition-all"
-          >
-            View Orders →
-          </Link>
-        </div>
 
-        {/* Account Settings Shortcut */}
-        <div className="pb-6 border-b border-[#dcd6cf] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-[#777] font-medium mb-2">
-              Account Settings
-            </p>
-            <p className="text-sm text-[#555] max-w-sm">
-              Update your personal details or change your password anytime.
-            </p>
+          {/* Account Settings Shortcut */}
+          <div className="pb-6 border-b border-[#dcd6cf] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-[#777] font-medium mb-2">
+                Account Settings
+              </p>
+              <p className="text-sm text-[#555] max-w-sm">
+                Update your personal details or change your password anytime.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/account/security"
+              className="inline-block px-6 py-3 rounded-full border-2 border-[var(--accent)] text-[var(--accent)] font-semibold text-sm transition-all hover:border-[var(--secondary)] hover:text-[var(--secondary)] hover:bg-[var(--secondary)]/10"
+            >
+              Manage Account →
+            </Link>
           </div>
-          <Link
-            href="/dashboard/account/security"
-            className="inline-block px-6 py-3 rounded-full border border-[#5DA865] text-[#5DA865] font-semibold text-sm hover:bg-[#5DA865]/10 transition-all"
-          >
-            Manage Account →
-          </Link>
-        </div>
 
-        {/* Preferences / Book Club Shortcut */}
-        <div className="pb-6 border-b border-[#dcd6cf] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-[#777] font-medium mb-2">
-              Community & Preferences
-            </p>
-            <p className="text-sm text-[#555] max-w-sm">
-              Join book clubs, follow new releases, or adjust your reading preferences.
-            </p>
+          {/* Preferences / Book Club Shortcut */}
+          <div className="pb-6 border-b border-[#dcd6cf] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-[#777] font-medium mb-2">
+                Community & Preferences
+              </p>
+              <p className="text-sm text-[#555] max-w-sm">
+                Join book clubs, follow new releases, or adjust your reading preferences.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/settings"
+              className="inline-block px-6 py-3 rounded-full border-2 border-[var(--accent)] text-[var(--accent)] font-semibold text-sm transition-all hover:border-[var(--secondary)] hover:text-[var(--secondary)] hover:bg-[var(--secondary)]/10"
+            >
+              Go to Settings →
+            </Link>
           </div>
-          <Link
-            href="/dashboard/settings"
-            className="inline-block px-6 py-3 rounded-full border border-[#5DA865] text-[#5DA865] font-semibold text-sm hover:bg-[#5DA865]/10 transition-all"
-          >
-            Go to Settings →
-          </Link>
-        </div>
-      </section>
+        </section>
 
-      {/* ---- Footer ---- */}
-      <footer className="text-center text-[#111]/50 text-xs mt-20">
-        © {new Date().getFullYear()} Pages & Peace · Crafted with ☕ & 📚
-      </footer>
-    </main>
+        
+      </div>
+    </div>
   );
 }

@@ -15,26 +15,64 @@ export type Product = {
 
 export default function ProductCard({ product }: { product: Product }) {
   return (
-    <div className="bg-white border border-[#e0dcd6] rounded-xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
-      <Link href={`/product/${product.slug}`}>
-        <div className="relative w-full h-64">
-          <Image
-            src={product.imageUrl || "/book_placeholder.jpg"}
-            alt={product.name}
-            fill
-            className="object-cover"
-          />
-        </div>
-        <div className="p-4 space-y-2">
-          <h3 className="text-lg font-semibold text-[#111]">{product.name}</h3>
+    <div className="bg-white border border-[var(--accent)]/10 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col justify-between w-full max-w-sm mx-auto">
+      {/* ---- Image ---- */}
+      <Link
+        href={`/product/${product.slug}`}
+        className="block relative w-full h-64"
+      >
+        <Image
+          src={product.imageUrl || "/book_placeholder.jpg"}
+          alt={product.name}
+          fill
+          className="object-cover"
+        />
+      </Link>
+
+      {/* ---- Info ---- */}
+      <div className="p-6 flex flex-col flex-grow justify-between text-center">
+        <div>
+          <h3 className="text-lg font-semibold text-[var(--foreground)] mb-1">
+            {product.name}
+          </h3>
           {product.author && (
-            <p className="text-sm text-[#111]/70">by {product.author}</p>
+            <p className="text-sm text-[var(--foreground)]/70 mb-1">
+              by {product.author}
+            </p>
           )}
-          <p className="text-[#5DA865] font-medium">
+          <p className="text-[var(--accent)] font-semibold text-lg">
             £{Number(product.price).toFixed(2)}
           </p>
         </div>
-      </Link>
+
+        {/* ---- Actions ---- */}
+        <div className="mt-6 flex flex-col gap-3">
+          {/* View Details */}
+          <Link
+            href={`/product/${product.slug}`}
+            className="text-[var(--accent)] font-medium hover:text-[var(--secondary)] transition text-sm"
+          >
+            View Details →
+          </Link>
+
+          {/* Buttons */}
+          <div className="flex gap-3 justify-center mt-1">
+            <button
+              className="border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition rounded-full px-4 py-2 text-xs font-semibold flex-1 max-w-[140px]"
+              onClick={() => console.log('💳 Buy Now clicked')}
+            >
+              Buy Now
+            </button>
+
+            <button
+              className="bg-[var(--accent)] hover:bg-[var(--secondary)] text-white transition rounded-full px-4 py-2 text-sm font-semibold flex-1 max-w-[140px]"
+              onClick={() => console.log('🛒 Add to Cart clicked')}
+            >
+              Add to Cart
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

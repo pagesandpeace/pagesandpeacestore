@@ -10,7 +10,6 @@ export default function ShopPage() {
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const { addToCart } = useCart();
 
-  // ---- Temporary demo data ----
   const genres = [
     { id: "books", name: "Books" },
     { id: "coffee", name: "Coffee" },
@@ -51,15 +50,8 @@ export default function ShopPage() {
     ? products.filter((p) => p.genre_id === selectedGenre)
     : products;
 
-  // ---- Debug helpers ----
-  const testApi = async () => {
-    console.log("🧪 Testing /api/checkout manually…");
-    const res = await fetch("/api/checkout", { method: "GET" });
-    console.log("🧪 /api/checkout response:", res.status, await res.text());
-  };
-
   return (
-    <main className="min-h-screen bg-[var(--background)] px-6 py-16">
+    <main className="min-h-screen bg-[var(--background)] px-6 py-16 font-[Montserrat]">
       {/* ---- Header ---- */}
       <section className="text-center mb-12">
         <Image
@@ -69,17 +61,12 @@ export default function ShopPage() {
           height={100}
           className="mx-auto mb-4"
         />
-        <h1 className="font-montserrat text-4xl font-bold text-[var(--foreground)] mb-2">
+        <h1 className="text-4xl font-bold text-[var(--foreground)] mb-2">
           Shop
         </h1>
-        <p className="text-[color:var(--foreground)]/70">
+        <p className="text-[var(--foreground)]/70">
           Explore our curated collection of books, blends, and memberships.
         </p>
-
-        {/* quick diagnostic button */}
-        <button onClick={testApi} className="btn-outline mt-4">
-          🧪 Test API
-        </button>
       </section>
 
       {/* ---- Genre Filters ---- */}
@@ -110,11 +97,12 @@ export default function ShopPage() {
       </section>
 
       {/* ---- Product Grid ---- */}
-      <section className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-w-6xl mx-auto">
+      <section className="grid gap-10 sm:grid-cols-1 md:grid-cols-2 max-w-5xl mx-auto px-4">
+
         {filteredProducts.map((product) => (
           <div
             key={product.id}
-            className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-200 p-5 flex flex-col items-center text-center border border-[color:var(--accent)]/10"
+            className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-200 p-5 flex flex-col items-center text-center border border-[var(--accent)]/10"
           >
             <Image
               src={product.image_url}
@@ -126,44 +114,47 @@ export default function ShopPage() {
             <h2 className="text-xl font-semibold mb-2 text-[var(--foreground)]">
               {product.name}
             </h2>
-            <p className="text-[color:var(--foreground)]/70 text-sm mb-3 line-clamp-2">
+            <p className="text-[var(--foreground)]/70 text-sm mb-3 line-clamp-2">
               {product.description}
             </p>
             <p className="text-lg font-semibold text-[var(--accent)] mb-4">
               £{Number(product.price).toFixed(2)}
             </p>
 
-            <div className="flex flex-col gap-2 w-full">
+            {/* ---- Actions ---- */}
+            <div className="flex flex-col gap-3 w-full">
+              {/* View Details Link */}
+              <Link
+                href={`/product/${product.slug}`}
+                className="text-[var(--accent)] font-medium hover:text-[var(--secondary)] transition text-sm"
+              >
+                View Details →
+              </Link>
+
+              {/* Buy Now + Add to Cart */}
               <div className="flex gap-2 w-full">
-                <Link href={`/product/${product.slug}`} className="btn-outline flex-1">
-                  View Details
-                </Link>
                 <button
-                  onClick={() => {
-                    console.log("🟢 Buy Now clicked", product);
-                    handleBuyNow(product);
-                  }}
-                  className="btn-primary flex-1"
+                  onClick={() => handleBuyNow(product)}
+                  className="border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap flex-1"
                 >
                   Buy Now
                 </button>
-              </div>
 
-              <button
-                onClick={() => {
-                  console.log("🛒 Adding to cart", product);
-                  addToCart({
-                    id: product.id,
-                    name: product.name,
-                    price: product.price,
-                    imageUrl: product.image_url,
-                    quantity: 1,
-                  });
-                }}
-                className="btn-primary w-full"
-              >
-                Add to Cart
-              </button>
+                <button
+                  onClick={() =>
+                    addToCart({
+                      id: product.id,
+                      name: product.name,
+                      price: product.price,
+                      imageUrl: product.image_url,
+                      quantity: 1,
+                    })
+                  }
+                  className="bg-[var(--accent)] hover:bg-[var(--secondary)] text-white transition rounded-full px-3 py-1.5 text-sm font-semibold flex-1"
+                >
+                  Add to Cart
+                </button>
+              </div>
             </div>
           </div>
         ))}

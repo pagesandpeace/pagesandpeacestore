@@ -141,11 +141,6 @@ export default function SecurityPage() {
             {loading ? "Updating…" : "Update Password"}
           </button>
         </form>
-
-        {/* Footer */}
-        <footer className="text-center text-[#111]/50 text-xs mt-16">
-          © {new Date().getFullYear()} Pages & Peace · Crafted with ☕ & 📚
-        </footer>
       </section>
     </main>
   );

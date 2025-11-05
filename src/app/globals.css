@@ -1,17 +1,25 @@
 @import "tailwindcss";
 
-/* ---- Brand Colours ---- */
+/* --------------------------------------------
+   🌿 BRAND THEME
+--------------------------------------------- */
 :root {
   --background: #FAF6F1; /* Cream */
   --foreground: #111111; /* Black */
-  --accent: #5DA865;     /* Green accent */
+  --accent: #189458;     /* Green */
+  --secondary: #C7A54B;  /* Gold */
+  --muted: #dcd6cf;      /* Soft border gray */
 }
 
-/* ---- Tailwind v4 Theme Mapping ---- */
+/* --------------------------------------------
+   🧩 Tailwind Theme Mapping
+--------------------------------------------- */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
 
   --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans";
@@ -19,7 +27,9 @@
     "Liberation Mono", "Courier New";
 }
 
-/* ---- Global Body ---- */
+/* --------------------------------------------
+   🪶 Global Reset + Base
+--------------------------------------------- */
 body {
   background: var(--background);
   color: var(--foreground);
@@ -27,74 +37,111 @@ body {
     "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
-/* ---- Links ---- */
-a,
+/* --------------------------------------------
+   🔗 Link Styling
+--------------------------------------------- */
+.link,
 .text-accent {
   color: var(--accent);
-  transition: color 0.2s ease-in-out;
+  transition: color 0.2s ease-in-out, opacity 0.2s ease-in-out;
 }
 
-a:hover {
-  opacity: 0.85;
+.link:hover,
+.text-accent:hover {
+  color: var(--secondary);
+  opacity: 0.9;
 }
 
-/* ---- Buttons ---- */
-button {
+/* Make plain <a> inherit text color unless classed */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* --------------------------------------------
+   🟢 Button System
+--------------------------------------------- */
+button,
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  /* Brand colours */
-  background-color: var(--accent);
-  color: var(--background) !important;
-
-  /* Typography */
   font-weight: 600;
-  font-size: 1rem; /* roughly Tailwind's text-base */
+  font-size: 1rem;
+  border-radius: 9999px;
+  padding: 0.75rem 2rem;
+  line-height: 1.25rem;
 
-  /* Shape + spacing */
-  border: none;
-  border-radius: 9999px; /* pill */
-  padding: 0.75rem 2rem; /* ✅ slightly more vertical and horizontal breathing room */
-  line-height: 1.25rem;  /* keep vertical centering crisp */
+  border: 2px solid var(--secondary);
+  background-color: var(--accent);
+  color: var(--background);
 
-  /* Motion & depth */
   transition: all 0.25s ease-in-out;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
 }
 
-button:hover {
-  opacity: 0.92;
-  filter: brightness(1.05);
+button:hover,
+.btn:hover {
+  background-color: var(--secondary);
+  color: var(--background);
   transform: translateY(-1px);
 }
 
-/* ---- Button Variants ---- */
+/* --- Variants --- */
+
+/* Filled primary (green w/ gold border) */
 .btn-primary {
   background-color: var(--accent);
-  color: var(--background) !important;
-  border-radius: 9999px;
-  padding: 0.75rem 2rem;
+  color: var(--background);
+  border: 2px solid var(--secondary);
+}
+.btn-primary:hover {
+  background-color: var(--secondary);
+  color: var(--background);
 }
 
+/* Gold outline, transparent background */
 .btn-outline {
   background-color: transparent;
-  border: 2px solid var(--accent);
-  color: var(--accent);
-  border-radius: 9999px;
-  padding: 0.7rem 2rem;
+  border: 2px solid var(--secondary);
+  color: var(--secondary);
 }
-
 .btn-outline:hover {
-  background-color: var(--accent);
-  color: var(--background) !important;
+  background-color: var(--secondary);
+  color: var(--background);
 }
 
+/* Transparent with accent text */
 .btn-ghost {
   background-color: transparent;
   color: var(--accent);
-  border-radius: 9999px;
-  padding: 0.7rem 2rem;
+  border: none;
+}
+.btn-ghost:hover {
+  color: var(--secondary);
+}
+
+/* Neutral / subtle variant (for back buttons etc.) */
+.btn-neutral {
+  background-color: transparent;
+  border: 2px solid var(--muted);
+  color: var(--foreground);
+}
+.btn-neutral:hover {
+  background-color: #f0ece7;
+}
+
+/* --------------------------------------------
+   🌙 Accessibility Tweaks
+--------------------------------------------- */
+button:disabled,
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
