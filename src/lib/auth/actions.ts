@@ -4,8 +4,9 @@ import { cookies, headers } from "next/headers";
 import { z } from "zod";
 import { auth } from ".";
 import { db } from "../db";
+import * as schema from "../db/schema";
 import { guests } from "../db/schema";
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 const COOKIE_OPTIONS = {
@@ -21,7 +22,10 @@ const emailSchema = z.string().email();
 const passwordSchema = z.string().min(8).max(128);
 const nameSchema = z.string().min(1).max(100);
 
-// ------------------ Guest sessions ------------------
+/* -------------------------------------------------------------------------- */
+/*                             GUEST SESSION HELPERS                          */
+/* -------------------------------------------------------------------------- */
+
 export async function createGuestSession() {
   const cookieStore = await cookies();
   const existing = cookieStore.get("guest_session");
@@ -49,7 +53,10 @@ export async function guestSession() {
   return { sessionToken: token };
 }
 
-// ------------------ Sign up / Sign in ------------------
+/* -------------------------------------------------------------------------- */
+/*                                SIGN UP                                     */
+/* -------------------------------------------------------------------------- */
+
 const signUpSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
@@ -63,21 +70,112 @@ export async function signUp(formData: FormData) {
     password: formData.get("password") as string,
   });
 
+  // ✅ Loyalty + consent flags
+  const loyaltyProgramOptIn = formData.get("loyaltyprogram") === "true";
+  const marketingConsent = formData.get("marketingConsent") === "true";
+  const acceptedTerms = formData.get("acceptedTerms") === "true";
+  const loyaltyPoints = 0;
+
+  // 🚨 Require terms if joining loyalty (for GDPR)
+  if (loyaltyProgramOptIn && !acceptedTerms) {
+    return { ok: false, message: "You must accept the Terms & Privacy Policy." };
+  }
+
+  // ✅ Create user via Better Auth
   const result = await auth.api.signUpEmail({
     body: {
       ...data,
-      callbackURL: "/verify-success", // ✅ redirect after verification
+      callbackURL: "/verify-success",
     },
   });
 
+  const userId = result.user?.id;
+  if (!userId) {
+    return { ok: false, message: "User ID missing after signup." };
+  }
+
+  // ✅ Base user update (handles loyalty boolean + points)
+  await db
+    .update(schema.users)
+    .set({
+      loyaltyprogram: loyaltyProgramOptIn,
+      loyaltypoints: loyaltyPoints,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.users.id, userId));
+
+  // ✅ If joining loyalty, create record in loyalty_members table
+  if (loyaltyProgramOptIn) {
+    try {
+      await db
+        .insert(schema.loyaltyMembers)
+        .values({
+          userId,
+          status: "active",
+          tier: "starter",
+          marketingConsent,
+          termsVersion: "v1.0",
+          joinedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: schema.loyaltyMembers.userId,
+          set: {
+            status: "active",
+            marketingConsent,
+            termsVersion: "v1.0",
+            updatedAt: new Date(),
+          },
+        });
+      console.log(`🌿 Created loyalty membership for ${data.email}`);
+    } catch (err) {
+      console.error("❌ Loyalty member insert error:", err);
+    }
+  }
+
+  // 🧩 Ensure verification token exists
+  try {
+    const [existingToken] = await db
+      .select()
+      .from(schema.verifications)
+      .where(eq(schema.verifications.identifier, data.email))
+      .limit(1);
+
+    if (!existingToken) {
+      const token = randomUUID();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await db.insert(schema.verifications).values({
+        id: randomUUID(),
+        identifier: data.email,
+        value: token,
+        expiresAt,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      console.log("🧩 Created fallback verification token for", data.email);
+    } else {
+      console.log("✅ Verification token already exists for", data.email);
+    }
+  } catch (err) {
+    console.error("❌ Failed to ensure verification token:", err);
+  }
+
+  // ✅ Clean up guest session
   await migrateGuestToUser();
 
   return {
     ok: true,
-    userId: result.user?.id,
+    userId,
     redirectTo: "/verify-pending",
   };
 }
+
+
+/* -------------------------------------------------------------------------- */
+/*                                SIGN IN                                     */
+/* -------------------------------------------------------------------------- */
 
 const signInSchema = z.object({
   email: emailSchema,
@@ -90,14 +188,21 @@ export async function signIn(formData: FormData) {
     password: formData.get("password") as string,
   });
 
-  const result = await auth.api.signInEmail({ body: data });
-  await migrateGuestToUser();
+  try {
+    const result = await auth.api.signInEmail({ body: data });
+    await migrateGuestToUser();
 
-  // ✅ Redirect users to /dashboard now
-  return { ok: true, userId: result.user?.id, redirectTo: "/dashboard" };
+    return { ok: true, userId: result.user?.id, redirectTo: "/dashboard" };
+  } catch (err) {
+    console.error("❌ Sign-in failed:", err);
+    return { ok: false };
+  }
 }
 
-// ------------------ Session / Auth helpers ------------------
+/* -------------------------------------------------------------------------- */
+/*                             SESSION / AUTH HELPERS                         */
+/* -------------------------------------------------------------------------- */
+
 export async function getCurrentUser() {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -127,7 +232,30 @@ async function migrateGuestToUser() {
   cookieStore.delete("guest_session");
 }
 
-// ------------------ Change Password ------------------
+/* -------------------------------------------------------------------------- */
+/*                             LOYALTY HELPERS                                */
+/* -------------------------------------------------------------------------- */
+
+export async function updateLoyaltyPoints(userId: string, pointsToAdd: number) {
+  try {
+    await db
+      .update(schema.users)
+      .set({
+        loyaltypoints: sql`${schema.users.loyaltypoints} + ${pointsToAdd}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.users.id, userId));
+    return { ok: true };
+  } catch (err) {
+    console.error("❌ Loyalty point update error:", err);
+    return { ok: false };
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             CHANGE PASSWORD                                */
+/* -------------------------------------------------------------------------- */
+
 export async function changePassword(currentPassword: string, newPassword: string) {
   try {
     const forwardedHeaders = new Headers(await headers());
@@ -138,12 +266,10 @@ export async function changePassword(currentPassword: string, newPassword: strin
 
     console.log("🔍 Password change response:", result);
 
-    // Sometimes Better Auth returns empty response on success
     if (!result || Object.keys(result).length === 0) {
       return { ok: true, message: "Password changed successfully (empty response)." };
     }
 
-    // ✅ Type-safe check (no `.status` unless result has it)
     if ("user" in result || ("status" in result && (result as { status?: number }).status === 200)) {
       return { ok: true, message: "Password updated successfully." };
     }
@@ -151,10 +277,8 @@ export async function changePassword(currentPassword: string, newPassword: strin
     return { ok: false, message: "Unexpected response from API." };
   } catch (err: unknown) {
     console.error("❌ Password change error:", err);
-
     let message = "Password change failed.";
     if (err instanceof Error) message = err.message;
-
     return { ok: false, message };
   }
 }

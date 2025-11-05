@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer, numeric, jsonb } from "drizzle-orm/pg-core";
 
 /* ---------------- USERS ---------------- */
 export const users = pgTable("users", {
@@ -7,12 +7,18 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+
+  // ✅ Add loyalty fields here
+  loyaltyprogram: boolean("loyaltyprogram").default(false).notNull(),
+  loyaltypoints: integer("loyaltypoints").default(0).notNull(),
+
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
 });
+
 
 /* ---------------- SESSIONS ---------------- */
 export const sessions = pgTable("sessions", {
@@ -53,8 +59,8 @@ export const accounts = pgTable("accounts", {
     .notNull(),
 });
 
-/* ---------------- VERIFICATION ---------------- */
-export const verifications = pgTable("verification", {
+/* ---------------- VERIFICATIONS ---------------- */
+export const verifications = pgTable("verifications", {   // 👈 make plural here
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull().unique(),
@@ -65,6 +71,7 @@ export const verifications = pgTable("verification", {
     .$onUpdate(() => new Date())
     .notNull(),
 });
+
 
 /* ---------------- GUESTS ---------------- */
 export const guests = pgTable("guests", {
@@ -127,3 +134,14 @@ export const orderItems = pgTable("order_items", {
   quantity: integer("quantity").$type<number>().notNull(),
   price: numeric("price", { precision: 10, scale: 2 }).$type<number>().notNull(),
 });
+
+/* ---------------- IDEMPOTENCY (for safe API retries) ---------------- */
+export const idempotencyKeys = pgTable("idempotency_keys", {
+  key: text("key").primaryKey(), // Unique request key
+  scope: text("scope").notNull().default("loyalty_optin"), // Context for where it's used
+  response: jsonb("response").default({}), // Optional stored response
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ✅ Loyalty schema (modular but included for migrations)
+export * from "./loyalty";

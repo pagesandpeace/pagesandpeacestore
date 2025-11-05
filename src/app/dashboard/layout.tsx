@@ -4,23 +4,19 @@ import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { signOut, getCurrentUser } from "@/lib/auth/actions";
+import { useRouter } from "next/navigation";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  // menuOpen = your original account dropdown
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  // sidebarOpen = controls mobile slide-in sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // avatar image
   const [userImage, setUserImage] = useState<string | null>(null);
 
   const handleSignOut = async () => {
     await signOut();
-    window.location.href = "/";
+    router.push("/"); // go back to marketing site only after sign-out
   };
 
-  // fetch logged-in user avatar
   const fetchUser = useCallback(async () => {
     try {
       const user = await getCurrentUser();
@@ -30,31 +26,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, []);
 
-  // initial avatar fetch
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
 
-  // live avatar updates (same tab + cross tab)
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "userAvatarUpdated") fetchUser();
     };
-
     const handleAvatarUpdated = (e: Event) => {
       const custom = e as CustomEvent<string>;
-      if (custom.detail) {
-        // update instantly with new URL
-        setUserImage(custom.detail);
-      } else {
-        // fallback refetch
-        fetchUser();
-      }
+      if (custom.detail) setUserImage(custom.detail);
+      else fetchUser();
     };
 
     window.addEventListener("storage", handleStorageChange);
     window.addEventListener("avatar-updated", handleAvatarUpdated);
-
     return () => {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("avatar-updated", handleAvatarUpdated);
@@ -62,114 +49,100 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [fetchUser]);
 
   return (
-    <div className="flex h-screen bg-[#FAF6F1] text-[#111] font-[Montserrat]">
-      {/* ── Mobile Top Bar (only visible < md) ── */}
-      <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between bg-[#FAF6F1] border-b border-[#dcd6cf] px-4 py-3 md:hidden">
-        {/* brand */}
-        <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/p&p_logo_green.svg"
-            alt="Pages & Peace logo"
-            width={32}
-            height={32}
-          />
-          <span className="text-base font-semibold tracking-wide">
-            Pages & Peace
-          </span>
-        </Link>
+    <div className="flex h-screen bg-[#FAF6F1] text-[#111] font-[Montserrat] overflow-hidden md:overflow-auto">
+      {/* ── Mobile Top Bar ── */}
+<header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between bg-[#FAF6F1] border-b border-[#dcd6cf] px-4 py-3 md:hidden">
+  {/* Hamburger on the LEFT */}
+  <button
+    onClick={() => {
+      setSidebarOpen((prev) => !prev);
+      setMenuOpen(false);
+    }}
+    aria-label="Toggle menu"
+    className="flex items-center justify-center p-2 rounded-md bg-transparent border-none focus:outline-none"
+    style={{
+      background: "transparent",
+      border: "none",
+      outline: "none",
+    }}
+  >
+    <div className="space-y-1.5">
+      <span className="block w-6 h-[2px] bg-[#111]" />
+      <span className="block w-6 h-[2px] bg-[#111]" />
+      <span className="block w-6 h-[2px] bg-[#111]" />
+    </div>
+  </button>
 
-        {/* hamburger */}
-        <button
-          onClick={() => {
-            setSidebarOpen((prev) => !prev);
-            // close account dropdown if it was open
-            setMenuOpen(false);
-          }}
-          aria-label="Toggle menu"
-          className="p-2 rounded-md hover:bg-[#E9E4DE] focus:outline-none"
-        >
-          <div className="space-y-1">
-            <span className="block w-6 h-[2px] bg-[#111]" />
-            <span className="block w-6 h-[2px] bg-[#111]" />
-            <span className="block w-6 h-[2px] bg-[#111]" />
-          </div>
-        </button>
-      </header>
+  {/* Logo on the RIGHT */}
+  <button
+    onClick={() => router.push("/dashboard")}
+    aria-label="Go to dashboard"
+    className="flex items-center justify-center bg-transparent border-none p-0"
+    style={{
+      background: "transparent",
+      border: "none",
+      outline: "none",
+    }}
+  >
+    <Image
+      src="/p&p_logo_cream.svg"
+      alt="Pages & Peace logo"
+      width={48}
+      height={48}
+      priority
+      className="bg-transparent !bg-none !rounded-none !shadow-none"
+    />
+  </button>
+</header>
 
-      {/* ── Sidebar (desktop: fixed open | mobile: slide-in) ── */}
+
+      {/* ── Sidebar ── */}
       <aside
-        className={`
-          fixed z-30 top-0 left-0 h-full bg-[#FAF6F1] border-r border-[#dcd6cf]
+        className={`fixed z-50 top-0 left-0 h-full bg-[#FAF6F1] border-r border-[#dcd6cf]
           flex flex-col justify-between px-6 py-8 w-64
           transform transition-transform duration-300 ease-in-out
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
           md:translate-x-0 md:static md:flex-shrink-0
         `}
       >
-        {/* Top section */}
         <div>
-          {/* Logo (hidden on mobile because it's in header already) */}
-          <Link
-            href="/"
-            className="hidden md:flex items-center gap-3 mb-12"
+          {/* Logo (desktop only) */}
+          <button
+            onClick={() => router.push("/dashboard")}
+            aria-label="Go to dashboard"
+            className="hidden md:flex items-center justify-center mb-12 hover:opacity-90 transition bg-transparent border-none p-0"
+            style={{ background: "transparent", border: "none", outline: "none" }}
           >
             <Image
-              src="/p&p_logo_green.svg"
+              src="/p&p_logo_cream.svg"
               alt="Pages & Peace logo"
-              width={40}
-              height={40}
+              width={60}
+              height={60}
               priority
+              className="bg-transparent !bg-none !rounded-none !shadow-none"
             />
-            <span className="text-lg font-semibold tracking-wide">
-              Pages & Peace
-            </span>
-          </Link>
+          </button>
 
-          {/* Nav links */}
+          {/* Nav Links */}
           <nav className="flex flex-col space-y-5 text-sm">
-            <Link
-              href="/dashboard"
-              onClick={() => setSidebarOpen(false)}
-              className="hover:text-[#5DA865] transition-colors"
-            >
+            <Link href="/dashboard" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865] transition-colors">
               Dashboard
             </Link>
-
-            <Link
-              href="/dashboard/orders"
-              onClick={() => setSidebarOpen(false)}
-              className="hover:text-[#5DA865] transition-colors"
-            >
+            <Link href="/dashboard/orders" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865] transition-colors">
               Orders
             </Link>
-
-            <Link
-              href="/dashboard/account/security"
-              onClick={() => setSidebarOpen(false)}
-              className="hover:text-[#5DA865] transition-colors"
-            >
+            <Link href="/dashboard/account/security" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865] transition-colors">
               Security
             </Link>
-
-            <Link
-              href="/dashboard/settings"
-              onClick={() => setSidebarOpen(false)}
-              className="hover:text-[#5DA865] transition-colors"
-            >
+            <Link href="/dashboard/settings" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865] transition-colors">
               Settings
             </Link>
           </nav>
         </div>
 
-        {/* Bottom section – keep your avatar dropdown logic */}
+        {/* Bottom Account Dropdown */}
         <div className="relative">
-          <button
-            onClick={() => {
-              // toggle dropdown
-              setMenuOpen((prev) => !prev);
-            }}
-            className="flex items-center gap-3 w-full text-left hover:opacity-90"
-          >
+          <button onClick={() => setMenuOpen((prev) => !prev)} className="flex items-center gap-3 w-full text-left hover:opacity-90">
             <Image
               src={userImage || "/user_avatar_placeholder.svg"}
               alt="User avatar"
@@ -181,13 +154,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
 
           {menuOpen && (
-            <div
-              className="
-                absolute bottom-12 left-0 bg-white border border-[#dcd6cf]
-                rounded-md py-2 w-44 shadow-sm
-                md:block
-              "
-            >
+            <div className="absolute bottom-12 left-0 bg-white border border-[#dcd6cf] rounded-md py-2 w-44 shadow-sm md:block">
               <Link
                 href="/dashboard/account"
                 onClick={() => {
@@ -210,10 +177,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Dim background when sidebar is open on mobile */}
+      {/* ── Dim background for mobile menu ── */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-20 md:hidden"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 md:hidden"
           onClick={() => {
             setSidebarOpen(false);
             setMenuOpen(false);
@@ -221,33 +188,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
 
-    {/* Main Content Area */}
-<main
-  className="
-    flex-1 overflow-y-auto
-    pt-[10px] md:pt-12
-    md:ml-64
-    px-4 sm:px-6 md:px-6 lg:px-8 xl:px-10
-    transition-all duration-300
-  "
->
-  <div
-    className="
-      max-w-[1000px] md:max-w-[1100px] lg:max-w-[1200px]
-      w-full mx-auto
-      md:ml-0
-      md:pr-4 lg:pr-8
-    "
-  >
-    {children}
-  </div>
-</main>
-
-
-
-
-
-
+      {/* ── Main Content ── */}
+      <main
+        className="
+          flex-1 overflow-y-auto
+          pt-[80px] md:pt-0
+          px-4 sm:px-6 md:px-8
+          flex flex-col items-center md:items-start
+          transition-all duration-300
+        "
+      >
+        <div className="w-full max-w-[1100px]">{children}</div>
+      </main>
     </div>
   );
 }

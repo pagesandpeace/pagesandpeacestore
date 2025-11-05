@@ -20,20 +20,21 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {
-      user: schema.users,            // ✅ uses app_users
-      session: schema.sessions,      // ✅ uses app_sessions
-      account: schema.accounts,      // ✅ uses app_accounts
-      verification: schema.verifications, // ✅ uses app_verification
-    },
+  user: schema.users,
+  session: schema.sessions,
+  account: schema.accounts,
+  verification: schema.verifications, // ✅ keep as is for now
+},
+
   }),
 
-  /* ---------- Auth Settings ---------- */
+  /* ---------- Email & Password Auth ---------- */
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true,
+    requireEmailVerification: true,  // users must verify before login
   },
 
-  /* ---------- Email Verification ---------- */
+  /* ---------- Email Verification Settings ---------- */
   emailVerification: {
     sendOnSignUp: true,
     sendOnSignIn: false,
@@ -96,7 +97,7 @@ export const auth = betterAuth({
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
         path: "/",
-        maxAge: 60 * 60 * 24 * 7,
+        maxAge: 60 * 60 * 24 * 7, // 7 days
       },
     },
   },

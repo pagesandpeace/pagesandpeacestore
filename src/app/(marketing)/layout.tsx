@@ -3,19 +3,73 @@
 import { useCart } from "@/context/CartContext";
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import LoyaltyJoinModal from "@/components/LoyaltyJoinModal";
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   const { cart } = useCart();
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const [banner, setBanner] = useState("🌿 10% off all coffee blends this weekend!");
+  const [banner, setBanner] = useState<string | null>(null);
+  const [joined, setJoined] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function checkLoyalty() {
+      try {
+        const res = await fetch("/api/loyalty/status");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.loyaltyprogram) {
+            setJoined(true);
+            setBanner("✅ You’re in the Pages & Peace Loyalty Club!");
+          } else {
+            setBanner("🌿 Join the Pages & Peace Loyalty Club and earn points!");
+          }
+        } else if (res.status === 401) {
+          // not signed in — banner still shows CTA
+          setBanner("🌿 Join the Pages & Peace Loyalty Club and earn points!");
+        } else {
+          setBanner("🌿 Join the Pages & Peace Loyalty Club and earn points!");
+        }
+      } catch (err) {
+        console.error("Error checking loyalty:", err);
+        setBanner("🌿 Join the Pages & Peace Loyalty Club and earn points!");
+      } finally {
+        setLoading(false);
+      }
+    }
+    checkLoyalty();
+  }, []);
+
+  const handleJoinClick = async () => {
+    try {
+      const res = await fetch("/api/loyalty/status");
+      if (res.status === 401) {
+        // 🚀 Redirect unauthenticated users to signup page
+        window.location.href = "/sign-up?join=loyalty";
+        return;
+      }
+      // ✅ Authenticated users open the modal
+      setShowModal(true);
+    } catch (err) {
+      console.error("Join flow error:", err);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* ---- Marketing Banner ---- */}
-      {banner && (
-        <div className="bg-[var(--accent)] text-[var(--background)] text-center py-2 font-semibold text-sm">
-          {banner}
+      {/* ---- Loyalty Banner ---- */}
+      {!loading && banner && (
+        <div className="bg-[var(--accent)] text-[var(--background)] text-center py-2 px-4 font-semibold text-sm flex justify-center items-center gap-4 flex-wrap">
+          <span>{banner}</span>
+          {!joined && (
+            <button
+              onClick={handleJoinClick}
+              className="bg-[var(--background)] text-[var(--accent)] px-4 py-1.5 rounded-full font-semibold hover:opacity-90 transition"
+            >
+              Join Now
+            </button>
+          )}
         </div>
       )}
 
@@ -29,10 +83,18 @@ const [banner, setBanner] = useState("🌿 10% off all coffee blends this weeken
         </Link>
 
         <nav className="flex items-center gap-6">
-          <Link href="/" className="text-[var(--foreground)] hover:text-[var(--accent)]">Home</Link>
-          <Link href="/shop" className="text-[var(--foreground)] hover:text-[var(--accent)]">Shop</Link>
-          <Link href="/about" className="text-[var(--foreground)] hover:text-[var(--accent)]">About</Link>
-          <Link href="/contact" className="text-[var(--foreground)] hover:text-[var(--accent)]">Contact</Link>
+          <Link href="/" className="text-[var(--foreground)] hover:text-[var(--accent)]">
+            Home
+          </Link>
+          <Link href="/shop" className="text-[var(--foreground)] hover:text-[var(--accent)]">
+            Shop
+          </Link>
+          <Link href="/about" className="text-[var(--foreground)] hover:text-[var(--accent)]">
+            About
+          </Link>
+          <Link href="/contact" className="text-[var(--foreground)] hover:text-[var(--accent)]">
+            Contact
+          </Link>
 
           {/* ---- Cart Icon ---- */}
           <Link href="/cart" className="relative">
@@ -49,10 +111,17 @@ const [banner, setBanner] = useState("🌿 10% off all coffee blends this weeken
       {/* ---- Page Content ---- */}
       <main className="flex-1">{children}</main>
 
-      {/* ---- Footer (optional placeholder) ---- */}
-      <footer className="bg-[var(--background)] text-center py-6 text-sm text-[var(--foreground)]/70 border-t">
-        © {new Date().getFullYear()} Pages & Peace · Books, coffee & calm ☕📚
-      </footer>
+      {/* ---- Loyalty Modal ---- */}
+      {showModal && (
+        <LoyaltyJoinModal
+          onClose={() => setShowModal(false)}
+          onSuccess={() => {
+            setJoined(true);
+            setBanner("✅ You’re in the Pages & Peace Loyalty Club!");
+            setShowModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }
