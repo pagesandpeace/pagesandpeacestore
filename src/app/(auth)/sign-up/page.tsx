@@ -1,6 +1,13 @@
+"use client";
+
+import { Suspense } from "react";
 import AuthForm from "@/components/AuthForm";
 import { signUp } from "@/lib/auth/actions";
 
 export default function Page() {
-  return <AuthForm mode="sign-up" onSubmit={signUp} />;
+  return (
+    <Suspense fallback={<div className="text-center py-10">Loading...</div>}>
+      <AuthForm mode="sign-up" onSubmit={signUp} />
+    </Suspense>
+  );
 }

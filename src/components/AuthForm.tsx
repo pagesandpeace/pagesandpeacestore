@@ -160,7 +160,7 @@ export default function AuthForm({
         {mode === "sign-up" && isLoyaltySignup && (
           <div className="space-y-3 text-sm">
             <p className="text-[var(--foreground)]/80">
-              🌿 You're joining the Pages & Peace Loyalty Club — earn points with every purchase.
+              🌿 You are joining the Pages & Peace Loyalty Club — earn points with every purchase.
             </p>
 
             <label className="flex items-start gap-2">
