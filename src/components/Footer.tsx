@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-[var(--border)] mt-16 py-8 text-center text-sm font-[Montserrat] text-[var(--foreground)]/80">
+    <footer className="border-t border-[var(--border)] mt-8 py-8 text-center text-sm font-[Montserrat] text-[var(--foreground)]/80">
       <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-4">
         <p className="text-[var(--foreground)]/60">
           © {new Date().getFullYear()} Pages & Peace · All rights reserved.

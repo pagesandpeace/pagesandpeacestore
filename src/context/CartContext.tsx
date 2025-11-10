@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export type CartItem = {
   id: string;
@@ -16,7 +16,8 @@ type CartContextType = {
   removeFromCart: (id: string) => void;
   clearCart: () => void;
   updateQuantity: (id: string, quantity: number) => void;
-  total: number;
+  total: number;      // £ total
+  totalQty: number;   // 👈 total items badge
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -24,15 +25,19 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // ✅ Load cart from localStorage on mount
+  // Load from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem("cart");
-    if (stored) setCart(JSON.parse(stored));
+    try {
+      const stored = localStorage.getItem("cart");
+      if (stored) setCart(JSON.parse(stored));
+    } catch {}
   }, []);
 
-  // ✅ Save cart to localStorage on change
+  // Save to localStorage
   useEffect(() => {
-    localStorage.setItem("cart", JSON.stringify(cart));
+    try {
+      localStorage.setItem("cart", JSON.stringify(cart));
+    } catch {}
   }, [cart]);
 
   const addToCart = (item: CartItem) => {
@@ -59,11 +64,19 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   const clearCart = () => setCart([]);
 
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const total = useMemo(
+    () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    [cart]
+  );
+
+  const totalQty = useMemo(
+    () => cart.reduce((sum, item) => sum + (item.quantity || 0), 0),
+    [cart]
+  );
 
   return (
     <CartContext.Provider
-      value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, total }}
+      value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, total, totalQty }}
     >
       {children}
     </CartContext.Provider>

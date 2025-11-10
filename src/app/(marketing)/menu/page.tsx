@@ -77,8 +77,21 @@ export default function MenuPage() {
           />
 
           <MenuSection
+            title="Cold Drinks"
+            items={[
+              ["Iced Latte", "£3.50"],
+              ["Cans", "£1.50"],
+              ["Water", "£1.00"],
+              ["Glass of Milk", "£0.80"],
+            ]}
+          />
+
+          <MenuSection
             title="Alternative Milk"
-            items={[["Oatly", "£0.50"]]}
+            items={[
+              ["Oatly", "£0.50"],
+              ["Alpro Soya", "£0.50"],
+            ]}
           />
 
           <MenuSection
@@ -115,7 +128,7 @@ export default function MenuPage() {
             title="Traybakes & Cookie Bars"
             items={[
               ["Rocky Road", "£3.60"],
-              ["Bakewell Slice", "£2.90"],
+              ["Bakewell Slice", "£3.20"],
               ["Brownie", "£3.40"],
               ["Salted Caramel Brownie", "£3.90"],
               ["Banoffee Cookie Bar", "£3.70"],
@@ -137,7 +150,6 @@ export default function MenuPage() {
               ["Lemon & Almond", "£3.40"],
               ["Pistachio & Blueberry", "£3.40"],
               ["Carrot with Frosting & Walnuts", "£3.40"],
-              ["Fruit & Almond Bakewell Tart", "£4.00"],
             ]}
           />
 
@@ -146,10 +158,6 @@ export default function MenuPage() {
             items={[
               ["Pork, Apple & Red Onion Chutney Sausage Roll", "£3.50"],
               ["Curried Jackfruit, Aloo Gobi Bubble & Squeak", "£3.50"],
-              [
-                "Ploughman’s Roll with Cheddar, Onion & Tomato Relish",
-                "£3.50",
-              ],
             ]}
           />
 
