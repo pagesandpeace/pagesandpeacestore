@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
@@ -24,18 +24,25 @@ export default function Navbar({ toggleSidebar }: Props) {
   const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleToggle = () => {
-    setOpen((prev) => !prev);
+    setOpen(prev => !prev);
     if (toggleSidebar) toggleSidebar();
   };
   const closeMenu = () => setOpen(false);
 
+  // Close on Esc
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 bg-white shadow-sm">
-  <nav
-    className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
-    aria-label="Primary"
-  >
-        {/* Left: Hamburger (mobile) */}
+      <nav
+        className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
+        aria-label="Primary"
+      >
+        {/* Left: Hamburger (turns into X when open) */}
         <button
           type="button"
           className="inline-flex items-center justify-center p-2 md:hidden"
@@ -52,17 +59,19 @@ export default function Navbar({ toggleSidebar }: Props) {
         </button>
 
         {/* Center: Logo */}
-        <Image
-    src="/p&p_logo_cream.svg"
-    alt="Pages & Peace"
-    width={0}
-    height={0}
-    sizes="64px"
-    className="block h-10 w-auto"                       // ⬅️ 40px tall, truly centered
-    priority
-  />
+        <Link href="/" aria-label="Home" className="flex items-center justify-center">
+          <Image
+            src="/p&p_logo_cream.svg"
+            alt="Pages & Peace"
+            width={0}
+            height={0}
+            sizes="64px"
+            className="block h-10 w-auto"
+            priority
+          />
+        </Link>
 
-        {/* Right: Cart icon (ALWAYS visible) */}
+        {/* Right: Cart */}
         <Link
           href="/cart"
           className="relative inline-flex items-center text-gray-800 hover:text-gray-600 transition-colors"
@@ -83,13 +92,12 @@ export default function Navbar({ toggleSidebar }: Props) {
 
         {/* Desktop links (centered) */}
         <ul className="hidden items-center gap-8 md:flex absolute left-1/2 -translate-x-1/2">
-          {NAV_LINKS.map((link) => (
+          {NAV_LINKS.map(link => (
             <li key={link.href}>
               <Link
-  href="/"
-  aria-label="Home"
-  className="flex h-full items-center justify-center"   // ⬅️ fill navbar height + center
->
+                href={link.href}
+                className="text-gray-800 hover:text-gray-600 transition-colors"
+              >
                 {link.label}
               </Link>
             </li>
@@ -97,52 +105,51 @@ export default function Navbar({ toggleSidebar }: Props) {
         </ul>
       </nav>
 
-      {/* Separator */}
-      <div className="border-t border-gray-200 mt-2" />
-
-      {/* Mobile dropdown with outside-click close */}
+      {/* Mobile dropdown */}
       {open && (
-        <div
-          className="fixed inset-0 z-40 md:hidden"
-          aria-hidden="true"
-          onClick={closeMenu} // click outside closes
-        >
-          {/* Overlay to capture outside clicks (transparent) */}
-          <div className="absolute inset-0" />
+        <>
+          {/* Backdrop - click to close */}
+          <button
+            aria-hidden="true"
+            className="fixed inset-0 z-40 md:hidden bg-black/30"
+            onClick={closeMenu}
+          />
 
-          {/* Solid dropdown panel (auto height, not full screen) */}
+          {/* Panel: fixed under navbar, auto-height, green bg */}
           <div
             id="mobile-menu"
-            className="absolute top-16 left-0 w-full bg-white border-t border-gray-200 shadow-lg"
-            onClick={(e) => e.stopPropagation()} // don't close when clicking inside
+            className="
+              absolute left-0 right-0 top-16 z-50 md:hidden
+              bg-[var(--accent)] text-[var(--background)]
+              border-t border-[var(--secondary)]/40 shadow-lg
+              rounded-b-xl
+            "
+            onClick={e => e.stopPropagation()}
           >
-            {/* Top-left close button inside the dropdown panel */}
-            <button
-              type="button"
-              aria-label="Close menu"
-              className="md:hidden absolute left-3 top-3 rounded p-2 hover:bg-black/5"
-              onClick={closeMenu}
-            >
-              <XMarkIcon className="h-5 w-5 text-gray-800" />
-            </button>
-
-            <ul className="space-y-2 px-4 py-3 pt-12"> {/* pt-12 to clear the close button */}
-              {NAV_LINKS.map((link) => (
+            <ul className="px-4 py-3 space-y-1">
+              {NAV_LINKS.map(link => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="block py-2 text-gray-800 hover:text-gray-600"
+                    className="
+                      block w-full rounded-lg px-3 py-2
+                      text-[var(--background)]
+                      hover:bg-[var(--secondary)] hover:text-[var(--background)]
+                      transition-colors
+                    "
                     onClick={closeMenu}
                   >
                     {link.label}
                   </Link>
                 </li>
               ))}
-              {/* Cart NOT duplicated here to avoid redundancy */}
             </ul>
           </div>
-        </div>
+        </>
       )}
+
+      {/* Thin separator under navbar */}
+      <div className="border-t border-gray-200 mt-2" />
     </header>
   );
 }

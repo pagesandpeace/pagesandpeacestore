@@ -2,13 +2,22 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import LockScroll from "@/components/LockScroll";
 
 export default function Home() {
   return (
-    <main className="h-full overflow-hidden flex flex-col items-center justify-start px-6 py-8">
-      <LockScroll />
+    <main
+      className="
+        /* Fill visible viewport minus footer (h-16 = 4rem) */
+        min-h-[calc(100dvh-4rem)]
+        md:min-h-[calc(100svh-4rem)]
+        overflow-hidden
 
+        /* Layout */
+        flex flex-col items-center justify-start
+        px-6 py-8
+        bg-[var(--background)] text-[var(--foreground)] font-[Montserrat]
+      "
+    >
       {/* Logo + Tagline */}
       <div className="flex flex-col items-center mt-4">
         <Image
@@ -19,10 +28,17 @@ export default function Home() {
           priority
           className="mb-3"
         />
-        <h1 className="w-full max-w-[24ch] text-center text-balance text-4xl sm:text-6xl tracking-widest text-[var(--foreground)]">
-    ☕Every community needs a chapter.
-  </h1>
-        
+        <h1
+          className="
+            w-full max-w-[24ch]
+            text-center text-balance
+            text-4xl sm:text-6xl
+            leading-tight
+            tracking-widest
+          "
+        >
+          ☕ Every community needs a chapter.
+        </h1>
       </div>
 
       {/* CTAs */}
@@ -42,7 +58,7 @@ export default function Home() {
       </div>
 
       {/* Auth Prompt */}
-      <div className="mt-6">
+      <div className="mt-6 text-center">
         <p className="text-[var(--foreground)]/70 mb-3">Ready to make it personal?</p>
         <div className="flex gap-4 justify-center">
           <Link

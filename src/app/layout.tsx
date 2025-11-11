@@ -5,10 +5,16 @@ import "./globals.css";
 
 import { UserProvider } from "@/context/UserContext";
 import { CartProvider } from "@/context/CartContext";
-
 import CookieBanner from "@/components/CookieBanner";
 import ConditionalScripts from "@/components/ConditionalScripts";
 import Footer from "@/components/Footer";
+
+export const metadata: Metadata = {
+  title: "Pages & Peace",
+  description: "Books, coffee & calm ☕📚",
+  // ✅ lets us use the full safe area on iOS
+  other: { "viewport": "width=device-width, initial-scale=1, viewport-fit=cover" },
+};
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -16,29 +22,24 @@ const montserrat = Montserrat({
   variable: "--font-montserrat",
 });
 
-export const metadata: Metadata = {
-  title: "Pages & Peace",
-  description: "Books, coffee & calm ☕📚",
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full">
-      {/* ✅ Body is the only scroll container */}
-      <body className="min-h-screen flex flex-col ...">
-  <UserProvider>
-    <CartProvider>
-      <div className="flex-1">{children}</div>  {/* no overflow here */}
-      <Footer />
-      <CookieBanner />
-      <ConditionalScripts />
-    </CartProvider>
-  </UserProvider>
-</body>
+      <body className={`${montserrat.variable} min-h-screen flex flex-col antialiased bg-[var(--background)] text-[var(--foreground)]`}>
+        <UserProvider>
+          <CartProvider>
+            {/* Content column grows; footer is always visible as the last row */}
+            <div className="flex-1 min-h-0">
+              {children}
+            </div>
+
+            {/* Give footer a predictable height */}
+            <Footer />
+            <CookieBanner />
+            <ConditionalScripts />
+          </CartProvider>
+        </UserProvider>
+      </body>
     </html>
   );
 }
