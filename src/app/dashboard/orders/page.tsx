@@ -1,114 +1,66 @@
-"use client";
+import ComingSoon from "@/components/ComingSoon";
 
-import { useEffect, useState } from "react";
-
-type Order = {
-  id: string;
-  date: string;
-  total: string;
-  status: string;
+export const metadata = {
+  title: "My Orders | Pages & Peace",
+  description: "Track your purchases and order history.",
+  robots: { index: false, follow: false }, // not indexable until live
 };
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // 🧩 Placeholder: simulate fetching from API
-    const fetchOrders = async () => {
-      setLoading(true);
-      try {
-        // Simulated demo data — replace with real endpoint later
-        const mockData: Order[] = [
-          {
-            id: "ORD-1001",
-            date: "2025-10-21",
-            total: "£34.50",
-            status: "Delivered",
-          },
-          {
-            id: "ORD-1002",
-            date: "2025-10-22",
-            total: "£19.90",
-            status: "Processing",
-          },
-        ];
-        setTimeout(() => {
-          setOrders(mockData);
-          setLoading(false);
-        }, 800);
-      } catch (err) {
-        console.error("❌ Failed to fetch orders:", err);
-        setLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, []);
-
   return (
-    <main className="min-h-screen bg-[#FAF6F1] text-[#111] font-[Montserrat] px-8 py-16">
-      <section className="max-w-5xl mx-auto space-y-10">
-        {/* Header */}
-        <header className="border-b border-[#dcd6cf] pb-6 flex items-center justify-between">
+    <main className="min-h-screen bg-[#FAF6F1] text-[#111] font-[Montserrat] px-6 md:px-8 py-12 md:py-16">
+      <section className="mx-auto max-w-5xl space-y-8">
+        <header className="flex flex-col gap-2 border-b border-[#dcd6cf] pb-6 md:flex-row md:items-end md:justify-between">
           <h1 className="text-3xl font-semibold tracking-widest">My Orders 📦</h1>
           <p className="text-[#111]/70 text-sm">
-            Track your recent purchases and order history
+            Your order history will appear here once this feature goes live.
           </p>
         </header>
 
-        {/* Orders Table */}
-        {loading ? (
-          <p className="text-center text-[#777]">Loading your orders…</p>
-        ) : orders.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-[#111]/70 text-lg mb-4">
-              You haven’t placed any orders yet.
-            </p>
-            <a
-              href="/(marketing)/shop"
-              className="text-[#5DA865] font-medium hover:underline"
-            >
-              Visit the shop →
-            </a>
+        <ComingSoon
+          title="Orders are almost ready"
+          description="You’ll soon be able to view your purchases, track delivery, and download receipts right here."
+          actions={[
+            { label: "Browse the shop", href: "/shop" },
+            { label: "Back to account", href: "/dashboard" },
+          ]}
+        />
+
+        <div className="rounded-xl border border-[#e0dcd6] bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-[#e0dcd6] bg-[#FAF6F1] px-6 py-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-[#111]/80">
+              Layout preview (placeholder)
+            </h2>
+            <span className="text-xs text-[#111]/60">No live data shown</span>
           </div>
-        ) : (
-          <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-[#e0dcd6]">
-            <table className="w-full text-left border-collapse">
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left">
               <thead className="bg-[#FAF6F1] text-[#111]/80 text-sm uppercase tracking-wide">
                 <tr>
-                  <th className="px-6 py-4 border-b border-[#e0dcd6]">Order ID</th>
-                  <th className="px-6 py-4 border-b border-[#e0dcd6]">Date</th>
-                  <th className="px-6 py-4 border-b border-[#e0dcd6]">Total</th>
-                  <th className="px-6 py-4 border-b border-[#e0dcd6]">Status</th>
+                  <th className="px-6 py-3 border-b border-[#e0dcd6]">Order ID</th>
+                  <th className="px-6 py-3 border-b border-[#e0dcd6]">Date</th>
+                  <th className="px-6 py-3 border-b border-[#e0dcd6]">Total</th>
+                  <th className="px-6 py-3 border-b border-[#e0dcd6]">Status</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {orders.map((order) => (
-                  <tr
-                    key={order.id}
-                    className="hover:bg-[#FAF6F1]/60 transition-colors"
-                  >
-                    <td className="px-6 py-4 font-medium">{order.id}</td>
-                    <td className="px-6 py-4">{order.date}</td>
-                    <td className="px-6 py-4">{order.total}</td>
-                    <td
-                      className={`px-6 py-4 font-medium ${
-                        order.status === "Delivered"
-                          ? "text-[#5DA865]"
-                          : order.status === "Processing"
-                          ? "text-[#d89a00]"
-                          : "text-[#777]"
-                      }`}
-                    >
-                      {order.status}
-                    </td>
+                {[1, 2, 3].map((i) => (
+                  <tr key={i} className="hover:bg-[#FAF6F1]/60 transition-colors">
+                    <td className="px-6 py-4 text-[#111]/40">—</td>
+                    <td className="px-6 py-4 text-[#111]/40">—</td>
+                    <td className="px-6 py-4 text-[#111]/40">—</td>
+                    <td className="px-6 py-4 text-[#111]/40">—</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
+
+          <div className="border-t border-[#e0dcd6] px-6 py-4 text-sm text-[#111]/70">
+            This is a visual preview only. No order data is stored or displayed here yet.
+          </div>
+        </div>
       </section>
     </main>
   );

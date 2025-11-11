@@ -11,11 +11,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // On mount, check membership to set the banner copy
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/me", { cache: "no-store" });
-        if (res.status !== 200) {
+        if (!res.ok) {
           setJoined(false);
           setBanner("🌿 Join the Pages & Peace Loyalty Club and earn points!");
           return;
@@ -38,21 +39,10 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
     })();
   }, []);
 
-  const handleJoinClick = async () => {
-    try {
-      const res = await fetch("/api/me", { cache: "no-store" });
-      if (res.status === 401) {
-        window.location.href = "/sign-up?join=loyalty";
-        return;
-      }
-      setShowModal(true);
-    } catch (err) {
-      console.error("[MarketingLayout] join click /api/me failed:", err);
-    }
-  };
+  // Open modal unconditionally; let the modal handle auth (redirect on 401)
+  const handleJoinClick = () => setShowModal(true);
 
   return (
-    // 👇 fits inside RootLayout’s grid row (doesn't force full viewport)
     <div className="flex flex-col flex-1 min-h-0 bg-[var(--background)]">
       {!loading && banner && (
         <div className="w-full bg-[var(--accent)] text-[var(--background)] text-center py-2 px-4 font-semibold text-sm flex justify-center items-center gap-4 flex-wrap">
@@ -68,14 +58,13 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      
-        <Navbar />
-      
+      {/* Navbar sits directly under the banner; no extra padding/margin here */}
+      <Navbar />
 
-      {/* 👇 only the page content scrolls, footer remains visible in root grid */}
-      <main className="flex-1 min-h-0 overflow-y-auto pt-4 md:pt-16 pb-16">
-  {children}
-</main>
+      {/* Only page content scrolls; footer remains visible via RootLayout */}
+      <main className="flex-1 min-h-0 overflow-y-auto">
+        {children}
+      </main>
 
       {showModal && (
         <LoyaltyJoinModal

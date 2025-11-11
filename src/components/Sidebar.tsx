@@ -64,7 +64,16 @@ export default function Sidebar({
       router.push("/");
     }
   };
+useEffect(() => {
+  fetchUser(); // initial
+}, [fetchUser]);
 
+// 🔄 Refresh when dashboard join completes
+useEffect(() => {
+  const onLoyaltyUpdated = () => fetchUser();
+  window.addEventListener("pp:loyalty-updated", onLoyaltyUpdated);
+  return () => window.removeEventListener("pp:loyalty-updated", onLoyaltyUpdated);
+}, [fetchUser]);
   // Close sidebar by clicking backdrop (you already have this behavior)
   // Close Account dropdown when clicking outside it
   useEffect(() => {
@@ -140,14 +149,14 @@ export default function Sidebar({
             Dashboard
           </Link>
           <Link
-            href="/orders"
+            href="/dashboard/orders"
             onClick={() => setSidebarOpen(false)}
             className="hover:text-[#5DA865]"
           >
             Orders
           </Link>
           <Link
-            href="/settings"
+            href="/dashboard/settings"
             onClick={() => setSidebarOpen(false)}
             className="hover:text-[#5DA865]"
           >
