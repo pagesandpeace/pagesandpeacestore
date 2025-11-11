@@ -31,10 +31,10 @@ export default function Navbar({ toggleSidebar }: Props) {
 
   return (
     <header className="sticky top-0 z-50 bg-white shadow-sm">
-      <nav
-        className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 pt-2 pb-2"
-        aria-label="Primary"
-      >
+  <nav
+    className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
+    aria-label="Primary"
+  >
         {/* Left: Hamburger (mobile) */}
         <button
           type="button"
@@ -52,16 +52,15 @@ export default function Navbar({ toggleSidebar }: Props) {
         </button>
 
         {/* Center: Logo */}
-        <Link href="/" aria-label="Home" className="flex items-center justify-center">
-          <Image
-            src="/p&p_logo_cream.svg"
-            alt="Pages & Peace"
-            width={70}
-            height={70}
-            priority
-            className="object-contain"
-          />
-        </Link>
+        <Image
+    src="/p&p_logo_cream.svg"
+    alt="Pages & Peace"
+    width={0}
+    height={0}
+    sizes="64px"
+    className="block h-10 w-auto"                       // ⬅️ 40px tall, truly centered
+    priority
+  />
 
         {/* Right: Cart icon (ALWAYS visible) */}
         <Link
@@ -87,9 +86,10 @@ export default function Navbar({ toggleSidebar }: Props) {
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <Link
-                href={link.href}
-                className="text-gray-800 hover:text-gray-600 transition-colors"
-              >
+  href="/"
+  aria-label="Home"
+  className="flex h-full items-center justify-center"   // ⬅️ fill navbar height + center
+>
                 {link.label}
               </Link>
             </li>
@@ -116,7 +116,17 @@ export default function Navbar({ toggleSidebar }: Props) {
             className="absolute top-16 left-0 w-full bg-white border-t border-gray-200 shadow-lg"
             onClick={(e) => e.stopPropagation()} // don't close when clicking inside
           >
-            <ul className="space-y-2 px-4 py-3">
+            {/* Top-left close button inside the dropdown panel */}
+            <button
+              type="button"
+              aria-label="Close menu"
+              className="md:hidden absolute left-3 top-3 rounded p-2 hover:bg-black/5"
+              onClick={closeMenu}
+            >
+              <XMarkIcon className="h-5 w-5 text-gray-800" />
+            </button>
+
+            <ul className="space-y-2 px-4 py-3 pt-12"> {/* pt-12 to clear the close button */}
               {NAV_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link

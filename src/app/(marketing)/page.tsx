@@ -2,30 +2,31 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import LockScroll from "@/components/LockScroll";
 
 export default function Home() {
   return (
-<main className="flex flex-col items-center justify-start text-center px-6 py-16 bg-[var(--background)] font-[Montserrat]">
-      {/* --- Logo + Tagline --- */}
-      <div className="flex flex-col items-center mt-6"> {/* Adjusted margin-top for logo */}
+    <main className="h-full overflow-hidden flex flex-col items-center justify-start px-6 py-8">
+      <LockScroll />
+
+      {/* Logo + Tagline */}
+      <div className="flex flex-col items-center mt-4">
         <Image
           src="/p&p_logo_cream.svg"
           alt="Pages & Peace logo"
           width={160}
           height={160}
           priority
-          className="mb-4" // Reduced bottom margin for tighter spacing
+          className="mb-3"
         />
-        <h1 className="text-4xl sm:text-6xl tracking-widest text-[var(--foreground)]">
-          PAGES & PEACE
-        </h1>
-        <p className="mt-4 text-[var(--foreground)]/80 text-lg max-w-md leading-relaxed">
-          ☕ Every community needs a chapter.
-        </p>
+        <h1 className="w-full max-w-[24ch] text-center text-balance text-4xl sm:text-6xl tracking-widest text-[var(--foreground)]">
+    ☕Every community needs a chapter.
+  </h1>
+        
       </div>
 
-      {/* --- Call to Action --- */}
-      <div className="flex flex-col sm:flex-row gap-4 mt-8"> {/* Reduced margin-top */}
+      {/* CTAs */}
+      <div className="flex flex-col sm:flex-row gap-4 mt-6">
         <Link
           href="/shop"
           className="inline-block px-6 py-3 text-[var(--accent)] font-semibold border-2 border-[var(--accent)] rounded-full hover:border-[var(--secondary)] hover:text-[var(--secondary)] transition-all"
@@ -40,11 +41,9 @@ export default function Home() {
         </Link>
       </div>
 
-      {/* --- Auth Prompt --- */}
-      <div className="mt-8"> {/* Adjusted margin-top for better spacing */}
-        <p className="text-[var(--foreground)]/70 mb-3">
-          Ready to make it personal?
-        </p>
+      {/* Auth Prompt */}
+      <div className="mt-6">
+        <p className="text-[var(--foreground)]/70 mb-3">Ready to make it personal?</p>
         <div className="flex gap-4 justify-center">
           <Link
             href="/sign-in"

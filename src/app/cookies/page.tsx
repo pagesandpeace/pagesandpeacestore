@@ -1,3 +1,5 @@
+import BackLink from "@/components/BackLink";
+
 export const metadata = {
   title: "Cookie Policy | Pages & Peace",
   description:
@@ -7,6 +9,8 @@ export const metadata = {
 export default function CookiePolicyPage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-16 font-[Montserrat] text-[var(--foreground)] leading-relaxed">
+      <BackLink />
+
       <h1 className="text-4xl font-semibold mb-6 text-[var(--accent)]">
         Cookie Policy
       </h1>
@@ -112,9 +116,9 @@ export default function CookiePolicyPage() {
           <br />
           <strong>Pages & Peace</strong>
           <br />
-          Rossington, Doncaster, United Kingdom
+          8 Eva Building, Rossington, Doncaster, United Kingdom, DN10PF
           <br />
-          📧 <a href="mailto:hello@pagesandpeace.co.uk">hello@pagesandpeace.co.uk</a>
+          📧 <a href="mailto:admin@pagesandpeace.co.uk">admin@pagesandpeace.co.uk</a>
         </p>
       </section>
     </main>

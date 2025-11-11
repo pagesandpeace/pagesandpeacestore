@@ -19,7 +19,7 @@ export default function MenuPage() {
           className="mb-4"
         />
         <h1 className="text-4xl sm:text-5xl font-semibold tracking-widest text-[#5DA865]">
-          Pages & Peace Menu
+          Our Menu
         </h1>
         <p className="text-[#111]/70 mt-2">
           Every community needs a chapter.

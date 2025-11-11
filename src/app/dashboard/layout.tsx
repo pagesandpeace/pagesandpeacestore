@@ -1,31 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import Sidebar from "@/components/Sidebar"; // Import the Sidebar component
+import Sidebar from "@/components/Sidebar";
+import { Bars3Icon } from "@heroicons/react/24/outline";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Toggle sidebar function
-  const toggleSidebar = () => setSidebarOpen((prev) => !prev);
-
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--background)]">
-      {/* ---- Page Container (Main Content + Sidebar) ---- */}
-      <div className="flex flex-1">
-        {/* ---- Sidebar (for mobile) ---- */}
-        <Sidebar
-          sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen} // Pass setSidebarOpen to Sidebar
-          toggleSidebar={toggleSidebar} // Pass toggleSidebar to Sidebar
-          className="md:block w-64 bg-white" // Set sidebar width
-        /> {/* Sidebar will toggle open/close on mobile */}
+    <div className="flex min-h-screen bg-[var(--background)]">
+      {/* Sidebar overlay / panel */}
+      <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
-        {/* ---- Main Content Area ---- */}
-        <main className="flex-1 pt-4 md:pt-16 px-6 md:px-8">
-          {/* Add transition for smooth layout when sidebar opens/closes */}
-          {children} {/* Main content */}
-        </main>
+      {/* Main column */}
+      <div className="flex min-h-screen flex-1 flex-col">
+        {/* 🔸 Dashboard header with hamburger */}
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-white px-4 md:px-6">
+          <button
+            type="button"
+            aria-label="Open menu"
+            className="inline-flex items-center justify-center rounded p-2 md:hidden"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Bars3Icon className="h-6 w-6 text-gray-800" />
+          </button>
+        </header>
+
+        {/* Page body */}
+        <main className="flex-1 p-4 md:p-8">{children}</main>
       </div>
     </div>
   );

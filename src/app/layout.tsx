@@ -1,3 +1,4 @@
+// src/app/layout.tsx
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
@@ -27,25 +28,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full">
-      <body
-        className={`${montserrat.variable} h-full grid grid-rows-[1fr_auto] antialiased bg-[var(--background)] text-[var(--foreground)]`}
-      >
-        <UserProvider>
-          <CartProvider>
-            {/* ✅ Content fills screen height but scrolls only if needed */}
-            <div className="min-h-0 overflow-y-auto">
-              {children}
-            </div>
-
-            {/* ✅ Sticky footer (always visible at bottom of viewport) */}
-            <Footer />
-
-            {/* ✅ Global cookie controls */}
-            <CookieBanner />
-            <ConditionalScripts />
-          </CartProvider>
-        </UserProvider>
-      </body>
+      {/* ✅ Body is the only scroll container */}
+      <body className="min-h-screen flex flex-col ...">
+  <UserProvider>
+    <CartProvider>
+      <div className="flex-1">{children}</div>  {/* no overflow here */}
+      <Footer />
+      <CookieBanner />
+      <ConditionalScripts />
+    </CartProvider>
+  </UserProvider>
+</body>
     </html>
   );
 }

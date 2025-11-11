@@ -1,3 +1,5 @@
+import BackLink from "@/components/BackLink";
+
 export const metadata = {
   title: "Privacy Policy | Pages & Peace",
   description:
@@ -7,6 +9,8 @@ export const metadata = {
 export default function PrivacyPolicyPage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-16 font-[Montserrat] text-[var(--foreground)] leading-relaxed">
+      <BackLink />
+
       <h1 className="text-4xl font-semibold mb-6 text-[var(--accent)]">
         Privacy Policy
       </h1>
@@ -30,8 +34,11 @@ export default function PrivacyPolicyPage() {
           <strong>Address:</strong> Rossington, Doncaster, United Kingdom
           <br />
           <strong>Email:</strong>{" "}
-          <a href="mailto:hello@pagesandpeace.co.uk" className="underline text-[var(--accent)]">
-            hello@pagesandpeace.co.uk
+          <a
+            href="mailto:admin@pagesandpeace.co.uk"
+            className="underline text-[var(--accent)]"
+          >
+            admin@pagesandpeace.co.uk
           </a>
         </p>
 
