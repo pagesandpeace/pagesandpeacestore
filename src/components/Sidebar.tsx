@@ -1,12 +1,10 @@
-// src/components/Sidebar.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { Button } from "@/components/ui/Button";
-import { signOut } from "@/lib/auth/actions"; // keep this if it's client-safe
+import { signOut } from "@/lib/auth/actions";
 import { useRouter } from "next/navigation";
 
 interface SidebarProps {
@@ -36,7 +34,6 @@ export default function Sidebar({
 
   const accountRef = useRef<HTMLDivElement | null>(null);
 
-  // Fetch current user (client-safe)
   const fetchUser = useCallback(async () => {
     try {
       const res = await fetch("/api/me", { cache: "no-store" });
@@ -54,7 +51,14 @@ export default function Sidebar({
   }, []);
 
   useEffect(() => {
-    fetchUser();
+    fetchUser(); // initial
+  }, [fetchUser]);
+
+  // Refresh when dashboard join completes
+  useEffect(() => {
+    const onLoyaltyUpdated = () => fetchUser();
+    window.addEventListener("pp:loyalty-updated", onLoyaltyUpdated);
+    return () => window.removeEventListener("pp:loyalty-updated", onLoyaltyUpdated);
   }, [fetchUser]);
 
   const handleSignOut = async () => {
@@ -64,18 +68,8 @@ export default function Sidebar({
       router.push("/");
     }
   };
-useEffect(() => {
-  fetchUser(); // initial
-}, [fetchUser]);
 
-// 🔄 Refresh when dashboard join completes
-useEffect(() => {
-  const onLoyaltyUpdated = () => fetchUser();
-  window.addEventListener("pp:loyalty-updated", onLoyaltyUpdated);
-  return () => window.removeEventListener("pp:loyalty-updated", onLoyaltyUpdated);
-}, [fetchUser]);
-  // Close sidebar by clicking backdrop (you already have this behavior)
-  // Close Account dropdown when clicking outside it
+  // Close account dropdown when clicking outside
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node;
@@ -86,6 +80,15 @@ useEffect(() => {
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
+
+  // Close on Escape
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    if (menuOpen) document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   return (
     <div className={className}>
@@ -111,7 +114,7 @@ useEffect(() => {
       >
         {/* Close (mobile only) */}
         <button
-          type="button"
+          type="button" /* ✅ explicit, avoids accidental submit */
           aria-label="Close menu"
           className="md:hidden absolute right-3 top-3 rounded p-2 hover:bg-black/5"
           onClick={() => setSidebarOpen(false)}
@@ -121,6 +124,7 @@ useEffect(() => {
 
         {/* Logo */}
         <button
+          type="button" /* ✅ explicit */
           onClick={() => {
             setSidebarOpen(false);
             router.push("/dashboard");
@@ -164,11 +168,23 @@ useEffect(() => {
           </Link>
         </nav>
 
+        {/* Divider between settings and account */}
+        <hr className="my-6 border-t border-[#dcd6cf]" />
+
         {/* Account section (with loyalty badge) */}
-        <div className="relative mt-8" ref={accountRef}>
+        <div className="relative" ref={accountRef}>
           <button
+            type="button" /* ✅ explicit */
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-3 w-full text-left hover:opacity-90"
+            aria-expanded={menuOpen}
+            className="
+              flex items-center gap-3 w-full text-left
+              rounded-md px-2 py-2
+              transition-colors
+              hover:bg-[#f1ede7] hover:text-[#2f6b3a]
+              focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30
+              cursor-pointer
+            "
           >
             <Image
               src={userImage || "/user_avatar_placeholder.svg"}
@@ -180,7 +196,7 @@ useEffect(() => {
             <span className="font-medium text-sm">{userName}</span>
           </button>
 
-          {/* Loyalty badge ALWAYS visible if true */}
+          {/* Loyalty badge ONLY in sidebar */}
           {isInLoyaltyProgram && (
             <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#E5F7E4] px-3 py-1 text-xs font-medium text-[#2f7c3e]">
               <span>Chapters Club</span>
@@ -190,7 +206,7 @@ useEffect(() => {
 
           {/* Dropdown */}
           {menuOpen && (
-            <div className="absolute bottom-12 left-0 bg-white border border-[#dcd6cf] rounded-md py-2 w-44 shadow-sm">
+            <div className="absolute bottom-12 left-0 bg-white border border-[#dcd6cf] rounded-md py-1 w-44 shadow-sm">
               <Link
                 href="/dashboard/account"
                 onClick={() => {
@@ -202,14 +218,22 @@ useEffect(() => {
                 My Account
               </Link>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full mt-1"
+              {/* thin divider */}
+              <div className="my-1 border-t border-[#eee]" />
+
+              {/* Sign out as lightweight text item */}
+              <button
+                type="button" /* ✅ explicit */
                 onClick={handleSignOut}
+                className="
+                  block w-full text-left
+                  px-4 py-2 text-sm
+                  text-red-600 hover:bg-[#FAF6F1] hover:text-red-700
+                  transition
+                "
               >
-                Sign Out
-              </Button>
+                Sign out
+              </button>
             </div>
           )}
         </div>

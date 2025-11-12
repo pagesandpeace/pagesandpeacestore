@@ -3,140 +3,199 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { changePassword } from "@/lib/auth/actions";
+import { Field, Label, ErrorMessage, Hint } from "@/components/fieldset";
+import { Input } from "@/components/input";
+import { Eye, EyeOff } from "lucide-react";
+
+type Errors = {
+  currentPassword?: string;
+  newPassword?: string;
+  confirmPassword?: string;
+  form?: string;
+  success?: string;
+};
 
 export default function SecurityPage() {
   const router = useRouter();
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const [errors, setErrors] = useState<Errors>({});
   const [loading, setLoading] = useState(false);
+
+  const validate = (): boolean => {
+    const next: Errors = {};
+    if (!currentPassword) next.currentPassword = "Please enter your current password.";
+    if (!newPassword) next.newPassword = "Please enter a new password.";
+    if (newPassword && newPassword.length < 8) next.newPassword = "Minimum 8 characters.";
+    if (!confirmPassword) next.confirmPassword = "Please confirm your new password.";
+    if (newPassword && confirmPassword && newPassword !== confirmPassword) {
+      next.confirmPassword = "New passwords do not match.";
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage(null);
-
-    if (newPassword !== confirmPassword) {
-      setMessage("⚠️ New passwords do not match.");
-      return;
-    }
+    setErrors({});
+    if (!validate()) return;
 
     setLoading(true);
     try {
       const res = await changePassword(currentPassword, newPassword);
-
       if (res.ok) {
-        setMessage("✅ Password updated successfully.");
+        setErrors({ success: "✅ Password updated successfully. Redirecting…" });
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
-
-        // redirect after short delay
-        setTimeout(() => router.push("/dashboard"), 2000);
+        setTimeout(() => router.push("/dashboard"), 1500);
       } else {
-        setMessage(`❌ ${res.message || "Incorrect current password or invalid request."}`);
+        setErrors({ form: res.message || "Incorrect current password or invalid request." });
       }
     } catch (err) {
-      console.error(err);
-      setMessage("❌ Something went wrong. Please try again.");
+      setErrors({ form: "Something went wrong. Please try again." });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-[#FAF6F1] text-[#111] flex flex-col items-center py-16 px-6 font-[Montserrat]">
+    // ⬇️ no min-h-screen; let the parent layout control height so the footer stays visible
+    <main className="flex-1 min-h-0 bg-[#FAF6F1] text-[#111] flex flex-col items-center py-12 px-6 font-[Montserrat]">
       <section className="w-full max-w-2xl">
         {/* Header */}
-        <header className="mb-10">
-          <h1 className="text-3xl font-semibold tracking-wide text-[#111]">
-            Change Password 🔐
-          </h1>
+        <header className="mb-8">
+          <h1 className="text-3xl font-semibold tracking-wide">Change Password 🔐</h1>
           <p className="text-[#111]/70 mt-2 text-sm">
             Update your password securely below.
           </p>
         </header>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
           {/* Current password */}
-          <div className="pb-6 border-b border-[#dcd6cf]">
-            <label
-              htmlFor="currentPassword"
-              className="block text-xs uppercase tracking-wide text-[#777] font-medium mb-2"
-            >
-              Current Password
-            </label>
-            <input
-              id="currentPassword"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Enter current password"
-              required
-              className="w-full border-b border-[#ccc] bg-transparent py-2 text-[#111] placeholder:text-[#777] focus:outline-none focus:border-[#5DA865]"
-            />
-          </div>
+          <Field>
+            <Label htmlFor="currentPassword" requiredMark>
+              Current password
+            </Label>
+            <div className="relative">
+              <Input
+                id="currentPassword"
+                name="currentPassword"
+                type={showCurrent ? "text" : "password"}
+                placeholder="Enter current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                invalid={!!errors.currentPassword}
+                aria-describedby={errors.currentPassword ? "currentPassword-error" : undefined}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-[#777] hover:text-[#111]"
+                onClick={() => setShowCurrent((v) => !v)}
+                aria-label={showCurrent ? "Hide current password" : "Show current password"}
+              >
+                {showCurrent ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {errors.currentPassword ? (
+              <ErrorMessage id="currentPassword-error">{errors.currentPassword}</ErrorMessage>
+            ) : (
+              <Hint>For your security, we’ll verify your current password first.</Hint>
+            )}
+          </Field>
 
           {/* New password */}
-          <div className="pb-6 border-b border-[#dcd6cf]">
-            <label
-              htmlFor="newPassword"
-              className="block text-xs uppercase tracking-wide text-[#777] font-medium mb-2"
-            >
-              New Password
-            </label>
-            <input
-              id="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Minimum 8 characters"
-              required
-              minLength={8}
-              className="w-full border-b border-[#ccc] bg-transparent py-2 text-[#111] placeholder:text-[#777] focus:outline-none focus:border-[#5DA865]"
-            />
-          </div>
+          <Field>
+            <Label htmlFor="newPassword" requiredMark>
+              New password
+            </Label>
+            <div className="relative">
+              <Input
+                id="newPassword"
+                name="newPassword"
+                type={showNew ? "text" : "password"}
+                placeholder="Minimum 8 characters"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                invalid={!!errors.newPassword}
+                aria-describedby={errors.newPassword ? "newPassword-error" : "newPassword-hint"}
+                autoComplete="new-password"
+                minLength={8}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-[#777] hover:text-[#111]"
+                onClick={() => setShowNew((v) => !v)}
+                aria-label={showNew ? "Hide new password" : "Show new password"}
+              >
+                {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {errors.newPassword ? (
+              <ErrorMessage id="newPassword-error">{errors.newPassword}</ErrorMessage>
+            ) : (
+              <Hint id="newPassword-hint">
+                Use at least 8 characters. Mix letters, numbers, and symbols for strength.
+              </Hint>
+            )}
+          </Field>
 
           {/* Confirm new password */}
-          <div className="pb-6 border-b border-[#dcd6cf]">
-            <label
-              htmlFor="confirmPassword"
-              className="block text-xs uppercase tracking-wide text-[#777] font-medium mb-2"
-            >
-              Confirm New Password
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Re-enter new password"
-              required
-              className="w-full border-b border-[#ccc] bg-transparent py-2 text-[#111] placeholder:text-[#777] focus:outline-none focus:border-[#5DA865]"
-            />
-          </div>
+          <Field>
+            <Label htmlFor="confirmPassword" requiredMark>
+              Confirm new password
+            </Label>
+            <div className="relative">
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type={showConfirm ? "text" : "password"}
+                placeholder="Re-enter new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                invalid={!!errors.confirmPassword}
+                aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-[#777] hover:text-[#111]"
+                onClick={() => setShowConfirm((v) => !v)}
+                aria-label={showConfirm ? "Hide confirmation password" : "Show confirmation password"}
+              >
+                {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {errors.confirmPassword && (
+              <ErrorMessage id="confirmPassword-error">{errors.confirmPassword}</ErrorMessage>
+            )}
+          </Field>
 
-          {/* Message */}
-          {message && (
-            <div
-              className={`mt-6 text-center text-sm font-medium px-4 py-2 rounded-full border transition-all duration-300 ${
-                message.startsWith("✅")
-                  ? "bg-green-50 border-green-300 text-green-700"
-                  : message.startsWith("⚠️")
-                  ? "bg-yellow-50 border-yellow-300 text-yellow-700"
-                  : "bg-red-50 border-red-300 text-red-700"
-              }`}
-            >
-              {message}
+          {/* Form-level messages */}
+          {errors.form && (
+            <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+              ❌ {errors.form}
+            </div>
+          )}
+          {errors.success && (
+            <div className="mt-2 rounded-md border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+              {errors.success}
             </div>
           )}
 
-          {/* Submit button */}
+          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
-            className="mt-6 inline-block px-8 py-3 rounded-full bg-[#5DA865] text-[#FAF6F1] font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50"
+            className="mt-2 inline-block px-8 py-3 rounded-full bg-[var(--accent)] text-[var(--background)] font-semibold text-sm hover:bg-[var(--secondary)] transition-all disabled:opacity-50"
           >
             {loading ? "Updating…" : "Update Password"}
           </button>
