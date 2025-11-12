@@ -1,8 +1,7 @@
-// src/app/(marketing)/(auth)/layout.tsx  (adjust path to your auth segment)
+// src/app/(marketing)/(auth)/layout.tsx
 "use client";
 
 import Image from "next/image";
-import LockScroll from "@/components/LockScroll";
 import BackLink from "@/components/BackLink";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -10,14 +9,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <main
       className="
         relative flex flex-col lg:flex-row
-        min-h-screen h-[100svh] w-full
+        min-h-screen w-full
         bg-[var(--background)] text-[var(--foreground)]
-        overflow-hidden
       "
     >
-      {/* 🔒 Lock body scroll on all auth screens */}
-      <LockScroll />
-
       {/* LEFT SECTION — Brand Message (desktop) */}
       <section
         className="
@@ -56,18 +51,17 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </p>
       </section>
 
-      {/* RIGHT SECTION — Form Area */}
+      {/* RIGHT SECTION — Form Area (scrollable if content exceeds viewport) */}
       <section
         className="
           relative flex flex-1 items-center justify-center
           bg-[#FAF6F1] text-[#111111]
           px-6 sm:px-10 md:px-12
           py-12 sm:py-20
-          overflow-hidden    /* ⛔ no scrolling on auth pages */
-          h-[100svh]         /* fill viewport height */
+          overflow-y-auto
         "
       >
-        {/* ⬅️ Back link (top-left, like an app) */}
+        {/* Back link (top-left, like an app) */}
         <div className="absolute left-4 top-4 z-10">
           <BackLink />
         </div>
