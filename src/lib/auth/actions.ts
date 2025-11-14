@@ -1,3 +1,4 @@
+// src/lib/auth/actions.ts
 "use server";
 
 import { cookies, headers } from "next/headers";
@@ -5,22 +6,16 @@ import { z } from "zod";
 import { auth } from ".";
 import { db } from "../db";
 import * as schema from "../db/schema";
-import { guests } from "../db/schema";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 const COOKIE_OPTIONS = {
-  httpOnly: true as const,
+  httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "strict" as const,
-  path: "/" as const,
-  maxAge: 60 * 60 * 24 * 7, // 7 days
+  path: "/",
+  maxAge: 60 * 60 * 24 * 7,
 };
-
-// ✅ Validation Schemas
-const emailSchema = z.string().email();
-const passwordSchema = z.string().min(8).max(128);
-const nameSchema = z.string().min(1).max(100);
 
 /* -------------------------------------------------------------------------- */
 /*                             GUEST SESSION HELPERS                          */
@@ -29,14 +24,22 @@ const nameSchema = z.string().min(1).max(100);
 export async function createGuestSession() {
   const cookieStore = await cookies();
   const existing = cookieStore.get("guest_session");
-  if (existing?.value) return { ok: true, sessionToken: existing.value };
+  if (existing?.value)
+    return { ok: true, sessionToken: existing.value };
 
   const sessionToken = randomUUID();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + COOKIE_OPTIONS.maxAge * 1000);
 
-  await db.insert(guests).values({ sessionToken, expiresAt });
-  cookieStore.set("guest_session", sessionToken, COOKIE_OPTIONS);
+  await db.insert(schema.guests).values({ sessionToken, expiresAt });
+
+  // FIXED COOKIE SETTER
+  cookieStore.set({
+    name: "guest_session",
+    value: sessionToken,
+    ...COOKIE_OPTIONS,
+  });
+
   return { ok: true, sessionToken };
 }
 
@@ -46,9 +49,10 @@ export async function guestSession() {
   if (!token) return { sessionToken: null };
 
   const now = new Date();
+
   await db
-    .delete(guests)
-    .where(and(eq(guests.sessionToken, token), lt(guests.expiresAt, now)));
+    .delete(schema.guests)
+    .where(and(eq(schema.guests.sessionToken, token), lt(schema.guests.expiresAt, now)));
 
   return { sessionToken: token };
 }
@@ -56,6 +60,10 @@ export async function guestSession() {
 /* -------------------------------------------------------------------------- */
 /*                                SIGN UP                                     */
 /* -------------------------------------------------------------------------- */
+
+const emailSchema = z.string().email();
+const passwordSchema = z.string().min(8).max(128);
+const nameSchema = z.string().min(1).max(100);
 
 const signUpSchema = z.object({
   email: emailSchema,
@@ -70,108 +78,50 @@ export async function signUp(formData: FormData) {
     password: formData.get("password") as string,
   });
 
-  // ✅ Loyalty + consent flags
   const loyaltyProgramOptIn = formData.get("loyaltyprogram") === "true";
   const marketingConsent = formData.get("marketingConsent") === "true";
-  const acceptedTerms = formData.get("acceptedTerms") === "true";
-  const loyaltyPoints = 0;
 
-  // 🚨 Require terms if joining loyalty (for GDPR)
-  if (loyaltyProgramOptIn && !acceptedTerms) {
-    return { ok: false, message: "You must accept the Terms & Privacy Policy." };
-  }
 
-  // ✅ Create user via Better Auth
   const result = await auth.api.signUpEmail({
-    body: {
-      ...data,
-      callbackURL: "/verify-success",
-    },
+    body: { ...data, callbackURL: "/verify-success" },
   });
 
   const userId = result.user?.id;
-  if (!userId) {
-    return { ok: false, message: "User ID missing after signup." };
-  }
+  if (!userId) return { ok: false, message: "User ID missing after signup." };
 
-  // ✅ Base user update (handles loyalty boolean + points)
   await db
     .update(schema.users)
     .set({
       loyaltyprogram: loyaltyProgramOptIn,
-      loyaltypoints: loyaltyPoints,
       updatedAt: new Date(),
     })
     .where(eq(schema.users.id, userId));
 
-  // ✅ If joining loyalty, create record in loyalty_members table
   if (loyaltyProgramOptIn) {
-    try {
-      await db
-        .insert(schema.loyaltyMembers)
-        .values({
-          userId,
-          status: "active",
-          tier: "starter",
-          marketingConsent,
-          termsVersion: "v1.0",
-          joinedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: schema.loyaltyMembers.userId,
-          set: {
-            status: "active",
-            marketingConsent,
-            termsVersion: "v1.0",
-            updatedAt: new Date(),
-          },
-        });
-      console.log(`🌿 Created loyalty membership for ${data.email}`);
-    } catch (err) {
-      console.error("❌ Loyalty member insert error:", err);
-    }
-  }
-
-  // 🧩 Ensure verification token exists
-  try {
-    const [existingToken] = await db
-      .select()
-      .from(schema.verifications)
-      .where(eq(schema.verifications.identifier, data.email))
-      .limit(1);
-
-    if (!existingToken) {
-      const token = randomUUID();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-      await db.insert(schema.verifications).values({
-        id: randomUUID(),
-        identifier: data.email,
-        value: token,
-        expiresAt,
-        createdAt: new Date(),
+    await db.insert(schema.loyaltyMembers).values({
+      userId,
+      status: "active",
+      tier: "starter",
+      marketingConsent,
+      termsVersion: "v1.0",
+      joinedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: schema.loyaltyMembers.userId,
+      set: {
+        status: "active",
+        marketingConsent,
+        termsVersion: "v1.0",
         updatedAt: new Date(),
-      });
-
-      console.log("🧩 Created fallback verification token for", data.email);
-    } else {
-      console.log("✅ Verification token already exists for", data.email);
-    }
-  } catch (err) {
-    console.error("❌ Failed to ensure verification token:", err);
+      },
+    });
   }
 
-  // ✅ Clean up guest session
   await migrateGuestToUser();
 
-  return {
-    ok: true,
-    userId,
-    redirectTo: "/verify-pending",
-  };
+  return { ok: true, userId, redirectTo: "/verify-pending" };
 }
-
 
 /* -------------------------------------------------------------------------- */
 /*                                SIGN IN                                     */
@@ -192,7 +142,13 @@ export async function signIn(formData: FormData) {
     const result = await auth.api.signInEmail({ body: data });
     await migrateGuestToUser();
 
-    return { ok: true, userId: result.user?.id, redirectTo: "/dashboard" };
+    const callbackURL = formData.get("callbackURL") as string | null;
+
+    return {
+      ok: true,
+      userId: result.user?.id,
+      redirectTo: callbackURL || "/dashboard",
+    };
   } catch (err) {
     console.error("❌ Sign-in failed:", err);
     return { ok: false };
@@ -200,85 +156,125 @@ export async function signIn(formData: FormData) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             SESSION / AUTH HELPERS                         */
+/*                             MIGRATE GUEST                                  */
 /* -------------------------------------------------------------------------- */
-
-export async function getCurrentUser() {
-  try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    return session?.user ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export async function signOut() {
-  const forwardedHeaders = new Headers(await headers());
-  await auth.api.signOut({ headers: forwardedHeaders });
-  return { ok: true };
-}
-
-export async function mergeGuestCartWithUserCart() {
-  await migrateGuestToUser();
-  return { ok: true };
-}
 
 async function migrateGuestToUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get("guest_session")?.value;
   if (!token) return;
 
-  await db.delete(guests).where(eq(guests.sessionToken, token));
+  await db.delete(schema.guests).where(eq(schema.guests.sessionToken, token));
+
   cookieStore.delete("guest_session");
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             LOYALTY HELPERS                                */
+/*                               GET CURRENT USER                             */
 /* -------------------------------------------------------------------------- */
 
-export async function updateLoyaltyPoints(userId: string, pointsToAdd: number) {
+/** ✔ SERVER-SIDE VERSION */
+export async function getCurrentUserServer() {
   try {
-    await db
-      .update(schema.users)
-      .set({
-        loyaltypoints: sql`${schema.users.loyaltypoints} + ${pointsToAdd}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.users.id, userId));
-    return { ok: true };
+    const hdrs = await headers();
+    const session = await auth.api.getSession({ headers: hdrs });
+
+    return session?.user ?? null;
   } catch (err) {
-    console.error("❌ Loyalty point update error:", err);
-    return { ok: false };
+    console.error("❌ [getCurrentUserServer] error:", err);
+    return null;
   }
 }
 
+/** ✔ CLIENT-SIDE VERSION */
+export async function getCurrentUserClient() {
+  try {
+    const res = await fetch("/api/me", {
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.error("❌ [getCurrentUserClient] error:", err);
+    return null;
+  }
+}
+
+
+
 /* -------------------------------------------------------------------------- */
-/*                             CHANGE PASSWORD                                */
+/*                                   SIGN OUT                                 */
+/* -------------------------------------------------------------------------- */
+
+export async function signOut() {
+  try {
+    const hdrs = await headers();
+
+    try {
+      // Attempt clean logout — ignore errors
+      await auth.api.signOut({ headers: hdrs });
+    } catch (err) {
+      console.warn("⚠️ BetterAuth signOut() errored (ignored):", err);
+    }
+
+    // FORCE REMOVE SESSION COOKIE (BetterAuth does NOT always do it)
+    const cookieStore = await cookies();
+    cookieStore.set({
+      name: "auth_session",
+      value: "",
+      path: "/",
+      maxAge: 0,
+    });
+
+  } catch (err) {
+    console.error("❌ signOut() fatal error:", err);
+  }
+
+  // Always succeed from caller's perspective
+  return { ok: true };
+}
+
+
+
+
+
+/* -------------------------------------------------------------------------- */
+/*                              CHANGE PASSWORD                               */
 /* -------------------------------------------------------------------------- */
 
 export async function changePassword(currentPassword: string, newPassword: string) {
   try {
-    const forwardedHeaders = new Headers(await headers());
+    const hdrs = await headers();
+
+    // 1. Verify session
+    const session = await auth.api.getSession({ headers: hdrs });
+    if (!session?.user) {
+      return { ok: false, message: "Not authenticated" };
+    }
+
+    // 2. Attempt password change
     const result = await auth.api.changePassword({
       body: { currentPassword, newPassword },
-      headers: forwardedHeaders,
+      headers: hdrs,
     });
 
-    console.log("🔍 Password change response:", result);
-
-    if (!result || Object.keys(result).length === 0) {
-      return { ok: true, message: "Password changed successfully (empty response)." };
+    // BetterAuth throws on error — meaning if we reach here, it's successful
+    if (!result) {
+      return { ok: false, message: "Password change failed unexpectedly." };
     }
 
-    if ("user" in result || ("status" in result && (result as { status?: number }).status === 200)) {
-      return { ok: true, message: "Password updated successfully." };
-    }
-
-    return { ok: false, message: "Unexpected response from API." };
+    return { ok: true };
   } catch (err: unknown) {
-    console.error("❌ Password change error:", err);
-    let message = "Password change failed.";
-    if (err instanceof Error) message = err.message;
-    return { ok: false, message };
+    console.error("❌ changePassword() error:", err);
+
+    // Convert to readable message
+    const msg =
+      err instanceof Error
+        ? err.message
+        : "Something went wrong updating your password.";
+
+    return { ok: false, message: msg };
   }
 }

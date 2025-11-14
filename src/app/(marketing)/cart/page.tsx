@@ -1,14 +1,11 @@
 "use client";
 
 import { useCart } from "@/context/CartContext";
-// import { handleBuyNow } from "@/lib/checkout"; // ❌ remove this unused import
-
 import Image from "next/image";
 
 export default function CartPage() {
   const { cart, clearCart } = useCart();
 
-  // compute totals
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const handleCheckout = async () => {
@@ -19,7 +16,6 @@ export default function CartPage() {
     }
 
     try {
-      // Convert cart into Stripe-ready items
       const items = cart.map((item) => ({
         name: item.name,
         price: item.price,
@@ -30,7 +26,10 @@ export default function CartPage() {
 
       const res = await fetch("/api/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",            // 🔥 FIX: SEND SESSION COOKIE
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ items }),
       });
 
@@ -38,7 +37,7 @@ export default function CartPage() {
       console.log("💳 Stripe response:", data);
 
       if (data.url) {
-        window.location.href = data.url; // redirect to Stripe
+        window.location.href = data.url;
       } else {
         alert("Failed to start checkout session.");
       }
@@ -73,7 +72,9 @@ export default function CartPage() {
                     className="rounded-md"
                   />
                   <div>
-                    <p className="font-medium text-[var(--foreground)]">{item.name}</p>
+                    <p className="font-medium text-[var(--foreground)]">
+                      {item.name}
+                    </p>
                     <p className="text-sm text-gray-500">
                       £{item.price.toFixed(2)} × {item.quantity}
                     </p>

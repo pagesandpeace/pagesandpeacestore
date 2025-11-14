@@ -1,19 +1,36 @@
+// src/app/(marketing)/success/page.tsx
+"use client";
+
+import { useEffect, useRef } from "react";
+import Link from "next/link";
+import { useCart } from "@/context/CartContext";
+
 export default function SuccessPage() {
+  const { clearCart } = useCart();
+  const hasCleared = useRef(false);
+
+  useEffect(() => {
+    if (!hasCleared.current) {
+      hasCleared.current = true;
+      clearCart();
+    }
+  }, [clearCart]);
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-[var(--background)] text-center p-6">
-      <h1 className="text-4xl font-bold text-[var(--accent)] mb-4">
-        Payment Successful 🎉
-      </h1>
-      <p className="text-lg text-[color:var(--foreground)]/70 max-w-md mb-8">
-        Thank you for your purchase! Your order has been received and is being processed.
-        A confirmation email has been sent to your inbox.
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--background)] text-[var(--foreground)]">
+      <h1 className="text-2xl font-semibold mb-2">Payment successful 🎉</h1>
+      <p className="opacity-80 mb-6 text-center max-w-md">
+        Thanks for your order. Your receipt has been emailed to you and your
+        cart has been cleared.
       </p>
-      <a
-        href="/shop"
-        className="btn-primary inline-block"
-      >
-        Back to Shop
-      </a>
+      <div className="flex gap-4">
+        <Link href="/dashboard/orders" className="underline text-[var(--accent)]">
+          View my orders
+        </Link>
+        <Link href="/shop" className="underline text-[var(--accent)]">
+          Back to shop
+        </Link>
+      </div>
     </main>
   );
 }

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useCart } from "@/context/CartContext";
+import { useUser } from "@/lib/auth/useUser";   // ← NEW
 
 const NAV_LINKS = [
   { label: "Home", href: "/" },
@@ -15,21 +16,22 @@ const NAV_LINKS = [
 ];
 
 type Props = {
-  toggleSidebar?: () => void; // optional
+  toggleSidebar?: () => void;
 };
 
 export default function Navbar({ toggleSidebar }: Props) {
   const [open, setOpen] = useState(false);
   const { cart } = useCart();
+  const { user, loading } = useUser();   // ← unified login state
   const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleToggle = () => {
-    setOpen(prev => !prev);
+    setOpen((prev) => !prev);
     if (toggleSidebar) toggleSidebar();
   };
+
   const closeMenu = () => setOpen(false);
 
-  // Close on Esc
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("keydown", onKey);
@@ -42,7 +44,7 @@ export default function Navbar({ toggleSidebar }: Props) {
         className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
         aria-label="Primary"
       >
-        {/* Left: Hamburger (turns into X when open) */}
+        {/* Mobile hamburger */}
         <button
           type="button"
           className="inline-flex items-center justify-center p-2 md:hidden"
@@ -58,7 +60,7 @@ export default function Navbar({ toggleSidebar }: Props) {
           )}
         </button>
 
-        {/* Center: Logo */}
+        {/* Logo */}
         <Link href="/" aria-label="Home" className="flex items-center justify-center">
           <Image
             src="/p&p_logo_cream.svg"
@@ -71,28 +73,43 @@ export default function Navbar({ toggleSidebar }: Props) {
           />
         </Link>
 
-        {/* Right: Cart */}
-        <Link
-          href="/cart"
-          className="relative inline-flex items-center text-gray-800 hover:text-gray-600 transition-colors"
-          aria-label="Cart"
-        >
-          <span className="text-lg">🛒</span>
-          {totalQty > 0 && (
-            <span
-              className="absolute -top-1 -right-3 w-5 h-5 px-1 rounded-full text-xs font-semibold
-                         bg-[var(--accent,#5DA865)] text-black flex items-center justify-center"
-              aria-label={`${totalQty} items in cart`}
-            >
-              {totalQty > 99 ? "99+" : totalQty}
-            </span>
-          )}
-          <span className="sr-only">Cart</span>
-        </Link>
+        <div className="flex items-center gap-4">
+          {/* Cart */}
+          <Link
+            href="/cart"
+            className="relative inline-flex items-center text-gray-800 hover:text-gray-600 transition-colors"
+            aria-label="Cart"
+          >
+            <span className="text-lg">🛒</span>
+            {totalQty > 0 && (
+              <span
+                className="absolute -top-1 -right-3 w-5 h-5 px-1 rounded-full text-xs font-semibold
+                  bg-[var(--accent,#5DA865)] text-black flex items-center justify-center"
+                aria-label={`${totalQty} items in cart`}
+              >
+                {totalQty > 99 ? "99+" : totalQty}
+              </span>
+            )}
+          </Link>
 
-        {/* Desktop links (centered) */}
+          {/* Desktop: My Account */}
+          <div className="hidden md:inline-block min-w-[90px]">
+            {!loading && user ? (
+              <Link
+                href="/dashboard"
+                className="text-gray-800 hover:text-gray-600 transition-colors"
+              >
+                My Account
+              </Link>
+            ) : (
+              <span className="inline-block">&nbsp;</span>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop Navigation Centered */}
         <ul className="hidden items-center gap-8 md:flex absolute left-1/2 -translate-x-1/2">
-          {NAV_LINKS.map(link => (
+          {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <Link
                 href={link.href}
@@ -105,17 +122,15 @@ export default function Navbar({ toggleSidebar }: Props) {
         </ul>
       </nav>
 
-      {/* Mobile dropdown */}
+      {/* Mobile menu */}
       {open && (
         <>
-          {/* Backdrop - click to close */}
           <button
             aria-hidden="true"
             className="fixed inset-0 z-40 md:hidden bg-black/30"
             onClick={closeMenu}
           />
 
-          {/* Panel: fixed under navbar, auto-height, green bg */}
           <div
             id="mobile-menu"
             className="
@@ -124,18 +139,17 @@ export default function Navbar({ toggleSidebar }: Props) {
               border-t border-[var(--secondary)]/40 shadow-lg
               rounded-b-xl
             "
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <ul className="px-4 py-3 space-y-1">
-              {NAV_LINKS.map(link => (
+              {NAV_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
                     className="
                       block w-full rounded-lg px-3 py-2
                       text-[var(--background)]
-                      hover:bg-[var(--secondary)] hover:text-[var(--background)]
-                      transition-colors
+                      hover:bg-[var(--secondary)] transition-colors
                     "
                     onClick={closeMenu}
                   >
@@ -143,12 +157,28 @@ export default function Navbar({ toggleSidebar }: Props) {
                   </Link>
                 </li>
               ))}
+
+              {/* Mobile: My Account */}
+              {!loading && user && (
+                <li>
+                  <Link
+                    href="/dashboard"
+                    onClick={closeMenu}
+                    className="
+                      block w-full rounded-lg px-3 py-2
+                      text-[var(--background)]
+                      hover:bg-[var(--secondary)] transition-colors
+                    "
+                  >
+                    My Account
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
         </>
       )}
 
-      {/* Thin separator under navbar */}
       <div className="border-t border-gray-200 mt-2" />
     </header>
   );

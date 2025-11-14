@@ -1,54 +1,144 @@
 "use client";
 
-import { handleBuyNow } from "@/lib/checkout";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 
+// ✔ Use the CLIENT version only
+import { getCurrentUserClient } from "@/lib/auth/client";
+
+import { handleBuyNow } from "@/lib/checkout";
+
+type Genre = "gift" | "books" | "coffee" | "memberships";
+
+type RegularProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  image_url: string;
+  genre_id: Exclude<Genre, "gift">;
+  kind: "regular";
+};
+
+type GiftVoucherProduct = {
+  id: "gift-voucher";
+  name: string;
+  slug: "gift-vouchers";
+  description: string;
+  price: null;
+  image_url: string;
+  genre_id: "gift";
+  kind: "gift";
+};
+
+type Product = RegularProduct | GiftVoucherProduct;
+type User = { id: string; name?: string | null; email: string } | null;
+
 export default function ShopPage() {
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const router = useRouter();
   const { addToCart } = useCart();
 
-  const genres = [
-    { id: "books", name: "Books" },
-    { id: "coffee", name: "Coffee" },
-    { id: "memberships", name: "Memberships" },
-  ];
+  const [selectedGenre, setSelectedGenre] = useState<Genre | null>(null);
+  const [user, setUser] = useState<User>(null);
+  const [checkingUser, setCheckingUser] = useState(true);
 
-  const products = [
-    {
-      id: "1",
-      name: "Pages & Peace Tote Bag",
-      slug: "pages-peace-tote",
-      description: "Eco-friendly tote bag with our logo.",
-      price: 12.99,
-      image_url: "/coming_soon.svg",
-      genre_id: "books",
-    },
-    {
-      id: "2",
-      name: "House Blend Coffee Beans 250g",
-      slug: "house-blend-250g",
-      description: "Smooth, balanced blend roasted locally.",
-      price: 9.99,
-      image_url: "/coming_soon.svg",
-      genre_id: "coffee",
-    },
-    {
-      id: "3",
-      name: "Monthly Book Club Membership",
-      slug: "book-club-membership",
-      description: "Join our book club and get 1 new read every month.",
-      price: 29.99,
-      image_url: "/coming_soon.svg",
-      genre_id: "memberships",
-    },
-  ];
+  // ✔ Correct client-side auth
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const u = await getCurrentUserClient();
+        if (!cancelled) setUser(u ?? null);
+      } catch {
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setCheckingUser(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const filteredProducts = selectedGenre
-    ? products.filter((p) => p.genre_id === selectedGenre)
-    : products;
+  const genres: { id: Genre; name: string }[] = useMemo(
+    () => [
+      { id: "gift", name: "Gift Vouchers" },
+      { id: "books", name: "Books" },
+      { id: "coffee", name: "Coffee" },
+      { id: "memberships", name: "Memberships" },
+    ],
+    []
+  );
+
+  const products: Product[] = useMemo(
+    () => [
+      {
+        id: "gift-voucher",
+        name: "Pages & Peace Gift Voucher",
+        slug: "gift-vouchers",
+        description:
+          "Treat someone to books, coffee & calm. Pick an amount and we’ll email it or let you print at home.",
+        price: null,
+        image_url: "/gift-card.svg",
+        genre_id: "gift",
+        kind: "gift",
+      },
+      {
+        id: "1",
+        name: "Pages & Peace Tote Bag",
+        slug: "pages-peace-tote",
+        description: "Eco-friendly tote bag with our logo.",
+        price: 12.99,
+        image_url: "/coming_soon.svg",
+        genre_id: "books",
+        kind: "regular",
+      },
+      {
+        id: "2",
+        name: "House Blend Coffee Beans 250g",
+        slug: "house-blend-250g",
+        description: "Smooth, balanced blend roasted locally.",
+        price: 9.99,
+        image_url: "/coming_soon.svg",
+        genre_id: "coffee",
+        kind: "regular",
+      },
+      {
+        id: "3",
+        name: "Monthly Book Club Membership",
+        slug: "book-club-membership",
+        description: "Join our book club and get 1 new read every month.",
+        price: 29.99,
+        image_url: "/coming_soon.svg",
+        genre_id: "memberships",
+        kind: "regular",
+      },
+    ],
+    []
+  );
+
+  const filteredProducts = useMemo(
+    () =>
+      selectedGenre
+        ? products.filter((p) => p.genre_id === selectedGenre)
+        : products,
+    [products, selectedGenre]
+  );
+
+  const handleGiftVoucherClick = () => {
+    if (checkingUser) return;
+    if (!user) {
+      router.push(
+        `/sign-in?callbackURL=${encodeURIComponent("/gift-vouchers")}`
+      );
+      return;
+    }
+    router.push("/gift-vouchers");
+  };
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-16 font-[Montserrat]">
@@ -65,7 +155,8 @@ export default function ShopPage() {
           Shop
         </h1>
         <p className="text-[var(--foreground)]/70">
-          Explore our curated collection of books, blends, and memberships.
+          Explore our curated collection of books, blends, memberships — and
+          gift vouchers.
         </p>
       </section>
 
@@ -81,6 +172,7 @@ export default function ShopPage() {
         >
           All
         </button>
+
         {genres.map((genre) => (
           <button
             key={genre.id}
@@ -98,66 +190,92 @@ export default function ShopPage() {
 
       {/* ---- Product Grid ---- */}
       <section className="grid gap-10 sm:grid-cols-1 md:grid-cols-2 max-w-5xl mx-auto px-4">
+        {filteredProducts.map((product) => {
+          const isGift = product.kind === "gift";
 
-        {filteredProducts.map((product) => (
-          <div
-            key={product.id}
-            className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-200 p-5 flex flex-col items-center text-center border border-[var(--accent)]/10"
-          >
-            <Image
-              src={product.image_url}
-              alt={product.name}
-              width={300}
-              height={300}
-              className="rounded-xl mb-4 object-cover"
-            />
-            <h2 className="text-xl font-semibold mb-2 text-[var(--foreground)]">
-              {product.name}
-            </h2>
-            <p className="text-[var(--foreground)]/70 text-sm mb-3 line-clamp-2">
-              {product.description}
-            </p>
-            <p className="text-lg font-semibold text-[var(--accent)] mb-4">
-              £{Number(product.price).toFixed(2)}
-            </p>
+          return (
+            <div
+              key={product.id}
+              className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-200 p-5 flex flex-col items-center text-center border border-[var(--accent)]/10"
+            >
+              <Image
+                src={product.image_url}
+                alt={product.name}
+                width={300}
+                height={300}
+                className="rounded-xl mb-4 object-cover"
+              />
 
-            {/* ---- Actions ---- */}
-            <div className="flex flex-col gap-3 w-full">
-              {/* View Details Link */}
-              <Link
-                href={`/product/${product.slug}`}
-                className="text-[var(--accent)] font-medium hover:text-[var(--secondary)] transition text-sm"
-              >
-                View Details →
-              </Link>
+              <h2 className="text-xl font-semibold mb-2 text-[var(--foreground)]">
+                {product.name}
+              </h2>
 
-              {/* Buy Now + Add to Cart */}
-              <div className="flex gap-2 w-full">
-                <button
-                  onClick={() => handleBuyNow(product)}
-                  className="border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap flex-1"
-                >
-                  Buy Now
-                </button>
+              <p className="text-[var(--foreground)]/70 text-sm mb-3 line-clamp-2">
+                {product.description}
+              </p>
 
-                <button
-                  onClick={() =>
-                    addToCart({
-                      id: product.id,
-                      name: product.name,
-                      price: product.price,
-                      imageUrl: product.image_url,
-                      quantity: 1,
-                    })
+              {!isGift && (
+                <p className="text-lg font-semibold text-[var(--accent)] mb-4">
+                  £{Number(product.price).toFixed(2)}
+                </p>
+              )}
+
+              {/* ---- Actions ---- */}
+              <div className="flex flex-col gap-3 w-full">
+                <Link
+                  href={
+                    isGift
+                      ? "/gift-vouchers/details"
+                      : `/product/${product.slug}`
                   }
-                  className="bg-[var(--accent)] hover:bg-[var(--secondary)] text-white transition rounded-full px-3 py-1.5 text-sm font-semibold flex-1"
+                  className="text-[var(--accent)] font-medium hover:text-[var(--secondary)] transition text-sm"
                 >
-                  Add to Cart
-                </button>
+                  View Details →
+                </Link>
+
+                <div className="flex gap-2 w-full">
+                  {isGift ? (
+                    <button
+                      onClick={handleGiftVoucherClick}
+                      disabled={checkingUser}
+                      className="border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap flex-1"
+                    >
+                      {checkingUser
+                        ? "Checking…"
+                        : user
+                        ? "Buy Voucher"
+                        : "Sign in to buy"}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleBuyNow(product)}
+                        className="border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap flex-1"
+                      >
+                        Buy Now
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          addToCart({
+                            id: product.id,
+                            name: product.name,
+                            price: product.price,
+                            imageUrl: product.image_url,
+                            quantity: 1,
+                          })
+                        }
+                        className="bg-[var(--accent)] hover:bg-[var(--secondary)] text-white transition rounded-full px-3 py-1.5 text-sm font-semibold flex-1"
+                      >
+                        Add to Cart
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
     </main>
   );

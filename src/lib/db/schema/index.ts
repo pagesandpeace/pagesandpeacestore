@@ -1,6 +1,18 @@
-import { pgTable, text, timestamp, boolean, integer, numeric, jsonb } from "drizzle-orm/pg-core";
+// src/lib/db/schema/index.ts
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  integer,
+  numeric,
+  jsonb,
+  uuid,
+  varchar,
+  pgEnum,
+} from "drizzle-orm/pg-core";
 
-/* ---------------- USERS ---------------- */
+/* USERS */
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -8,19 +20,14 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
 
-  // ✅ Add loyalty fields here
   loyaltyprogram: boolean("loyaltyprogram").default(false).notNull(),
   loyaltypoints: integer("loyaltypoints").default(0).notNull(),
 
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-
-/* ---------------- SESSIONS ---------------- */
+/* SESSIONS */
 export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id")
@@ -31,13 +38,10 @@ export const sessions = pgTable("sessions", {
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-/* ---------------- ACCOUNTS ---------------- */
+/* ACCOUNTS */
 export const accounts = pgTable("accounts", {
   id: text("id").primaryKey(),
   accountId: text("account_id").notNull(),
@@ -53,34 +57,27 @@ export const accounts = pgTable("accounts", {
   scope: text("scope"),
   password: text("password"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-/* ---------------- VERIFICATIONS ---------------- */
-export const verifications = pgTable("verifications", {   // 👈 make plural here
+/* VERIFICATIONS */
+export const verifications = pgTable("verifications", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull().unique(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-
-/* ---------------- GUESTS ---------------- */
+/* GUEST SESSIONS */
 export const guests = pgTable("guests", {
   sessionToken: text("session_token").primaryKey(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-/* ---------------- GENRES (formerly categories) ---------------- */
+/* GENRES */
 export const genres = pgTable("genres", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -88,7 +85,7 @@ export const genres = pgTable("genres", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-/* ---------------- PRODUCTS ---------------- */
+/* PRODUCTS */
 export const products = pgTable("products", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -111,18 +108,26 @@ export const products = pgTable("products", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
-/* ---------------- ORDERS ---------------- */
+/* ORDERS */
 export const orders = pgTable("orders", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .references(() => users.id, { onDelete: "cascade" })
     .notNull(),
+
   total: numeric("total", { precision: 10, scale: 2 }).$type<number>().notNull(),
   status: text("status").default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeReceiptUrl: text("stripe_receipt_url"),
+  stripeCardBrand: text("stripe_card_brand"),
+  stripeLast4: text("stripe_last4"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
 });
 
-/* ---------------- ORDER ITEMS ---------------- */
+/* ORDER ITEMS */
 export const orderItems = pgTable("order_items", {
   id: text("id").primaryKey(),
   orderId: text("order_id")
@@ -131,17 +136,133 @@ export const orderItems = pgTable("order_items", {
   productId: text("product_id")
     .references(() => products.id, { onDelete: "cascade" })
     .notNull(),
-  quantity: integer("quantity").$type<number>().notNull(),
+
+  quantity: integer("quantity").notNull(),
   price: numeric("price", { precision: 10, scale: 2 }).$type<number>().notNull(),
 });
 
-/* ---------------- IDEMPOTENCY (for safe API retries) ---------------- */
+/* IDEMPOTENCY KEYS */
 export const idempotencyKeys = pgTable("idempotency_keys", {
-  key: text("key").primaryKey(), // Unique request key
-  scope: text("scope").notNull().default("loyalty_optin"), // Context for where it's used
-  response: jsonb("response").default({}), // Optional stored response
+  key: text("key").primaryKey(),
+  scope: text("scope").notNull().default("loyalty_optin"),
+  response: jsonb("response").default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// ✅ Loyalty schema (modular but included for migrations)
-export * from "./loyalty";
+/* GUEST ORDERS */
+export const guestOrders = pgTable("guest_orders", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull(),
+  guestToken: text("guest_token").notNull(),
+
+  total: numeric("total", { precision: 10, scale: 2 }).$type<number>().notNull(),
+  status: text("status").default("pending"),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeReceiptUrl: text("stripe_receipt_url"),
+  stripeCardBrand: text("stripe_card_brand"),
+  stripeLast4: text("stripe_last4"),
+
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+});
+
+export const guestOrderItems = pgTable("guest_order_items", {
+  id: text("id").primaryKey(),
+  guestOrderId: text("guest_order_id")
+    .references(() => guestOrders.id, { onDelete: "cascade" })
+    .notNull(),
+  productId: text("product_id")
+    .references(() => products.id, { onDelete: "set null" })
+    .notNull(),
+
+  quantity: integer("quantity").notNull(),
+  price: numeric("price", { precision: 10, scale: 2 }).$type<number>().notNull(),
+});
+
+/* LOYALTY MEMBERS */
+export const loyaltyMembers = pgTable("loyalty_members", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("active"),
+  tier: text("tier").notNull().default("starter"),
+  marketingConsent: boolean("marketing_consent").notNull().default(false),
+  termsVersion: text("terms_version").notNull(),
+  joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/* LOYALTY LEDGER */
+export const loyaltyLedger = pgTable("loyalty_ledger", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  points: integer("points").notNull(),
+  source: text("source").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/* EARNING RULES */
+export const earningRules = pgTable("earning_rules", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  active: boolean("active").notNull().default(true),
+  definition: jsonb("definition").notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }),
+  endsAt: timestamp("ends_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/* VOUCHERS ENUM */
+export const voucherStatusEnum = pgEnum("voucher_status", [
+  "active",
+  "redeemed",
+  "void",
+]);
+
+/* VOUCHERS */
+export const vouchers = pgTable("vouchers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  code: varchar("code", { length: 32 }).notNull().unique(),
+
+  amountInitialPence: integer("amount_initial_pence").notNull(),
+  amountRemainingPence: integer("amount_remaining_pence").notNull(),
+  currency: varchar("currency", { length: 10 }).notNull().default("gbp"),
+
+  status: voucherStatusEnum("status").notNull().default("active"),
+
+  buyerEmail: varchar("buyer_email", { length: 255 }).notNull(),
+  recipientEmail: varchar("recipient_email", { length: 255 }),
+  personalMessage: text("personal_message"),
+
+  stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
+  stripeCheckoutSessionId: varchar("stripe_checkout_session_id", { length: 255 }),
+
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/* VOUCHER REDEMPTIONS */
+export const voucherRedemptions = pgTable("voucher_redemptions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  voucherId: uuid("voucher_id")
+    .notNull()
+    .references(() => vouchers.id, { onDelete: "cascade" }),
+  redeemedAmountPence: integer("redeemed_amount_pence").notNull(),
+  note: text("note"),
+  staffUserId: varchar("staff_user_id", { length: 64 }),
+  location: varchar("location", { length: 120 }).default("store"),
+  redeemedAt: timestamp("redeemed_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export { users as user };
+export { sessions as session };
+export { accounts as account };
+export { verifications as verification };

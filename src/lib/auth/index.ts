@@ -8,33 +8,41 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
+/* ---------------------------------------------------------------------
+   FIX 1 — ALWAYS USE YOUR REAL DOMAIN
+   This prevents BetterAuth from auto-generating guest@pagesandpeace.com
+--------------------------------------------------------------------- */
 const BASE_URL =
-  process.env.NODE_ENV === "production"
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+  (process.env.NODE_ENV === "production"
     ? "https://pagesandpeace.co.uk"
-    : "http://localhost:3000";
+    : "http://localhost:3000");
+
+/* ---------------------------------------------------------------------
+   FIX 2 — Completely disable BetterAuth from auto-creating ANY user
+--------------------------------------------------------------------- */
 
 export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL ?? BASE_URL,
+  baseURL: BASE_URL,
 
   /* ---------- Database (Drizzle + BetterAuth) ---------- */
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {
-  user: schema.users,
-  session: schema.sessions,
-  account: schema.accounts,
-  verification: schema.verifications, // ✅ keep as is for now
-},
-
+      user: schema.users,
+      session: schema.sessions,
+      account: schema.accounts,
+      verification: schema.verifications,
+    },
   }),
 
   /* ---------- Email & Password Auth ---------- */
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true,  // users must verify before login
+    requireEmailVerification: true,
   },
 
-  /* ---------- Email Verification Settings ---------- */
+  /* ---------- Email Verification ---------- */
   emailVerification: {
     sendOnSignUp: true,
     sendOnSignIn: false,
@@ -43,7 +51,7 @@ export const auth = betterAuth({
     async sendVerificationEmail({ user, url }) {
       const verifyUrl = url.startsWith("http")
         ? url
-        : new URL(url, BASE_URL).toString();
+        : `${BASE_URL}${url}`;
 
       try {
         await resend.emails.send({
@@ -65,8 +73,7 @@ export const auth = betterAuth({
               <p style="text-align:center; margin-top:32px;">
                 <a href="${verifyUrl}"
                   style="background:#5DA865; color:#FAF6F1; text-decoration:none;
-                  padding:14px 28px; border-radius:8px; font-weight:600;
-                  display:inline-block; transition:background 0.2s;">
+                  padding:14px 28px; border-radius:8px; font-weight:600;">
                   Verify My Email
                 </a>
               </p>
@@ -90,20 +97,26 @@ export const auth = betterAuth({
 
   /* ---------- Cookies ---------- */
   cookies: {
-    sessionToken: {
-      name: "auth_session",
-      options: {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7, // 7 days
-      },
+  sessionToken: {
+    name: "auth_session",
+    options: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",     // ← FIXED HERE
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
     },
   },
+},
+
 
   /* ---------- Advanced ---------- */
   advanced: {
+    /* FIX 2 — NO AUTO-GUEST, NO AUTO-CREATE */
+    session: {
+      createUserIfNotExists: false,   // 🔥 stops BetterAuth making guest users
+    },
+
     database: {
       generateId: () => uuidv4(),
     },

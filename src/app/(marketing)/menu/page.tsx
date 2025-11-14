@@ -62,6 +62,7 @@ export default function MenuPage() {
               ["Cappuccino", "£3.50"],
               ["Flat White", "£3.20"],
               ["Mocha", "£3.70"],
+              ["Chai Latte", "£3.70"],
               ["Hot Chocolate", "£3.20"],
               ["Luxury Hot Chocolate", "£4.20"],
               ["Yorkshire Tea", "£2.50"],

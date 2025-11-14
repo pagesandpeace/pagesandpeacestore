@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
@@ -6,11 +7,25 @@ import * as schema from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function GET() {
+  console.log("📥 [/api/me] HIT");
+
   try {
     const hdrs = await headers();
+
+    console.log("📄 Request headers:");
+    hdrs.forEach((v, k) => console.log("   ", k, "=", v));
+
     const session = await auth.api.getSession({ headers: hdrs });
-    const user = session?.user;
-    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+    console.log("🔑 Session:", session);
+
+    if (!session?.user) {
+      console.log("❌ No user in session — returning {id:null}");
+      return NextResponse.json({ id: null }, { status: 200 });
+    }
+
+    const user = session.user;
+    console.log("✅ Found session user:", user);
 
     const [row] = await db
       .select({
@@ -24,10 +39,17 @@ export async function GET() {
       .where(eq(schema.users.id, user.id))
       .limit(1);
 
-    if (!row) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    console.log("📀 DB row:", row);
+
+    if (!row) {
+      console.log("⚠️ User missing in DB — return logged-out state");
+      return NextResponse.json({ id: null }, { status: 200 });
+    }
+
+    console.log("🏁 Returning user:", row);
     return NextResponse.json(row);
   } catch (err) {
-    console.error("[api/me] error:", err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    console.error("💥 [/api/me] ERROR:", err);
+    return NextResponse.json({ id: null }, { status: 200 });
   }
 }

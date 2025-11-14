@@ -1,13 +1,19 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/actions";
+import { getCurrentUserServer } from "@/lib/auth/actions";
 
 export default async function AdminPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/(auth)/sign-in");
+  // ✔ Correct server-side version
+  const user = await getCurrentUserServer();
 
-  // TODO: replace with real RBAC (profiles.role === 'admin')
+  if (!user) {
+    redirect("/(auth)/sign-in");
+  }
+
+  // ✔ Your admin rule
   const isAdmin = (user.email ?? "").endsWith("@yourdomain.com");
-  if (!isAdmin) redirect("/account");
+  if (!isAdmin) {
+    redirect("/account");
+  }
 
   return (
     <div className="space-y-4">

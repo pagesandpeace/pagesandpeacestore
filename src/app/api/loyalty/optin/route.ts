@@ -5,7 +5,8 @@ import {
   loyaltyMembers,
   loyaltyLedger,
   idempotencyKeys,
-} from "@/lib/db/schema/loyalty"; // <-- new file you added
+} from "@/lib/db/schema";
+ // <-- new file you added
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { randomUUID } from "crypto";

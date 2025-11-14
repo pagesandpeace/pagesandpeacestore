@@ -128,3 +128,11 @@ button:disabled,
   justify-content: center; /* Center the content */
   overflow-y: auto; /* Allow vertical scrolling */
 }
+
+/* Pulse in when value changes */
+.pulse-in { animation: pulse-in 180ms ease-out; }
+@keyframes pulse-in {
+  0% { transform: scale(0.98); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
