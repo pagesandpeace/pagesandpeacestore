@@ -5,8 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
-
-// ✔ Use the CLIENT version only
 import { getCurrentUserClient } from "@/lib/auth/client";
 
 import { handleBuyNow } from "@/lib/checkout";
@@ -40,15 +38,14 @@ type User = { id: string; name?: string | null; email: string } | null;
 
 export default function ShopPage() {
   const router = useRouter();
-  const { addToCart } = useCart();
-
   const [selectedGenre, setSelectedGenre] = useState<Genre | null>(null);
   const [user, setUser] = useState<User>(null);
   const [checkingUser, setCheckingUser] = useState(true);
 
-  // ✔ Correct client-side auth
+  // Load user once on mount
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       try {
         const u = await getCurrentUserClient();
@@ -59,12 +56,13 @@ export default function ShopPage() {
         if (!cancelled) setCheckingUser(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const genres: { id: Genre; name: string }[] = useMemo(
+  const genres = useMemo(
     () => [
       { id: "gift", name: "Gift Vouchers" },
       { id: "books", name: "Books" },
@@ -155,8 +153,7 @@ export default function ShopPage() {
           Shop
         </h1>
         <p className="text-[var(--foreground)]/70">
-          Explore our curated collection of books, blends, memberships — and
-          gift vouchers.
+          Explore our curated collection of books, blends, memberships — and gift vouchers.
         </p>
       </section>
 
@@ -181,7 +178,8 @@ export default function ShopPage() {
                 ? "bg-[var(--accent)] text-[var(--background)]"
                 : ""
             }`}
-            onClick={() => setSelectedGenre(genre.id)}
+            onClick={() => setSelectedGenre(genre.id as Genre)}
+
           >
             {genre.name}
           </button>
@@ -234,43 +232,16 @@ export default function ShopPage() {
                 </Link>
 
                 <div className="flex gap-2 w-full">
-                  {isGift ? (
-                    <button
-                      onClick={handleGiftVoucherClick}
-                      disabled={checkingUser}
-                      className="border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap flex-1"
-                    >
-                      {checkingUser
-                        ? "Checking…"
-                        : user
-                        ? "Buy Voucher"
-                        : "Sign in to buy"}
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => handleBuyNow(product)}
-                        className="border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap flex-1"
-                      >
-                        Buy Now
-                      </button>
+                  <button
+  disabled
+  className="bg-[var(--accent)]/20 text-[var(--accent)] 
+             border border-[var(--accent)]/40 cursor-not-allowed 
+             rounded-full px-3 py-2 text-xs font-semibold flex-1"
+>
+  🕒 Coming Soon
+</button>
 
-                      <button
-                        onClick={() =>
-                          addToCart({
-                            id: product.id,
-                            name: product.name,
-                            price: product.price,
-                            imageUrl: product.image_url,
-                            quantity: 1,
-                          })
-                        }
-                        className="bg-[var(--accent)] hover:bg-[var(--secondary)] text-white transition rounded-full px-3 py-1.5 text-sm font-semibold flex-1"
-                      >
-                        Add to Cart
-                      </button>
-                    </>
-                  )}
+
                 </div>
               </div>
             </div>

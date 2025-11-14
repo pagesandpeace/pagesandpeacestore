@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import LoyaltyJoinModal from "@/components/LoyaltyJoinModal";
-import { useUser } from "@/lib/auth/useUser";   // ← NEW
+import { useUser } from "@/lib/auth/useUser";
 
 type Me = { id: string; email: string; loyaltyprogram?: boolean };
 
@@ -11,14 +11,12 @@ const DISMISS_KEY = "pp_alpha_banner_dismissed_v2";
 const DISMISS_TTL_HOURS = 24;
 
 export default function DashboardPage() {
-  const { user, loading } = useUser();   // ← unified login state
+  const { user, loading } = useUser();
   const [loyalty, setLoyalty] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
   const [showJoinModal, setShowJoinModal] = useState(false);
 
-  /* ---------------------------------------------
-   *  Load loyalty from /api/me when user is ready
-   * ------------------------------------------- */
+  /* Load loyalty flag once user is present */
   useEffect(() => {
     if (!user) return;
 
@@ -39,9 +37,7 @@ export default function DashboardPage() {
     refreshMe();
   }, [user]);
 
-  /* ---------------------------------------------
-   * Banner dismiss TTL
-   * ------------------------------------------- */
+  /* Banner TTL */
   useEffect(() => {
     try {
       const raw = localStorage.getItem(DISMISS_KEY);
@@ -81,9 +77,7 @@ export default function DashboardPage() {
     setShowBanner(true);
   };
 
-  /* ---------------------------------------------
-   * Loading state
-   * ------------------------------------------- */
+  /* Loading */
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] font-[Montserrat] flex items-center justify-center">
@@ -92,9 +86,7 @@ export default function DashboardPage() {
     );
   }
 
-  /* ---------------------------------------------
-   * Not signed in
-   * ------------------------------------------- */
+  /* Not logged in */
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--background)] text-[var(--foreground)] font-[Montserrat]">
@@ -109,13 +101,11 @@ export default function DashboardPage() {
     );
   }
 
-  /* ---------------------------------------------
-   * MAIN DASHBOARD
-   * ------------------------------------------- */
+  /* MAIN DASHBOARD */
   return (
     <div className="flex-1 w-full bg-[var(--background)] text-[var(--foreground)] font-[Montserrat]">
 
-      {/* Banner */}
+      {/* BANNER */}
       {showBanner && (
         <div role="status" className="w-full bg-[#FFF6E5] text-[#5B4200] border-b border-[#EAD9B5]">
           <div className="mx-auto max-w-4xl px-6 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -125,14 +115,17 @@ export default function DashboardPage() {
               </span>
 
               {loyalty ? (
-                <>Thanks for being an early adopter via the <strong>Chapters Club</strong>. Features are still rolling out.</>
+                <>You’re part of the <strong>Chapters Club</strong>. New features are unlocking soon.</>
               ) : (
-                <>We’re still in early development. Some sections are preview-only.</>
+                <>We’re still rolling out features. You’re seeing an early preview.</>
               )}
             </div>
 
             <div className="flex items-center gap-3">
-              <Link href="/dashboard/orders" className="text-sm font-medium underline underline-offset-4 hover:opacity-80">
+              <Link
+                href="/dashboard/chapters-club"
+                className="text-sm font-medium underline underline-offset-4 hover:opacity-80"
+              >
                 What’s coming
               </Link>
 
@@ -157,7 +150,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Main content */}
+      {/* MAIN CONTENT */}
       <div className="max-w-4xl mx-auto px-6 py-10 md:py-16">
 
         <header className="mb-12">
@@ -165,10 +158,19 @@ export default function DashboardPage() {
             <h1 className="text-3xl font-semibold tracking-widest">
               Welcome back, {user.name || "Reader"} ☕
             </h1>
-            <span className="inline-flex items-center rounded-full border border-[#dcd6cf] px-2.5 py-1 text-xs font-semibold text-[#5B4200] bg-[#FFF6E5]">
-              Early Access
-            </span>
+
+            {/* ✔ Updated badge — matches Chapters Club page */}
+            {loyalty ? (
+              <span className="inline-flex items-center rounded-full bg-[#E5F7E4] border border-[#5DA865]/30 px-2.5 py-1 text-xs font-semibold text-[#2f6b3a]">
+                <strong>Founding Member Status</strong> 🎉
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-[#FFF6E5] border border-[#EAD9B5] px-2.5 py-1 text-xs font-semibold text-[#5B4200]">
+                Early Access
+              </span>
+            )}
           </div>
+
           <p className="text-[var(--foreground)]/70 text-sm max-w-xl mt-2">
             Here’s what’s happening in your Pages & Peace account.
           </p>
@@ -207,8 +209,12 @@ export default function DashboardPage() {
           {/* Preferences */}
           <div className="pb-6 border-b border-[#dcd6cf] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
             <div>
-              <p className="text-xs uppercase tracking-wide text-[#777] font-medium mb-2">Community & Preferences</p>
-              <p className="text-sm text-[#555] max-w-sm">Join book clubs, follow new releases, or adjust your reading preferences.</p>
+              <p className="text-xs uppercase tracking-wide text-[#777] font-medium mb-2">
+                Community & Preferences
+              </p>
+              <p className="text-sm text-[#555] max-w-sm">
+                Join book clubs, follow new releases, or adjust your reading preferences.
+              </p>
             </div>
             <Link
               href="/dashboard/settings"

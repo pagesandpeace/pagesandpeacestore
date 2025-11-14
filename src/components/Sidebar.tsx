@@ -112,6 +112,22 @@ export default function Sidebar({
           <Link href="/shop" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865]">
             Shop
           </Link>
+          <Link
+  href="/dashboard/chapters-club"
+  onClick={() => setSidebarOpen(false)}
+  className="hover:text-[#5DA865] flex items-center gap-2"
+>
+  <span>Chapters Club</span>
+
+  {/* Coming Soon badge */}
+  <span
+  className="inline-flex items-center rounded-full bg-[#E5F7E4] border border-[#5DA865]/30 px-2.5 py-1 text-xs font-semibold text-[#2f6b3a]">
+    
+  
+  <strong>Coming Soon</strong> 🚀
+  </span>
+</Link>
+
         </nav>
 
         <hr className="my-6 border-t border-[#dcd6cf]" />

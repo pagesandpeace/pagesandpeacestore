@@ -1,6 +1,5 @@
 "use client";
 
-import { handleBuyNow } from "@/lib/checkout";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -20,7 +19,7 @@ export default function ProductPage() {
   const { slug } = useParams();
   const [product, setProduct] = useState<Product | null>(null);
 
-  // ✅ Local fallback data
+  // Local seed data (fallback)
   const seedProducts: Product[] = [
     {
       id: "1",
@@ -51,14 +50,13 @@ export default function ProductPage() {
     },
   ];
 
-  // ✅ Find matching product by slug
+  // Load correct product by slug
   useEffect(() => {
     const found = seedProducts.find((p) => p.slug === slug);
     setProduct(found || null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
-  // ✅ Product not found
+  // Product not found
   if (!product) {
     return (
       <main className="min-h-screen flex flex-col justify-center items-center text-center bg-[var(--background)] text-[var(--foreground)] px-6">
@@ -70,11 +68,12 @@ export default function ProductPage() {
     );
   }
 
-  // ✅ Product display
+  // Product display
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] px-6 py-16">
       <section className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-        {/* ---- Product Image ---- */}
+        
+        {/* Image */}
         <div className="flex justify-center">
           <Image
             src={product.image_url || "/coming_soon.svg"}
@@ -85,23 +84,27 @@ export default function ProductPage() {
           />
         </div>
 
-        {/* ---- Product Details ---- */}
+        {/* Details */}
         <div className="flex flex-col space-y-6">
           <h1 className="text-4xl font-semibold">{product.name}</h1>
+
           <p className="text-[color:var(--foreground)]/80 leading-relaxed">
             {product.description}
           </p>
+
           <p className="text-2xl font-bold text-[var(--accent)]">
             £{Number(product.price).toFixed(2)}
           </p>
 
+          {/* 🚫 Buy Now disabled — Coming Soon Button */}
           <button
-            onClick={() => handleBuyNow(product)}
-            className="btn-primary w-full md:w-auto"
+            disabled
+            className="bg-[var(--accent)]/20 text-[var(--accent)] border border-[var(--accent)]/40 cursor-not-allowed rounded-full px-4 py-3 text-base font-semibold w-full md:w-auto"
           >
-            🛒 Buy Now
+            🕒 Coming Soon
           </button>
 
+          {/* Back to shop */}
           <Link href="/shop" className="btn-outline w-full md:w-auto text-center">
             ← Back to Shop
           </Link>
