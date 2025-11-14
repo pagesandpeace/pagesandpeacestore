@@ -6,7 +6,7 @@ import { signUp } from "@/lib/auth/actions";
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="text-center py-10">Loading...</div>}>
+    <Suspense fallback={<div className="text-center py-10">Loading…</div>}>
       <AuthForm mode="sign-up" onSubmit={signUp} />
     </Suspense>
   );

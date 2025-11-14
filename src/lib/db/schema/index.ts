@@ -25,6 +25,8 @@ export const users = pgTable("users", {
 
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  role: text("role").notNull().default("customer"),
+
 });
 
 /* SESSIONS */
@@ -266,3 +268,5 @@ export { users as user };
 export { sessions as session };
 export { accounts as account };
 export { verifications as verification };
+export * from "./events";
+export * from "./event_bookings";

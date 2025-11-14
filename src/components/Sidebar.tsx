@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { signOut } from "@/lib/auth/actions";
-import { useUser } from "@/lib/auth/useUser"; // ← NEW
+import { useUser } from "@/lib/auth/useUser";
 import { useRouter } from "next/navigation";
 
 interface SidebarProps {
@@ -19,12 +19,11 @@ export default function Sidebar({
   setSidebarOpen,
   className = "",
 }: SidebarProps) {
-  const { user, loading } = useUser();      // ← unified state
+  const { user, loading } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const router = useRouter();
   const accountRef = useRef<HTMLDivElement | null>(null);
 
-  /* ------------------------ SIGN OUT ------------------------ */
   const handleSignOut = async () => {
     await signOut();
     setMenuOpen(false);
@@ -33,7 +32,6 @@ export default function Sidebar({
     router.push("/");
   };
 
-  /* ------------------------ Close dropdown on outside click ------------------------ */
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node;
@@ -45,7 +43,6 @@ export default function Sidebar({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  /* ------------------------ UI ------------------------ */
   return (
     <div className={className}>
       {sidebarOpen && (
@@ -101,6 +98,11 @@ export default function Sidebar({
             Dashboard
           </Link>
 
+          {/* ⭐ NEW — Events */}
+          <Link href="/events" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865]">
+            Events
+          </Link>
+
           <Link href="/dashboard/orders" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865]">
             Orders
           </Link>
@@ -112,22 +114,17 @@ export default function Sidebar({
           <Link href="/shop" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865]">
             Shop
           </Link>
+
           <Link
-  href="/dashboard/chapters-club"
-  onClick={() => setSidebarOpen(false)}
-  className="hover:text-[#5DA865] flex items-center gap-2"
->
-  <span>Chapters Club</span>
-
-  {/* Coming Soon badge */}
-  <span
-  className="inline-flex items-center rounded-full bg-[#E5F7E4] border border-[#5DA865]/30 px-2.5 py-1 text-xs font-semibold text-[#2f6b3a]">
-    
-  
-  <strong>Coming Soon</strong> 🚀
-  </span>
-</Link>
-
+            href="/dashboard/chapters-club"
+            onClick={() => setSidebarOpen(false)}
+            className="hover:text-[#5DA865] flex items-center gap-2"
+          >
+            <span>Chapters Club</span>
+            <span className="inline-flex items-center rounded-full bg-[#E5F7E4] border border-[#5DA865]/30 px-2.5 py-1 text-xs font-semibold text-[#2f6b3a]">
+              <strong>Coming Soon</strong> 🚀
+            </span>
+          </Link>
         </nav>
 
         <hr className="my-6 border-t border-[#dcd6cf]" />

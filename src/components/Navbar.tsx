@@ -5,11 +5,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useCart } from "@/context/CartContext";
-import { useUser } from "@/lib/auth/useUser";   // ← NEW
+import { useUser } from "@/lib/auth/useUser";
 
 const NAV_LINKS = [
   { label: "Home", href: "/" },
   { label: "Shop", href: "/shop" },
+  { label: "Events", href: "/events" },              // ⭐ NEW
   { label: "About", href: "/about" },
   { label: "Chapters Club", href: "/chapters-club" },
   { label: "Contact", href: "/contact" },
@@ -22,7 +23,8 @@ type Props = {
 export default function Navbar({ toggleSidebar }: Props) {
   const [open, setOpen] = useState(false);
   const { cart } = useCart();
-  const { user, loading } = useUser();   // ← unified login state
+  const { user, loading } = useUser();
+
   const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleToggle = () => {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { changePassword } from "@/lib/auth/actions";
 import { Field, Label, ErrorMessage, Hint } from "@/components/fieldset";
-import { Input } from "@/components/input";
+import { Input } from "@/components/ui/Input";
 import { Eye, EyeOff } from "lucide-react";
 
 type Errors = {

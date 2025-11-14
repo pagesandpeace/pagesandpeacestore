@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/input";
+import { Input } from "@/components/ui/Input";
 
 // 🔥 Correct client-side auth function
 import { getCurrentUserClient } from "@/lib/auth/client";

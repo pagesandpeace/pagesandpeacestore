@@ -1,8 +1,12 @@
-// src/app/api/orders/get/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders, orderItems, products } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  orders,
+  orderItems,
+  products,
+  events,
+} from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
 
 export async function GET(req: Request) {
   try {
@@ -11,22 +15,22 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing order id" }, { status: 400 });
     }
 
-    // 1. Fetch order
     const base = await db
       .select()
       .from(orders)
       .where(eq(orders.id, id))
       .limit(1);
 
-    if (!base || base.length === 0) {
+    if (!base.length) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
     const order = base[0];
 
-    // 2. Fetch line items
-    const items = await db
+    // Fetch order items normally
+    let items = await db
       .select({
+        productId: orderItems.productId,
         productName: products.name,
         quantity: orderItems.quantity,
         price: orderItems.price,
@@ -35,7 +39,31 @@ export async function GET(req: Request) {
       .leftJoin(products, eq(orderItems.productId, products.id))
       .where(eq(orderItems.orderId, id));
 
-    // 3. Return unified response
+    console.log("🧾 Raw items:", items);
+
+    // Find missing productNames (event items)
+    const missing = items.filter((i) => !i.productName).map((i) => i.productId);
+
+    console.log("📌 Missing productName for productIds:", missing);
+
+    if (missing.length > 0) {
+      const eventRows = await db
+        .select()
+        .from(events)
+        .where(inArray(events.id, missing));
+
+      const lookup = Object.fromEntries(
+        eventRows.map((ev) => [ev.id, ev.title])
+      );
+
+      items = items.map((i) => ({
+        ...i,
+        productName: i.productName || lookup[i.productId] || "Event Booking",
+      }));
+    }
+
+    console.log("✅ Final items returned:", items);
+
     return NextResponse.json({
       order: {
         id: order.id,
@@ -43,8 +71,6 @@ export async function GET(req: Request) {
         total: Number(order.total),
         status: order.status,
         items,
-
-        // 🔥 Stripe metadata
         stripe_payment_intent_id: order.stripePaymentIntentId ?? null,
         stripe_checkout_session_id: order.stripeCheckoutSessionId ?? null,
         stripe_receipt_url: order.stripeReceiptUrl ?? null,
@@ -55,9 +81,6 @@ export async function GET(req: Request) {
     });
   } catch (err) {
     console.error("GET /api/orders/get error:", err);
-    return NextResponse.json(
-      { error: "Failed to load order" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to load order" }, { status: 500 });
   }
 }

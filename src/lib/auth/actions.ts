@@ -1,4 +1,3 @@
-// src/lib/auth/actions.ts
 "use server";
 
 import { cookies, headers } from "next/headers";
@@ -33,7 +32,6 @@ export async function createGuestSession() {
 
   await db.insert(schema.guests).values({ sessionToken, expiresAt });
 
-  // FIXED COOKIE SETTER
   cookieStore.set({
     name: "guest_session",
     value: sessionToken,
@@ -80,7 +78,6 @@ export async function signUp(formData: FormData) {
 
   const loyaltyProgramOptIn = formData.get("loyaltyprogram") === "true";
   const marketingConsent = formData.get("marketingConsent") === "true";
-
 
   const result = await auth.api.signUpEmail({
     body: { ...data, callbackURL: "/verify-success" },
@@ -139,15 +136,43 @@ export async function signIn(formData: FormData) {
   });
 
   try {
+    // Authenticate via BetterAuth
     const result = await auth.api.signInEmail({ body: data });
+
+    // Migrate guest → user session
     await migrateGuestToUser();
 
     const callbackURL = formData.get("callbackURL") as string | null;
 
+    // Fetch full DB user including role
+    const [dbUser] = await db
+      .select({
+        id: schema.users.id,
+        email: schema.users.email,
+        name: schema.users.name,
+        role: schema.users.role,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, result.user!.id))
+      .limit(1);
+
+    const role = dbUser?.role ?? "customer";
+
+    // Default redirect based on role
+    let redirectTo =
+      role === "admin" || role === "staff"
+        ? "/admin"
+        : "/dashboard";
+
+    // Callback override
+    if (callbackURL) {
+      redirectTo = callbackURL;
+    }
+
     return {
       ok: true,
-      userId: result.user?.id,
-      redirectTo: callbackURL || "/dashboard",
+      userId: result.user!.id,
+      redirectTo,
     };
   } catch (err) {
     console.error("❌ Sign-in failed:", err);
@@ -165,7 +190,6 @@ async function migrateGuestToUser() {
   if (!token) return;
 
   await db.delete(schema.guests).where(eq(schema.guests.sessionToken, token));
-
   cookieStore.delete("guest_session");
 }
 
@@ -173,20 +197,39 @@ async function migrateGuestToUser() {
 /*                               GET CURRENT USER                             */
 /* -------------------------------------------------------------------------- */
 
-/** ✔ SERVER-SIDE VERSION */
 export async function getCurrentUserServer() {
   try {
     const hdrs = await headers();
     const session = await auth.api.getSession({ headers: hdrs });
 
-    return session?.user ?? null;
+    if (!session?.user?.id) return null;
+
+    // Get full DBUser (including role)
+    const [fullUser] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, session.user.id))
+      .limit(1);
+
+    if (!fullUser) return null;
+
+    return {
+      id: fullUser.id,
+      email: fullUser.email,
+      name: fullUser.name,
+      image: fullUser.image,
+      role: fullUser.role,
+      loyaltyprogram: fullUser.loyaltyprogram,
+      loyaltypoints: fullUser.loyaltypoints,
+      createdAt: fullUser.createdAt,
+      updatedAt: fullUser.updatedAt,
+    };
   } catch (err) {
     console.error("❌ [getCurrentUserServer] error:", err);
     return null;
   }
 }
 
-/** ✔ CLIENT-SIDE VERSION */
 export async function getCurrentUserClient() {
   try {
     const res = await fetch("/api/me", {
@@ -202,8 +245,6 @@ export async function getCurrentUserClient() {
   }
 }
 
-
-
 /* -------------------------------------------------------------------------- */
 /*                                   SIGN OUT                                 */
 /* -------------------------------------------------------------------------- */
@@ -213,13 +254,11 @@ export async function signOut() {
     const hdrs = await headers();
 
     try {
-      // Attempt clean logout — ignore errors
       await auth.api.signOut({ headers: hdrs });
     } catch (err) {
       console.warn("⚠️ BetterAuth signOut() errored (ignored):", err);
     }
 
-    // FORCE REMOVE SESSION COOKIE (BetterAuth does NOT always do it)
     const cookieStore = await cookies();
     cookieStore.set({
       name: "auth_session",
@@ -232,13 +271,8 @@ export async function signOut() {
     console.error("❌ signOut() fatal error:", err);
   }
 
-  // Always succeed from caller's perspective
   return { ok: true };
 }
-
-
-
-
 
 /* -------------------------------------------------------------------------- */
 /*                              CHANGE PASSWORD                               */
@@ -248,19 +282,16 @@ export async function changePassword(currentPassword: string, newPassword: strin
   try {
     const hdrs = await headers();
 
-    // 1. Verify session
     const session = await auth.api.getSession({ headers: hdrs });
     if (!session?.user) {
       return { ok: false, message: "Not authenticated" };
     }
 
-    // 2. Attempt password change
     const result = await auth.api.changePassword({
       body: { currentPassword, newPassword },
       headers: hdrs,
     });
 
-    // BetterAuth throws on error — meaning if we reach here, it's successful
     if (!result) {
       return { ok: false, message: "Password change failed unexpectedly." };
     }
@@ -269,7 +300,6 @@ export async function changePassword(currentPassword: string, newPassword: strin
   } catch (err: unknown) {
     console.error("❌ changePassword() error:", err);
 
-    // Convert to readable message
     const msg =
       err instanceof Error
         ? err.message

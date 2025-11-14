@@ -8,7 +8,10 @@ import {
   vouchers,
   guestOrders,
   guestOrderItems,
+  events,
+  eventBookings,
 } from "@/lib/db/schema";
+
 import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { sendVoucherEmails } from "@/lib/email/vouchers";
@@ -157,6 +160,103 @@ export async function POST(req: Request) {
 
         // We still continue to store any store orders below if applicable.
       }
+// ------------------------------------------------------------------
+// 1B. EVENT BOOKINGS (NEW)
+// ------------------------------------------------------------------
+const isEventBooking = md.kind === "event";
+
+if (isEventBooking) {
+  console.log("🎉 Processing event booking");
+
+  const bookingId = md.bookingId;
+  if (!bookingId) {
+    console.error("Missing bookingId in metadata");
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
+  // Mark booking paid
+  const [booking] = await db
+    .update(eventBookings)
+    .set({ paid: true })
+    .where(eq(eventBookings.id, bookingId))
+    .returning();
+
+  if (!booking) {
+    console.error("⚠️ No booking found for", bookingId);
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
+  // Get event info
+  const [ev] = await db
+    .select()
+    .from(events)
+    .where(eq(events.id, booking.eventId))
+    .limit(1);
+
+  if (!ev) {
+    console.error("⚠️ Booking refers to missing event");
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
+  // Get payment intent charge data
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : null;
+
+  let receiptUrl = null;
+  let cardBrand = null;
+  let last4 = null;
+  let paidAt = null;
+
+  if (paymentIntentId) {
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["latest_charge"],
+    });
+    const charge = pi.latest_charge as Stripe.Charge | null;
+    receiptUrl = charge?.receipt_url ?? null;
+    cardBrand = charge?.payment_method_details?.card?.brand ?? null;
+    last4 = charge?.payment_method_details?.card?.last4 ?? null;
+    paidAt = charge?.created
+      ? new Date(charge.created * 1000)
+      : null;
+  }
+
+  // Create a normal order
+  const orderId = uuidv4();
+
+const [orderRow] = await db
+  .insert(orders)
+  .values({
+    id: orderId,
+    userId: booking.userId,
+    total: ev.pricePence / 100,
+    status: "completed",
+    stripeCheckoutSessionId: session.id,
+    stripePaymentIntentId: paymentIntentId,
+    stripeReceiptUrl: receiptUrl,
+    stripeCardBrand: cardBrand,
+    stripeLast4: last4,
+    paidAt,
+  })
+  .returning();
+
+
+
+  // Insert ONE event item
+  await db.insert(orderItems).values({
+    id: uuidv4(),
+    orderId: orderRow.id,
+    productId: ev.id.toString(),
+    quantity: 1,
+    price: ev.pricePence / 100,
+  });
+
+  console.log("🎫 Event order created:", orderRow.id);
+
+  // stop here and don't continue into store order logic
+  return NextResponse.json({ received: true }, { status: 200 });
+}
 
       // ------------------------------------------------------------------
       // 2. STORE ORDERS (Books / Products)
