@@ -99,9 +99,9 @@ export default function Sidebar({
           </Link>
 
           {/* ⭐ NEW — Events */}
-          <Link href="/events" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865]">
-            Events
-          </Link>
+          <Link href="/dashboard/events" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865]">
+  Events
+</Link>
 
           <Link href="/dashboard/orders" onClick={() => setSidebarOpen(false)} className="hover:text-[#5DA865]">
             Orders

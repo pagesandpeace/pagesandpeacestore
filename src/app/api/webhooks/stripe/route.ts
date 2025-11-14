@@ -161,7 +161,7 @@ export async function POST(req: Request) {
         // We still continue to store any store orders below if applicable.
       }
 // ------------------------------------------------------------------
-// 1B. EVENT BOOKINGS (NEW)
+// 1B. EVENT BOOKINGS (NEW, FIXED FOR SHOPIFY MODEL)
 // ------------------------------------------------------------------
 const isEventBooking = md.kind === "event";
 
@@ -170,11 +170,11 @@ if (isEventBooking) {
 
   const bookingId = md.bookingId;
   if (!bookingId) {
-    console.error("Missing bookingId in metadata");
+    console.error("❌ Missing bookingId in metadata");
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Mark booking paid
+  // Mark event booking as paid
   const [booking] = await db
     .update(eventBookings)
     .set({ paid: true })
@@ -182,11 +182,11 @@ if (isEventBooking) {
     .returning();
 
   if (!booking) {
-    console.error("⚠️ No booking found for", bookingId);
+    console.error("⚠️ No event booking found for", bookingId);
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Get event info
+  // Fetch the event
   const [ev] = await db
     .select()
     .from(events)
@@ -198,7 +198,19 @@ if (isEventBooking) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Get payment intent charge data
+  // Fetch the product linked to this event
+  const [product] = await db
+    .select()
+    .from(products)
+    .where(eq(products.id, ev.productId))
+    .limit(1);
+
+  if (!product) {
+    console.error("❌ Missing product for event", ev.id);
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
+  // Retrieve Stripe charge info
   const paymentIntentId =
     typeof session.payment_intent === "string"
       ? session.payment_intent
@@ -207,54 +219,52 @@ if (isEventBooking) {
   let receiptUrl = null;
   let cardBrand = null;
   let last4 = null;
-  let paidAt = null;
+  let paidAt: Date | null = null;
 
   if (paymentIntentId) {
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
       expand: ["latest_charge"],
     });
+
     const charge = pi.latest_charge as Stripe.Charge | null;
+
     receiptUrl = charge?.receipt_url ?? null;
     cardBrand = charge?.payment_method_details?.card?.brand ?? null;
     last4 = charge?.payment_method_details?.card?.last4 ?? null;
-    paidAt = charge?.created
-      ? new Date(charge.created * 1000)
-      : null;
+    paidAt = charge?.created ? new Date(charge.created * 1000) : null;
   }
 
-  // Create a normal order
+  // Create an order for the logged-in user who booked the event
   const orderId = uuidv4();
 
-const [orderRow] = await db
-  .insert(orders)
-  .values({
-    id: orderId,
-    userId: booking.userId,
-    total: ev.pricePence / 100,
-    status: "completed",
-    stripeCheckoutSessionId: session.id,
-    stripePaymentIntentId: paymentIntentId,
-    stripeReceiptUrl: receiptUrl,
-    stripeCardBrand: cardBrand,
-    stripeLast4: last4,
-    paidAt,
-  })
-  .returning();
+  const [orderRow] = await db
+    .insert(orders)
+    .values({
+      id: orderId,
+      userId: booking.userId,            // event bookings always belong to authenticated users
+      total: product.price,              // use PRODUCT PRICE (correct source of truth)
+      status: "completed",
+      stripeCheckoutSessionId: session.id,
+      stripePaymentIntentId: paymentIntentId,
+      stripeReceiptUrl: receiptUrl,
+      stripeCardBrand: cardBrand,
+      stripeLast4: last4,
+      paidAt,
+    })
+    .returning();
 
-
-
-  // Insert ONE event item
+  // Insert the single event item (links to productId)
   await db.insert(orderItems).values({
     id: uuidv4(),
     orderId: orderRow.id,
-    productId: ev.id.toString(),
+    productId: product.id,              // MUST reference real product
     quantity: 1,
-    price: ev.pricePence / 100,
+    price: product.price,               // stored as GBP decimal (not pence)
   });
 
   console.log("🎫 Event order created:", orderRow.id);
 
-  // stop here and don't continue into store order logic
+  // Do NOT fall through to store order logic
   return NextResponse.json({ received: true }, { status: 200 });
 }
 

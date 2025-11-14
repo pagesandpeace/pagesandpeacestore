@@ -13,7 +13,7 @@ import { events, users } from "@/lib/db/schema";
 export const eventBookings = pgTable("event_bookings", {
   id: uuid("id").defaultRandom().primaryKey(),
 
-  eventId: uuid("event_id")
+  eventId: text("event_id")
     .notNull()
     .references(() => events.id, { onDelete: "cascade" }),
 

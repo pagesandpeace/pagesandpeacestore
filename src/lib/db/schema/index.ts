@@ -87,15 +87,21 @@ export const genres = pgTable("genres", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-/* PRODUCTS */
 export const products = pgTable("products", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   description: text("description"),
-  price: numeric("price", { precision: 10, scale: 2 }).$type<number>().notNull(),
+  price: numeric("price", { precision: 10, scale: 2 })
+    .$type<number>()
+    .notNull(),
+
   imageUrl: text("image_url"),
   genreId: text("genre_id").references(() => genres.id, { onDelete: "set null" }),
+
+  // NEW FIELDS
+  productType: text("product_type").notNull().default("physical"),
+  metadata: jsonb("metadata").default({}),
 
   author: text("author"),
   format: text("format"),
@@ -109,6 +115,7 @@ export const products = pgTable("products", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
+
 
 /* ORDERS */
 export const orders = pgTable("orders", {

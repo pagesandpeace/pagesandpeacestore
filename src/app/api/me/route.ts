@@ -12,11 +12,7 @@ export async function GET() {
   try {
     const hdrs = await headers();
 
-    console.log("📄 Request headers:");
-    hdrs.forEach((v, k) => console.log("   ", k, "=", v));
-
     const session = await auth.api.getSession({ headers: hdrs });
-
     console.log("🔑 Session:", session);
 
     if (!session?.user) {
@@ -27,6 +23,7 @@ export async function GET() {
     const user = session.user;
     console.log("✅ Found session user:", user);
 
+    // ⭐ FIX: INCLUDE ROLE
     const [row] = await db
       .select({
         id: schema.users.id,
@@ -34,6 +31,7 @@ export async function GET() {
         name: schema.users.name,
         image: schema.users.image,
         loyaltyprogram: schema.users.loyaltyprogram,
+        role: schema.users.role, // ← ⭐ ADD THIS FIELD
       })
       .from(schema.users)
       .where(eq(schema.users.id, user.id))

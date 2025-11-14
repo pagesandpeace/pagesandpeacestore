@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Resend } from "resend";
 
 /* ---------------------------------------------
-   BASE URL (local or production)
+   BASE URL
 --------------------------------------------- */
 const BASE_URL =
   process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
@@ -20,14 +20,13 @@ console.log("🚀 BetterAuth BASE_URL resolved:", BASE_URL);
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
 /* ---------------------------------------------
-   BETTERAUTH CONFIG
+   BETTERAUTH CONFIG (CLEAN + FIXED)
 --------------------------------------------- */
 export const auth = betterAuth({
   baseURL: BASE_URL,
 
-
   /* ---------------------------------------------
-     DATABASE (DRIZZLE)
+     DATABASE CONFIG (DRIZZLE)
   --------------------------------------------- */
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -40,7 +39,7 @@ export const auth = betterAuth({
   }),
 
   /* ---------------------------------------------
-     EXTEND USER MODEL (ROLE)
+     USER MODEL + ROLE FIELD
   --------------------------------------------- */
   user: {
     additionalFields: {
@@ -49,10 +48,19 @@ export const auth = betterAuth({
         required: false,
       },
     },
+
+    attributes: {
+      additionalFields: {
+        role: {
+          type: "string",
+          sql: (usersTable: typeof schema.users) => usersTable.role,
+        },
+      },
+    },
   },
 
   /* ---------------------------------------------
-     EMAIL + PASSWORD AUTH
+     EMAIL+PASSWORD
   --------------------------------------------- */
   emailAndPassword: {
     enabled: true,
@@ -60,30 +68,27 @@ export const auth = betterAuth({
   },
 
   /* ---------------------------------------------
-     GOOGLE OAuth
+     SOCIAL PROVIDERS
   --------------------------------------------- */
   socialProviders: {
-  google: {
-    clientId: process.env.GOOGLE_CLIENT_ID as string,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-    prompt: "select_account",
-    accessType: "offline",
-    redirectTo: "/dashboard",   // ⭐ <— HERE
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      prompt: "select_account",
+      accessType: "offline",
+      redirectTo: "/dashboard",
+    },
   },
-},
-
 
   /* ---------------------------------------------
-     EMAIL VERIFICATION
+     EMAIL VERIFICATION (RESEND)
   --------------------------------------------- */
   emailVerification: {
     sendOnSignUp: true,
     sendOnSignIn: false,
 
     async sendVerificationEmail({ user, url }) {
-      const verifyUrl = url.startsWith("http")
-        ? url
-        : `${BASE_URL}${url}`;
+      const verifyUrl = url.startsWith("http") ? url : `${BASE_URL}${url}`;
 
       try {
         await resend.emails.send({
@@ -92,18 +97,14 @@ export const auth = betterAuth({
           subject: "Confirm your email address ☕",
           html: `
             <div style="background:#FAF6F1; padding:32px; font-family:Montserrat, Arial; color:#111;">
-              <h2 style="text-align:center; margin-bottom:16px;">Welcome to Pages & Peace 📚☕</h2>
-
+              <h2 style="text-align:center;">Welcome to Pages & Peace 📚☕</h2>
               <p style="text-align:center;">Please confirm your email address to continue.</p>
-
               <p style="text-align:center; margin-top:32px;">
                 <a href="${verifyUrl}"
-                  style="background:#5DA865; color:#FAF6F1; padding:14px 28px;
-                  border-radius:8px; text-decoration:none; font-weight:600;">
+                  style="background:#5DA865; color:#FAF6F1; padding:14px 28px; border-radius:8px; text-decoration:none; font-weight:600;">
                   Verify My Email
                 </a>
               </p>
-
               <p style="text-align:center; margin-top:40px; font-size:12px; color:#555;">
                 If you didn’t create this account, ignore this email.
               </p>
@@ -121,7 +122,7 @@ export const auth = betterAuth({
   },
 
   /* ---------------------------------------------
-     SESSION COOKIE
+     COOKIES
   --------------------------------------------- */
   cookies: {
     sessionToken: {
@@ -131,13 +132,13 @@ export const auth = betterAuth({
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
-        maxAge: 60 * 60 * 24 * 7,
+        maxAge: 60 * 60 * 24 * 7, // 7 days
       },
     },
   },
 
   /* ---------------------------------------------
-     ADVANCED (ID generation)
+     ADVANCED
   --------------------------------------------- */
   advanced: {
     session: {

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { events, users } from "@/lib/db/schema";
+import { events, users, products } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUserServer } from "@/lib/auth/actions";
+import crypto from "crypto";
 
 /**
  * POST /api/admin/events/create
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 🔍 Fetch user's role from database (BetterAuth does NOT include role)
+    // Verify admin/staff role
     const [dbUser] = await db
       .select({ role: users.role })
       .from(users)
@@ -37,20 +38,45 @@ export async function POST(req: Request) {
       );
     }
 
-    // Create event
-    const id = crypto.randomUUID();
+    // ---------------------------------------------
+    // 1️⃣ CREATE PRODUCT FIRST (Shopify model)
+    // ---------------------------------------------
+    const productId = crypto.randomUUID();
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+
+    await db.insert(products).values({
+      id: productId,
+      name: title,
+      slug,
+      description: description ?? "",
+      price: Number(pricePence) / 100,           // decimal £
+      productType: "event",                      // NEW TYPE
+      metadata: {},                              // optional data
+      imageUrl: null,
+      inventoryCount: 999999,                    // effectively unlimited
+    });
+
+    // ---------------------------------------------
+    // 2️⃣ CREATE EVENT AND LINK IT TO PRODUCT
+    // ---------------------------------------------
+    const eventId = crypto.randomUUID();
 
     await db.insert(events).values({
-      id,
+      id: eventId,
+      productId,
       title,
       description: description || "",
       date: new Date(date),
       capacity: Number(capacity),
       pricePence: Number(pricePence),
+      imageUrl: null,
       createdAt: new Date(),
     });
 
-    return NextResponse.json({ ok: true, id });
+    return NextResponse.json({ ok: true, id: eventId });
   } catch (err) {
     console.error("❌ Event Creation Error:", err);
     return NextResponse.json(

@@ -5,57 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1762210960814,
-      "tag": "0000_messy_timeslip",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1762360414194,
-      "tag": "0001_happy_menace",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1762360724486,
-      "tag": "0002_brown_stephen_strange",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1762947700730,
-      "tag": "0003_bent_starhawk",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1763104611775,
-      "tag": "0004_nasty_speed",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1763106310005,
-      "tag": "0005_high_jackpot",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1763112908261,
-      "tag": "0006_burly_vivisector",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1763124314018,
-      "tag": "0007_living_luminals",
+      "when": 1763163115459,
+      "tag": "0000_powerful_quasar",
       "breakpoints": true
     }
   ]

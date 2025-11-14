@@ -1,14 +1,23 @@
-import { pgTable, text, varchar, timestamp, uuid, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { products } from "./index";
 
 export const events = pgTable("events", {
-  id: uuid("id").defaultRandom().primaryKey(),
+  id: text("id").primaryKey(),
+
+  // Shopify model: event → product link
+  productId: text("product_id")
+    .references(() => products.id, { onDelete: "cascade" })
+    .notNull(),
 
   title: text("title").notNull(),
   description: text("description"),
-  date: timestamp("date", { withTimezone: true }).notNull(),
-  pricePence: integer("price_pence").notNull(),
-  capacity: integer("capacity").default(20).notNull(),
 
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(), // ✅ ADD THIS
+  date: timestamp("date", { withTimezone: true }).notNull(),
+  capacity: integer("capacity").notNull(),
+  pricePence: integer("price_pence").notNull(),
+  imageUrl: text("image_url"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });

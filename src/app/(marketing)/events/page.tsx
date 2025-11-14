@@ -1,7 +1,6 @@
 // src/app/events/page.tsx
 import { db } from "@/lib/db";
 import { events, eventBookings } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import Link from "next/link";
 
 export const revalidate = 30; // Refresh events listing every 30s
@@ -43,7 +42,7 @@ export default async function EventsPage() {
         <p className="mt-4 max-w-2xl mx-auto text-lg text-neutral-600">
           Workshops, author evenings, tasting nights and more.
           <br />
-          Discover what's happening in our cosy book & coffee home.
+          Discover what is happening in our cosy book & coffee home.
         </p>
       </div>
 

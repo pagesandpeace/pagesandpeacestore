@@ -10,46 +10,14 @@ import { Input } from "@/components/ui/Input";
 import { TextArea } from "@/components/ui/TextArea";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
-
 import { getCurrentUserClient } from "@/lib/auth/client";
 
 export default function CreateEventPage() {
   const router = useRouter();
 
-  // Admin guard
+  // ⭐ HOOKS MUST BE AT THE TOP — ALWAYS
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [allowed, setAllowed] = useState<boolean>(false);
-
-  useEffect(() => {
-    async function check() {
-      const user = await getCurrentUserClient();
-
-      if (!user) {
-        router.push("/sign-in");
-        return;
-      }
-
-      if (user.role !== "admin") {
-        router.push("/dashboard");
-        return;
-      }
-
-      setAllowed(true);
-      setLoading(false);
-    }
-
-    check();
-  }, [router]);
-
-  if (loading) {
-    return (
-      <div className="max-w-3xl mx-auto py-12">
-        <p>Loading…</p>
-      </div>
-    );
-  }
-
-  if (!allowed) return null;
 
   // Form state
   const [title, setTitle] = useState("");
@@ -62,6 +30,44 @@ export default function CreateEventPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  /* ---------------------------------------------------
+     ADMIN CHECK
+  --------------------------------------------------- */
+  useEffect(() => {
+    async function load() {
+      const u = await getCurrentUserClient();
+      setUser(u);
+      setLoading(false);
+
+      if (!u) {
+        router.replace("/sign-in");
+        return;
+      }
+
+      if (u.role !== "admin") {
+        router.replace("/dashboard");
+        return;
+      }
+    }
+
+    load();
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto py-12">
+        <p>Loading…</p>
+      </div>
+    );
+  }
+
+  if (!user || user.role !== "admin") {
+    return null; // router is redirecting
+  }
+
+  /* ---------------------------------------------------
+     SUBMIT HANDLER
+  --------------------------------------------------- */
   async function submitHandler() {
     setSubmitting(true);
     setErrorMsg(null);
@@ -88,6 +94,9 @@ export default function CreateEventPage() {
     router.push("/admin/events");
   }
 
+  /* ---------------------------------------------------
+     RENDER PAGE
+  --------------------------------------------------- */
   return (
     <div className="max-w-3xl mx-auto py-12">
       <h1 className="text-3xl font-bold mb-8">Create New Event</h1>
@@ -101,9 +110,7 @@ export default function CreateEventPage() {
           <Input
             placeholder="Book Club: November Edition"
             value={title}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setTitle(e.target.value)
-            }
+            onChange={(e) => setTitle(e.target.value)}
           />
         </div>
 
@@ -113,9 +120,7 @@ export default function CreateEventPage() {
           <Input
             type="datetime-local"
             value={date}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setDate(e.target.value)
-            }
+            onChange={(e) => setDate(e.target.value)}
           />
         </div>
 
@@ -126,9 +131,7 @@ export default function CreateEventPage() {
             rows={4}
             placeholder="Describe the event (this is shown to customers)"
             value={description}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-              setDescription(e.target.value)
-            }
+            onChange={(e) => setDescription(e.target.value)}
           />
         </div>
 
@@ -139,9 +142,7 @@ export default function CreateEventPage() {
             type="number"
             min={1}
             value={capacity}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setCapacity(Number(e.target.value))
-            }
+            onChange={(e) => setCapacity(Number(e.target.value))}
           />
         </div>
 
@@ -153,9 +154,7 @@ export default function CreateEventPage() {
             min={0}
             step="0.01"
             value={price}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setPrice(Number(e.target.value))
-            }
+            onChange={(e) => setPrice(Number(e.target.value))}
           />
         </div>
 
