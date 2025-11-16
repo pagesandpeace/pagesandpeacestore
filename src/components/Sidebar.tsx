@@ -1,19 +1,26 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { signOut } from "@/lib/auth/actions";
 import { useUser } from "@/lib/auth/useUser";
 import { useRouter } from "next/navigation";
 
-export default function Sidebar({ sidebarOpen, setSidebarOpen }: any) {
+type SidebarProps = {
+  sidebarOpen: boolean;
+  setSidebarOpen: (value: boolean) => void;
+};
+
+export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
   const { user, loading } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const router = useRouter();
   const accountRef = useRef<HTMLDivElement | null>(null);
 
+  /* ---------------------------------------------
+     CLOSE ACCOUNT DROPDOWN WHEN CLICKING OUTSIDE
+  ---------------------------------------------- */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
@@ -24,14 +31,28 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: any) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  /* ---------------------------------------------
+     SIGN OUT
+  ---------------------------------------------- */
   const handleSignOut = async () => {
     await signOut();
     router.push("/");
   };
 
+  /* ---------------------------------------------
+     MOBILE CLOSE HANDLER
+  ---------------------------------------------- */
+  const handleMobileNavigate = (path: string) => {
+    setSidebarOpen(false);
+    router.push(path);
+  };
+
+  /* ---------------------------------------------
+     UI
+  ---------------------------------------------- */
   return (
     <>
-      {/* Mobile overlay */}
+      {/* MOBILE OVERLAY */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-40 md:hidden"
@@ -52,7 +73,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: any) {
           md:translate-x-0
         `}
       >
-        {/* Close button */}
+        {/* Close button (mobile only) */}
         <button
           className="md:hidden absolute right-3 top-3 p-2 hover:bg-black/5 rounded"
           onClick={() => setSidebarOpen(false)}
@@ -62,10 +83,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: any) {
 
         {/* Logo */}
         <button
-          onClick={() => {
-            setSidebarOpen(false);
-            router.push("/dashboard");
-          }}
+          onClick={() => handleMobileNavigate("/dashboard")}
           className="flex items-center justify-center"
         >
           <Image
@@ -76,31 +94,60 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: any) {
           />
         </button>
 
-        {/* SCROLLABLE SECTION */}
+        {/* MAIN NAVIGATION */}
         <div className="flex-1 overflow-y-auto pb-32 mt-6 text-sm">
-
           <nav className="flex flex-col gap-y-5">
-            <Link href="/dashboard" className="hover:text-[#5DA865]">Dashboard</Link>
-            <Link href="/dashboard/events" className="hover:text-[#5DA865]">Events</Link>
-            <Link href="/dashboard/orders" className="hover:text-[#5DA865]">Orders</Link>
-            <Link href="/dashboard/settings" className="hover:text-[#5DA865]">Settings</Link>
-            <Link href="/shop" className="hover:text-[#5DA865]">Shop</Link>
 
-            <Link
-              href="/dashboard/chapters-club"
-              className="hover:text-[#5DA865] flex items-center gap-2"
+            <button
+              className="text-left hover:text-[#5DA865]"
+              onClick={() => handleMobileNavigate("/dashboard")}
+            >
+              Dashboard
+            </button>
+
+            <button
+              className="text-left hover:text-[#5DA865]"
+              onClick={() => handleMobileNavigate("/dashboard/events")}
+            >
+              Events
+            </button>
+
+            <button
+              className="text-left hover:text-[#5DA865]"
+              onClick={() => handleMobileNavigate("/dashboard/orders")}
+            >
+              Orders
+            </button>
+
+            <button
+              className="text-left hover:text-[#5DA865]"
+              onClick={() => handleMobileNavigate("/dashboard/settings")}
+            >
+              Settings
+            </button>
+
+            <button
+              className="text-left hover:text-[#5DA865]"
+              onClick={() => handleMobileNavigate("/shop")}
+            >
+              Shop
+            </button>
+
+            {/* Chapters Club */}
+            <button
+              className="text-left hover:text-[#5DA865] flex items-center gap-2"
+              onClick={() => handleMobileNavigate("/dashboard/chapters-club")}
             >
               <span>Chapters Club</span>
               <span className="bg-[#E5F7E4] text-[#2f6b3a] rounded-full border px-2.5 py-1 text-xs font-semibold">
                 Coming Soon 🚀
               </span>
-            </Link>
+            </button>
           </nav>
         </div>
 
-        {/* FIXED BOTTOM ACCOUNT SECTION */}
+        {/* ACCOUNT SECTION */}
         <div ref={accountRef} className="absolute bottom-6 left-0 px-6 w-full">
-
           {!loading && user ? (
             <>
               <button
@@ -119,12 +166,12 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: any) {
 
               {menuOpen && (
                 <div className="absolute bottom-14 left-6 bg-white border rounded-md shadow p-1 w-44">
-                  <Link
-                    href="/dashboard/account"
-                    className="block px-4 py-2 text-sm hover:bg-[#FAF6F1]"
+                  <button
+                    onClick={() => handleMobileNavigate("/dashboard/account")}
+                    className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
                   >
                     My Account
-                  </Link>
+                  </button>
 
                   <button
                     onClick={handleSignOut}
@@ -136,12 +183,12 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: any) {
               )}
             </>
           ) : (
-            <Link
-              href="/sign-in"
-              className="block text-center px-4 py-2 border rounded-md text-[#5DA865] border-[#5DA865] hover:bg-[#5DA865] hover:text-white"
+            <button
+              onClick={() => handleMobileNavigate("/sign-in")}
+              className="block w-full text-center px-4 py-2 border rounded-md text-[#5DA865] border-[#5DA865] hover:bg-[#5DA865] hover:text-white"
             >
               Sign in
-            </Link>
+            </button>
           )}
         </div>
       </aside>
