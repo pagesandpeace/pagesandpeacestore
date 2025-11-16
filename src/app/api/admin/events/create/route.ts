@@ -27,9 +27,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // -------------------------------
-    // Extract payload from frontend
-    // -------------------------------
     const {
       title,
       subtitle,
@@ -45,9 +42,6 @@ export async function POST(req: Request) {
       published = true,
     } = await req.json();
 
-    // -------------------------------
-    // Validate inputs
-    // -------------------------------
     if (!title || !date || !capacity || !pricePence || !storeId) {
       return NextResponse.json(
         { error: "Missing required fields" },
@@ -82,32 +76,38 @@ export async function POST(req: Request) {
     });
 
     // -------------------------------
-    // 2) Create Event
+    // 2) Create Event (NO TIMEZONE)
     // -------------------------------
     const eventId = crypto.randomUUID();
 
-    // remove location, locationId
-await db.insert(events).values({
-  id: eventId,
-  productId,
-  title,
-  description: description ?? "",
-  date: new Date(
-  new Date(date).toLocaleString("en-GB", { timeZone: "Europe/London" })
-).toISOString(),
-  capacity: Number(capacity),
-  pricePence: Number(pricePence),
-  imageUrl: imageUrl ?? null,
-  storeId, // ONLY LOCATION FIELD
-  subtitle: subtitle || null,
-  shortDescription: shortDescription || null,
-  published: Boolean(published),
-});
+    // If datetime-local comes without seconds → add ":00"
+    const exact =
+      date.length === 16 ? date + ":00" : date;
 
+    if (isNaN(new Date(exact).getTime())) {
+      return NextResponse.json(
+        { error: "Invalid datetime value" },
+        { status: 400 }
+      );
+    }
 
+    await db.insert(events).values({
+      id: eventId,
+      productId,
+      title,
+      description: description ?? "",
+      date: exact, // ⭐ EXACT VALUE, NO SHIFTING
+      capacity: Number(capacity),
+      pricePence: Number(pricePence),
+      imageUrl: imageUrl ?? null,
+      storeId,
+      subtitle: subtitle || null,
+      shortDescription: shortDescription || null,
+      published: Boolean(published),
+    });
 
     // -------------------------------
-    // 3) Category Links (Many-to-Many)
+    // 3) Category Links
     // -------------------------------
     if (Array.isArray(categoryIds) && categoryIds.length > 0) {
       const rows = categoryIds.map((catId: string) => ({

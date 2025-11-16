@@ -60,7 +60,7 @@ export default function EditEventPage() {
   }, []);
 
   /* -------------------------------------------------------
-     LOAD EVENT (Joined API returns store + categories)
+     LOAD EVENT
   ------------------------------------------------------- */
   useEffect(() => {
     if (!eventId) return;
@@ -78,23 +78,23 @@ export default function EditEventPage() {
         const event = await res.json();
         if (!active) return;
 
-        // Populate event fields
         setTitle(event.title ?? "");
         setSubtitle(event.subtitle ?? "");
         setShortDescription(event.shortDescription ?? "");
         setDescription(event.description ?? "");
 
-        setDate(new Date(event.date).toISOString().slice(0, 16));
+        /* -------------------------------------------------
+           FIX: PREVENT TIMEZONE SHIFT
+           Use raw DB value → remove Z → strip seconds
+        ------------------------------------------------- */
+        setDate(event.date.replace("Z", "").slice(0, 16));
 
         setCapacity(event.capacity);
         setPrice(event.pricePence / 100);
         setPublished(event.published);
         setImageUrl(event.imageUrl ?? "");
 
-        // Store (joined from API)
         setStore(event.store ?? null);
-
-        // Categories (joined from API)
         setSelectedCategories(event.categories ?? []);
 
       } catch (err) {
@@ -130,13 +130,12 @@ export default function EditEventPage() {
         subtitle,
         shortDescription,
         description,
-        date,
+        date, // this is now the exact value typed
         capacity,
         pricePence: Math.round(price * 100),
         published,
         imageUrl,
         categoryIds: selectedCategories.map((c) => c.id),
-        // storeId NOT editable
       };
 
       const res = await fetch(`/api/admin/events/update`, {
@@ -217,7 +216,6 @@ export default function EditEventPage() {
             />
           </div>
 
-          {/* READ ONLY LOCATION */}
           <div>
             <Label>Location</Label>
             <Input

@@ -6,7 +6,7 @@ import {
   eventCategoryLinks,
 } from "@/lib/db/schema";
 
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getCurrentUserServer } from "@/lib/auth/actions";
 import crypto from "crypto";
 
@@ -32,12 +32,14 @@ export async function POST(req: Request) {
       categoryIds,
     } = await req.json();
 
+    console.log("🔍 RAW DATE RECEIVED:", date);
+
     if (!id || !title || !date || !capacity || !pricePence) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
     /* -----------------------------------------
-       FETCH EXISTING EVENT TO GET productId
+       FETCH EXISTING EVENT
     ------------------------------------------ */
     const existing = (
       await db.select().from(events).where(eq(events.id, id)).limit(1)
@@ -50,6 +52,26 @@ export async function POST(req: Request) {
     const productId = existing.productId;
 
     /* -----------------------------------------
+       ⭐ STORE EXACT DATE AS TYPED  
+       NO UTC. NO TIMEZONE. NO CONVERSION.
+    ------------------------------------------ */
+
+    // If datetime-local comes without seconds → add ":00"
+const exact = date.length === 16 ? date + ":00" : date;
+
+    // Validate format (just to prevent total nonsense)
+    if (isNaN(new Date(exact).getTime())) {
+      return NextResponse.json(
+        { error: "Invalid datetime format" },
+        { status: 400 }
+      );
+    }
+
+    // ⭐ DO NOT use new Date().toISOString() — it changes the hour.
+    // Just save the exact string with full seconds.
+    const finalDate = exact; // e.g., "2025-11-23T18:00:00"
+
+    /* -----------------------------------------
        UPDATE EVENT
     ------------------------------------------ */
     await db
@@ -59,20 +81,20 @@ export async function POST(req: Request) {
         subtitle: subtitle || null,
         shortDescription: shortDescription || null,
         description: description || "",
-        date: new Date(
-  new Date(date).toLocaleString("en-GB", { timeZone: "Europe/London" })
-).toISOString(),
+
+        // ❗ EXACT TIME, ZERO SHIFTING
+        date: finalDate,
 
         capacity: Number(capacity),
         pricePence: Number(pricePence),
         imageUrl: imageUrl || existing.imageUrl,
         published: Boolean(published),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(events.id, id));
 
     /* -----------------------------------------
-       UPDATE PRODUCT (MIRROR EVENT FIELDS)
+       UPDATE PRODUCT
     ------------------------------------------ */
     await db
       .update(products)
@@ -85,7 +107,7 @@ export async function POST(req: Request) {
           shortDescription: shortDescription || null,
           published: Boolean(published),
         },
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(products.id, productId));
 
@@ -93,7 +115,6 @@ export async function POST(req: Request) {
        UPDATE CATEGORY LINKS
     ------------------------------------------ */
     if (Array.isArray(categoryIds)) {
-      // Remove old links
       await db
         .delete(eventCategoryLinks)
         .where(eq(eventCategoryLinks.eventId, id));
