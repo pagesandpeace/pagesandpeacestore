@@ -7,13 +7,24 @@ import { CartProvider } from "@/context/CartContext";
 import CookieBanner from "@/components/CookieBanner";
 import ConditionalScripts from "@/components/ConditionalScripts";
 import Footer from "@/components/Footer";
-
-import { Toaster } from "@/components/ui/Toaster";  // ⭐ ADD THIS
+import { Toaster } from "@/components/ui/Toaster";  // ⭐ Toast system
 
 export const metadata: Metadata = {
   title: "Pages & Peace",
   description: "Books, coffee & calm ☕📚",
-  other: { "viewport": "width=device-width, initial-scale=1, viewport-fit=cover" },
+
+  // ⭐ VIEWPORT + SAFE AREA
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    viewportFit: "cover",
+  },
+
+  // ⭐ ICONS (favicon + apple)
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  }
 };
 
 const montserrat = Montserrat({
