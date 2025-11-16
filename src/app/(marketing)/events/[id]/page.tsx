@@ -174,7 +174,7 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
         {/* TERMS LINK — ★ NEW ★ */}
         <div className="text-center mt-4">
           <Link
-            href="/events/booking-terms"
+            href="/dashboard/legal/event-booking-terms"
             className="text-[var(--accent)] underline text-sm hover:opacity-80"
           >
             Booking Terms & Conditions

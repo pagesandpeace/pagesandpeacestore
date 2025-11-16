@@ -152,7 +152,7 @@ export default function BookingDetailClient({ booking, event }: Props) {
         </a>
 
         <Link
-          href="/events/booking-terms"
+          href="/dashboard/legal/event-booking-terms"
           className="text-xs underline text-accent hover:opacity-75"
         >
           Booking Terms & Conditions

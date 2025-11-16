@@ -185,7 +185,7 @@ export default async function DashboardEventDetailPage(props: {
           {/* TERMS LINK BELOW BUTTON */}
           <div className="pt-2">
             <Link
-              href="/events/booking-terms"
+              href="/dashboard/legal/event-booking-terms"
               className="underline text-sm text-[var(--accent)] hover:opacity-80 block"
             >
               Booking Terms & Conditions
