@@ -1,7 +1,7 @@
-// src/app/dashboard/layout.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, startTransition, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 
@@ -11,16 +11,52 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const router = useRouter();
+
+  /* -----------------------------------------
+     PREFETCH KEY ROUTES WHEN SIDEBAR OPENS
+  ----------------------------------------- */
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    router.prefetch("/dashboard");
+    router.prefetch("/dashboard/events");
+    router.prefetch("/dashboard/orders");
+    router.prefetch("/dashboard/settings");
+    router.prefetch("/dashboard/account");
+    router.prefetch("/dashboard/chapters-club");
+    router.prefetch("/shop");
+  }, [sidebarOpen, router]);
+
+  /* -----------------------------------------
+     ULTRA-SMOOTH NAVIGATION HANDLER
+  ----------------------------------------- */
+  const handleNav = (href: string) => {
+    // Begin route change immediately
+    startTransition(() => {
+      router.push(href);
+    });
+
+    // Smoothly close sidebar just after transition starts
+    setTimeout(() => {
+      setSidebarOpen(false);
+    }, 30);
+  };
 
   return (
-    <div className="flex min-h-screen bg-[var(--background)]">
-      {/* FIXED SIDEBAR */}
-      <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+    <div className="flex min-h-screen bg-background">
 
-      {/* MAIN AREA — shifted right on desktop */}
+      {/* SIDEBAR (fixed) */}
+      <Sidebar
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        handleNav={handleNav}
+      />
+
+      {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col md:ml-64 transition-all duration-300">
 
-        {/* TOP NAV (only visible on mobile) */}
+        {/* TOP BAR (mobile only) */}
         <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-white px-4 md:hidden">
           <button
             type="button"
@@ -33,7 +69,12 @@ export default function DashboardLayout({
         </header>
 
         {/* PAGE CONTENT */}
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-8">
+          <Suspense fallback={<div className="opacity-60 text-sm">Loading…</div>}>
+            {children}
+          </Suspense>
+        </main>
+
       </div>
     </div>
   );

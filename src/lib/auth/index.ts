@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { v4 as uuidv4 } from "uuid";
 import { Resend } from "resend";
+import { eq } from "drizzle-orm"; // ✅ FIXED: import eq with no errors
 
 /* ---------------------------------------------
    BASE URL
@@ -20,14 +21,28 @@ console.log("🚀 BetterAuth BASE_URL resolved:", BASE_URL);
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
 /* ---------------------------------------------
-   BETTERAUTH CONFIG (CLEAN + FIXED)
+   TYPES FOR SESSION CALLBACK
+--------------------------------------------- */
+interface SessionUser {
+  id: string;
+  email: string;
+  name?: string | null;
+  image?: string | null;
+  role?: string | null;
+  loyaltyprogram?: boolean;
+}
+
+interface SessionObject {
+  user: SessionUser;
+}
+
+/* ---------------------------------------------
+   BETTERAUTH CONFIG
 --------------------------------------------- */
 export const auth = betterAuth({
   baseURL: BASE_URL,
 
-  /* ---------------------------------------------
-     DATABASE CONFIG (DRIZZLE)
-  --------------------------------------------- */
+  /* DATABASE CONFIG */
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {
@@ -38,17 +53,11 @@ export const auth = betterAuth({
     },
   }),
 
-  /* ---------------------------------------------
-     USER MODEL + ROLE FIELD
-  --------------------------------------------- */
+  /* USER MODEL + ROLE FIELD */
   user: {
     additionalFields: {
-      role: {
-        type: "string",
-        required: false,
-      },
+      role: { type: "string", required: false },
     },
-
     attributes: {
       additionalFields: {
         role: {
@@ -59,21 +68,15 @@ export const auth = betterAuth({
     },
   },
 
-  /* ---------------------------------------------
-     EMAIL+PASSWORD
-  --------------------------------------------- */
+  /* EMAIL + PASSWORD AUTH */
   emailAndPassword: {
-  enabled: true,
-  requireEmailVerification: true,
+    enabled: true,
+    requireEmailVerification: true,
+    providerId: "email",
+    accountIdStrategy: "email",
+  },
 
-  providerId: "email", // ⭐ tells BetterAuth this is the credentials provider
-  accountIdStrategy: "email", // ⭐ use email as unique accountID
-},
-
-
-  /* ---------------------------------------------
-     SOCIAL PROVIDERS
-  --------------------------------------------- */
+  /* SOCIAL PROVIDERS */
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -84,9 +87,7 @@ export const auth = betterAuth({
     },
   },
 
-  /* ---------------------------------------------
-     EMAIL VERIFICATION (RESEND)
-  --------------------------------------------- */
+  /* EMAIL VERIFICATION */
   emailVerification: {
     sendOnSignUp: true,
     sendOnSignIn: false,
@@ -125,9 +126,7 @@ export const auth = betterAuth({
     },
   },
 
-  /* ---------------------------------------------
-     COOKIES
-  --------------------------------------------- */
+  /* COOKIES */
   cookies: {
     sessionToken: {
       name: "auth_session",
@@ -136,20 +135,48 @@ export const auth = betterAuth({
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
-        maxAge: 60 * 60 * 24 * 7, // 7 days
+        maxAge: 60 * 60 * 24 * 7,
       },
     },
   },
 
-  /* ---------------------------------------------
-     ADVANCED
-  --------------------------------------------- */
+  /* ADVANCED */
   advanced: {
     session: {
       createUserIfNotExists: false,
     },
     database: {
       generateId: () => uuidv4(),
+    },
+  },
+
+  /* ---------------------------------------------
+     ⭐ FIXED SESSION CALLBACK (NO ANY, NO ERRORS)
+  --------------------------------------------- */
+  callbacks: {
+    async session({
+      session,
+      user,
+    }: {
+      session: SessionObject;
+      user: SessionUser;
+    }) {
+      try {
+        const [row] = await db
+          .select({
+            loyaltyprogram: schema.users.loyaltyprogram,
+          })
+          .from(schema.users)
+          .where(eq(schema.users.id, user.id))
+          .limit(1);
+
+        session.user.loyaltyprogram = row?.loyaltyprogram ?? false;
+      } catch (err) {
+        console.error("⚠️ Failed to load loyaltyprogram into session:", err);
+        session.user.loyaltyprogram = false;
+      }
+
+      return session;
     },
   },
 

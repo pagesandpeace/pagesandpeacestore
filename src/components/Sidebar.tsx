@@ -5,25 +5,29 @@ import Image from "next/image";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { signOut } from "@/lib/auth/actions";
 import { useUser } from "@/lib/auth/useUser";
-import { useRouter } from "next/navigation";
 
 type SidebarProps = {
   sidebarOpen: boolean;
-  setSidebarOpen: (value: boolean) => void;
+  setSidebarOpen: (open: boolean) => void;
+  handleNav: (href: string) => void; 
 };
 
-export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
+export default function Sidebar({
+  sidebarOpen,
+  setSidebarOpen,
+  handleNav,
+}: SidebarProps) {
   const { user, loading } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
-  const router = useRouter();
   const accountRef = useRef<HTMLDivElement | null>(null);
 
-  /* ---------------------------------------------
-     CLOSE ACCOUNT DROPDOWN WHEN CLICKING OUTSIDE
-  ---------------------------------------------- */
+  /* Close account dropdown if clicking outside */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+      if (
+        accountRef.current &&
+        !accountRef.current.contains(e.target as Node)
+      ) {
         setMenuOpen(false);
       }
     };
@@ -31,28 +35,14 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  /* ---------------------------------------------
-     SIGN OUT
-  ---------------------------------------------- */
   const handleSignOut = async () => {
     await signOut();
-    router.push("/");
+    handleNav("/");
   };
 
-  /* ---------------------------------------------
-     MOBILE CLOSE HANDLER
-  ---------------------------------------------- */
-  const handleMobileNavigate = (path: string) => {
-    setSidebarOpen(false);
-    router.push(path);
-  };
-
-  /* ---------------------------------------------
-     UI
-  ---------------------------------------------- */
   return (
     <>
-      {/* MOBILE OVERLAY */}
+      {/* MOBILE BACKDROP */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-40 md:hidden"
@@ -62,18 +52,13 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
 
       {/* SIDEBAR */}
       <aside
-        className={`
-          fixed top-0 left-0 z-50
-          h-screen w-64
-          bg-[#FAF6F1] border-r border-[#dcd6cf]
-          flex flex-col
-          px-6 pt-10
-          transform transition-transform duration-300
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          md:translate-x-0
-        `}
+        className={`fixed top-0 left-0 z-50 h-screen w-64 bg-[#FAF6F1] border-r 
+        border-[#dcd6cf] px-6 pt-10 flex flex-col transform
+        transition-transform duration-300 
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} 
+        md:translate-x-0`}
       >
-        {/* Close button (mobile only) */}
+        {/* Close button (mobile) */}
         <button
           className="md:hidden absolute right-3 top-3 p-2 hover:bg-black/5 rounded"
           onClick={() => setSidebarOpen(false)}
@@ -83,7 +68,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
 
         {/* Logo */}
         <button
-          onClick={() => handleMobileNavigate("/dashboard")}
+          onClick={() => handleNav("/dashboard")}
           className="flex items-center justify-center"
         >
           <Image
@@ -94,49 +79,29 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
           />
         </button>
 
-        {/* MAIN NAVIGATION */}
+        {/* NAV */}
         <div className="flex-1 overflow-y-auto pb-32 mt-6 text-sm">
           <nav className="flex flex-col gap-y-5">
 
-            <button
-              className="text-left hover:text-[#5DA865]"
-              onClick={() => handleMobileNavigate("/dashboard")}
-            >
+            <button onClick={() => handleNav("/dashboard")} className="text-left hover:text-[#5DA865]">
               Dashboard
             </button>
 
-            <button
-              className="text-left hover:text-[#5DA865]"
-              onClick={() => handleMobileNavigate("/dashboard/events")}
-            >
+            <button onClick={() => handleNav("/dashboard/events")} className="text-left hover:text-[#5DA865]">
               Events
             </button>
 
-            <button
-              className="text-left hover:text-[#5DA865]"
-              onClick={() => handleMobileNavigate("/dashboard/orders")}
-            >
+            <button onClick={() => handleNav("/dashboard/orders")} className="text-left hover:text-[#5DA865]">
               Orders
             </button>
 
-            <button
-              className="text-left hover:text-[#5DA865]"
-              onClick={() => handleMobileNavigate("/dashboard/settings")}
-            >
-              Settings
-            </button>
-
-            <button
-              className="text-left hover:text-[#5DA865]"
-              onClick={() => handleMobileNavigate("/shop")}
-            >
+            <button onClick={() => handleNav("/shop")} className="text-left hover:text-[#5DA865]">
               Shop
             </button>
 
-            {/* Chapters Club */}
             <button
+              onClick={() => handleNav("/dashboard/chapters-club")}
               className="text-left hover:text-[#5DA865] flex items-center gap-2"
-              onClick={() => handleMobileNavigate("/dashboard/chapters-club")}
             >
               <span>Chapters Club</span>
               <span className="bg-[#E5F7E4] text-[#2f6b3a] rounded-full border px-2.5 py-1 text-xs font-semibold">
@@ -161,18 +126,40 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                   height={36}
                   className="rounded-full border"
                 />
-                <span className="font-medium text-sm">{user.name || "User"}</span>
+
+                <div className="flex flex-col">
+                  <span className="font-medium text-sm">
+                    {user.name || "User"}
+                  </span>
+
+                  {user.loyaltyprogram && (
+                    <span className="mt-1 inline-block text-xs bg-[#5DA865] text-white px-2 py-0.5 rounded-full">
+                      Loyalty Member ⭐
+                    </span>
+                  )}
+                </div>
               </button>
 
               {menuOpen && (
                 <div className="absolute bottom-14 left-6 bg-white border rounded-md shadow p-1 w-44">
+
+                  {/* My Account */}
                   <button
-                    onClick={() => handleMobileNavigate("/dashboard/account")}
+                    onClick={() => handleNav("/dashboard/account")}
                     className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
                   >
                     My Account
                   </button>
 
+                  {/* Settings (NEW) */}
+                  <button
+                    onClick={() => handleNav("/dashboard/settings")}
+                    className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
+                  >
+                    Settings
+                  </button>
+
+                  {/* Sign out */}
                   <button
                     onClick={handleSignOut}
                     className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-[#FAF6F1]"
@@ -184,7 +171,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
             </>
           ) : (
             <button
-              onClick={() => handleMobileNavigate("/sign-in")}
+              onClick={() => handleNav("/sign-in")}
               className="block w-full text-center px-4 py-2 border rounded-md text-[#5DA865] border-[#5DA865] hover:bg-[#5DA865] hover:text-white"
             >
               Sign in
