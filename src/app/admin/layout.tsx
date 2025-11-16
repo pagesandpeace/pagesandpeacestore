@@ -11,12 +11,24 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   return (
-    <div className="flex min-h-screen bg-[#FAF6F1]">
+    <div
+      className="
+        flex min-h-screen bg-[#FAF6F1]
+        pt-safe-top pb-safe-bottom pl-safe-left pr-safe-right
+      "
+    >
       {/* FIXED SIDEBAR */}
       <AdminSidebar />
 
-      {/* MAIN AREA — shifted right so content never sits under sidebar */}
-      <main className="flex-1 md:ml-64 p-10 min-h-screen">
+      {/* MAIN AREA */}
+      <main
+        className="
+          flex-1 md:ml-64 
+          p-6 md:p-10 
+          min-h-screen 
+          overflow-x-hidden
+        "
+      >
         {children}
       </main>
     </div>

@@ -2,7 +2,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { db } from "@/lib/db";
-import { events, eventBookings, users } from "@/lib/db/schema";
+import {
+  events,
+  eventBookings,
+  eventCategoryLinks,
+} from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 
@@ -15,23 +19,21 @@ import CancelBookingButton from "@/components/events/CancelBookingButton";
 import MarkAttendedButton from "@/components/admin/MarkAttendedButton";
 import { getCurrentUserServer } from "@/lib/auth/actions";
 
+import DuplicateEventModal from "@/components/admin/DuplicateEventModal";   // ⭐ NEW
+
 export default async function AdminEventDetailPage(props: {
   params: Promise<{ id: string }>;
 }) {
-  // Force dynamic params handling
   const { id: eventId } = await props.params;
 
   // -------------------------
-  // ADMIN-GUARD (SERVER-SIDE)
+  // ADMIN GUARD
   // -------------------------
   const user = await getCurrentUserServer();
-
   if (!user || user.role !== "admin") {
     return (
       <div className="max-w-3xl mx-auto py-20 text-center">
-        <h1 className="text-2xl font-semibold mb-4">
-          Admin access required
-        </h1>
+        <h1 className="text-2xl font-semibold mb-4">Admin access required</h1>
         <Link href="/sign-in">
           <Button variant="primary">Sign in</Button>
         </Link>
@@ -63,6 +65,16 @@ export default async function AdminEventDetailPage(props: {
   }
 
   // -------------------------
+  // FETCH CATEGORY LINKS
+  // -------------------------
+  const categoryLinks = await db
+    .select()
+    .from(eventCategoryLinks)
+    .where(eq(eventCategoryLinks.eventId, eventId));
+
+  const categoryIds = categoryLinks.map((c) => c.categoryId);
+
+  // -------------------------
   // FETCH BOOKINGS
   // -------------------------
   const attendees = await db
@@ -77,18 +89,18 @@ export default async function AdminEventDetailPage(props: {
   const remainingSeats = event.capacity - activeBookings;
 
   // -------------------------
-  // PAGE RENDER
+  // PAGE
   // -------------------------
   return (
     <div className="max-w-5xl mx-auto py-16 space-y-10">
-      {/* Back Link */}
+      {/* BACK LINK */}
       <Link href="/admin/events">
         <Button variant="neutral" size="sm">
           ← Back to Events
         </Button>
       </Link>
 
-      {/* Event Card */}
+      {/* EVENT CARD */}
       <Card>
         <CardHeader className="flex justify-between items-start">
           <div>
@@ -106,12 +118,20 @@ export default async function AdminEventDetailPage(props: {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* EDIT */}
             <Link href={`/admin/events/${event.id}/edit`}>
               <Button variant="outline" size="sm">
                 Edit Event
               </Button>
             </Link>
 
+            {/* ⭐ NEW: DUPLICATE */}
+            <DuplicateEventModal
+              event={event}
+              categoryIds={categoryIds}
+            />
+
+            {/* DELETE */}
             <DeleteEventButton eventId={event.id} />
           </div>
         </CardHeader>
@@ -148,7 +168,7 @@ export default async function AdminEventDetailPage(props: {
         </CardBody>
       </Card>
 
-      {/* Attendees Table */}
+      {/* ATTENDEES TABLE */}
       <Card>
         <CardHeader>
           <h2 className="text-2xl font-semibold">Attendees</h2>
@@ -177,36 +197,35 @@ export default async function AdminEventDetailPage(props: {
                       <td className="p-3">{attendee.email}</td>
 
                       <td className="p-3">
-  {attendee.refunded ? (
-    <Badge color="purple">Refunded</Badge>
-  ) : attendee.paid ? (
-    <Badge color="green">Paid</Badge>
-  ) : (
-    <Badge color="yellow">Pending</Badge>
-  )}
-</td>
-
+                        {attendee.refunded ? (
+                          <Badge color="purple">Refunded</Badge>
+                        ) : attendee.paid ? (
+                          <Badge color="green">Paid</Badge>
+                        ) : (
+                          <Badge color="yellow">Pending</Badge>
+                        )}
+                      </td>
 
                       <td className="p-3">
-  {attendee.refunded ? (
-    <Badge color="purple">Refunded</Badge>
-  ) : attendee.cancelled ? (
-    <Badge color="red">Cancelled</Badge>
-  ) : attendee.cancellationRequested ? (
-    <Badge color="yellow">Cancellation Requested</Badge>
-  ) : (
-    <Badge color="blue">Active</Badge>
-  )}
-</td>
+                        {attendee.refunded ? (
+                          <Badge color="purple">Refunded</Badge>
+                        ) : attendee.cancelled ? (
+                          <Badge color="red">Cancelled</Badge>
+                        ) : attendee.cancellationRequested ? (
+                          <Badge color="yellow">Cancellation Requested</Badge>
+                        ) : (
+                          <Badge color="blue">Active</Badge>
+                        )}
+                      </td>
 
                       <td className="p-3 space-x-3">
-                        {!attendee.cancelled && !attendee.refunded && (
-  <CancelBookingButton bookingId={attendee.id} />
-)}
+                        {!attendee.cancelled &&
+                          !attendee.refunded &&
+                          !attendee.cancellationRequested && (
+                            <CancelBookingButton bookingId={attendee.id} />
+                          )}
+
                         {attendee.paid && <MarkAttendedButton />}
-                      {!attendee.cancelled && !attendee.refunded && !attendee.cancellationRequested && (
-  <CancelBookingButton bookingId={attendee.id} />
-)}
                       </td>
                     </tr>
                   ))}

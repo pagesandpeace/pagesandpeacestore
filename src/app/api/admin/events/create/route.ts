@@ -14,9 +14,7 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUserServer();
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const [dbUser] = await db
       .select({ role: users.role })
@@ -43,15 +41,12 @@ export async function POST(req: Request) {
     } = await req.json();
 
     if (!title || !date || !capacity || !pricePence || !storeId) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // -------------------------------
-    // 1) Create Product
-    // -------------------------------
+    /* ------------------------------------------------
+       1) ALWAYS CREATE A NEW PRODUCT FOR EACH EVENT
+    ------------------------------------------------ */
     const productId = crypto.randomUUID();
     const slug = title
       .toLowerCase()
@@ -75,28 +70,19 @@ export async function POST(req: Request) {
       inventoryCount: 999999,
     });
 
-    // -------------------------------
-    // 2) Create Event (NO TIMEZONE)
-    // -------------------------------
+    /* ------------------------------------------------
+       2) CREATE EVENT LINKED TO THIS PRODUCT
+    ------------------------------------------------ */
     const eventId = crypto.randomUUID();
 
-    // If datetime-local comes without seconds → add ":00"
-    const exact =
-      date.length === 16 ? date + ":00" : date;
-
-    if (isNaN(new Date(exact).getTime())) {
-      return NextResponse.json(
-        { error: "Invalid datetime value" },
-        { status: 400 }
-      );
-    }
+    const exact = date.length === 16 ? date + ":00" : date;
 
     await db.insert(events).values({
       id: eventId,
-      productId,
+      productId, // ⭐ unique product per event
       title,
       description: description ?? "",
-      date: exact, // ⭐ EXACT VALUE, NO SHIFTING
+      date: exact,
       capacity: Number(capacity),
       pricePence: Number(pricePence),
       imageUrl: imageUrl ?? null,
@@ -106,25 +92,22 @@ export async function POST(req: Request) {
       published: Boolean(published),
     });
 
-    // -------------------------------
-    // 3) Category Links
-    // -------------------------------
+    /* ------------------------------------------------
+       3) CATEGORY LINKS
+    ------------------------------------------------ */
     if (Array.isArray(categoryIds) && categoryIds.length > 0) {
-      const rows = categoryIds.map((catId: string) => ({
-        id: crypto.randomUUID(),
-        eventId,
-        categoryId: catId,
-      }));
-
-      await db.insert(eventCategoryLinks).values(rows);
+      await db.insert(eventCategoryLinks).values(
+        categoryIds.map((cat: string) => ({
+          id: crypto.randomUUID(),
+          eventId,
+          categoryId: cat,
+        }))
+      );
     }
 
     return NextResponse.json({ ok: true, id: eventId });
-  } catch (err: any) {
+  } catch (err) {
     console.error("❌ Event Creation Error:", err);
-    return NextResponse.json(
-      { error: "Server error creating event" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Server error creating event" }, { status: 500 });
   }
 }

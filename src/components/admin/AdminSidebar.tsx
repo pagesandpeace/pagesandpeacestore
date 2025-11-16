@@ -35,92 +35,121 @@ export default function AdminSidebar() {
       className="
         fixed top-0 left-0 z-50
         w-64 h-screen
-        bg-white border-r border-neutral-200
-        flex flex-col
-        px-6 py-10
+        bg-[#FAF6F1] border-r border-[#dcd6cf]
+        flex flex-col justify-between
+        transition-transform duration-300
       "
     >
-      {/* Logo */}
-      <div className="flex justify-center">
-        <Image
-          src="/p&p_logo_cream.svg"
-          alt="Pages & Peace Logo"
-          width={90}
-          height={90}
-          className="object-contain"
-        />
+      {/* TOP SECTION */}
+      <div className="px-6 pt-10">
+
+        {/* Logo */}
+        <button
+          onClick={() => router.push("/admin")}
+          className="flex items-center justify-center"
+        >
+          <Image
+            src="/p&p_logo_cream.svg"
+            alt="Pages & Peace Logo"
+            width={100}
+            height={100}
+          />
+        </button>
+
+        {/* NAVIGATION – scrollable */}
+        <div className="mt-6 text-sm max-h-[60vh] overflow-y-auto pr-2 pb-4">
+          <nav className="flex flex-col gap-y-5">
+
+            <button
+              onClick={() => router.push("/admin/dashboard")}
+              className="text-left hover:text-[#5DA865]"
+            >
+              Dashboard
+            </button>
+
+            <button
+              onClick={() => router.push("/admin/events")}
+              className="text-left hover:text-[#5DA865]"
+            >
+              Events
+            </button>
+
+            <button
+              onClick={() => router.push("/admin/events/new")}
+              className="text-left hover:text-[#5DA865]"
+            >
+              Create Event
+            </button>
+
+
+          </nav>
+        </div>
       </div>
 
-      {/* Admin Nav */}
-      <nav className="space-y-4 text-sm font-medium mt-10">
-        <Link href="/admin" className="block hover:text-[var(--secondary)]">
-          Dashboard
-        </Link>
+      {/* BOTTOM ACCOUNT SECTION – FIXED */}
+      <div ref={accountRef} className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1]">
+        {!loading && user ? (
+          <>
+            {/* Profile button */}
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="flex items-center gap-3 w-full text-left rounded-md px-2 py-2 hover:bg-[#f1ede7]"
+            >
+              <Image
+                src={user.image || "/user_avatar_placeholder.svg"}
+                alt="User avatar"
+                width={36}
+                height={36}
+                className="rounded-full border object-cover"
+              />
 
-        <Link href="/admin/events" className="block hover:text-[var(--secondary)]">
-          Events
-        </Link>
+              <div className="flex flex-col">
+                <span className="font-medium text-sm">{user.name || "Admin"}</span>
 
-        <Link href="/admin/events/new" className="block hover:text-[var(--secondary)]">
-          Create Event
-        </Link>
+                {/* Admin badge */}
+                <span className="mt-1 inline-block text-xs bg-red-200 text-red-700 px-2 py-0.5 rounded-full border border-red-300">
+                  Admin
+                </span>
+              </div>
+            </button>
 
-        <Link href="/admin/account" className="block hover:text-[var(--secondary)]">
-          My Account
-        </Link>
-      </nav>
+            {/* Dropdown */}
+            {menuOpen && (
+              <div className="absolute bottom-20 left-6 bg-white border rounded-md shadow p-1 w-44">
 
-      {/* Push account section to bottom */}
-      <div className="flex-1" />
+                <button
+                  onClick={() => router.push("/admin/account")}
+                  className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
+                >
+                  My Account
+                </button>
 
-      {/* Account Section */}
-      {!loading && user && (
-        <div className="border-t border-neutral-200 pt-6" ref={accountRef}>
+                <button
+                  onClick={() => router.push("/admin/settings")}
+                  className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
+                >
+                  Settings
+                </button>
+
+                <button
+                  onClick={handleSignOut}
+                  className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-[#FAF6F1]"
+                >
+                  Sign out
+                </button>
+
+              </div>
+            )}
+          </>
+        ) : (
           <button
-            onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-3 w-full rounded-md px-2 py-2 hover:bg-neutral-100 transition"
+            onClick={() => router.push("/sign-in")}
+            className="block w-full text-center px-4 py-2 border rounded-md text-[#5DA865] border-[#5DA865] hover:bg-[#5DA865] hover:text-white"
           >
-            <Image
-              src={user.image || "/user_avatar_placeholder.svg"}
-              alt="Avatar"
-              width={40}
-              height={40}
-              className="rounded-full border border-neutral-300 object-cover"
-            />
-
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">{user.name || "Admin"}</span>
-
-              {/* ADMIN BADGE */}
-              <span className="inline-block text-[10px] font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full border border-red-300">
-                ADMIN
-              </span>
-            </div>
+            Sign in
           </button>
-
-          {/* Dropdown */}
-          {menuOpen && (
-            <div className="mt-2 bg-white border border-neutral-200 rounded-md shadow-sm py-1 text-sm w-full">
-              <Link
-                href="/admin/account"
-                onClick={() => setMenuOpen(false)}
-                className="block px-4 py-2 hover:bg-neutral-50"
-              >
-                My Account
-              </Link>
-
-              <div className="border-t border-neutral-200 my-1" />
-
-              <button
-                onClick={handleSignOut}
-                className="block w-full text-left px-4 py-2 text-red-600 hover:bg-neutral-50"
-              >
-                Sign out
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </aside>
   );
 }
