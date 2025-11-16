@@ -9,7 +9,7 @@ import { useUser } from "@/lib/auth/useUser";
 type SidebarProps = {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
-  handleNav: (href: string) => void; 
+  handleNav: (href: string) => void;
 };
 
 export default function Sidebar({
@@ -21,7 +21,6 @@ export default function Sidebar({
   const [menuOpen, setMenuOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement | null>(null);
 
-  /* Close account dropdown if clicking outside */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -52,67 +51,71 @@ export default function Sidebar({
 
       {/* SIDEBAR */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-screen w-64 bg-[#FAF6F1] border-r 
-        border-[#dcd6cf] px-6 pt-10 flex flex-col transform
+        className={`fixed top-0 left-0 z-50 h-screen w-64 bg-[#FAF6F1] border-r border-[#dcd6cf] 
+        flex flex-col justify-between 
         transition-transform duration-300 
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} 
         md:translate-x-0`}
       >
-        {/* Close button (mobile) */}
-        <button
-          className="md:hidden absolute right-3 top-3 p-2 hover:bg-black/5 rounded"
-          onClick={() => setSidebarOpen(false)}
-        >
-          <XMarkIcon className="h-6 w-6 text-gray-800" />
-        </button>
+        {/* TOP SECTION */}
+        <div className="px-6 pt-10">
 
-        {/* Logo */}
-        <button
-          onClick={() => handleNav("/dashboard")}
-          className="flex items-center justify-center"
-        >
-          <Image
-            src="/p&p_logo_cream.svg"
-            alt="Pages & Peace logo"
-            width={100}
-            height={100}
-          />
-        </button>
+          {/* Close button (mobile) */}
+          <button
+            className="md:hidden absolute right-3 top-3 p-2 hover:bg-black/5 rounded"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <XMarkIcon className="h-6 w-6 text-gray-800" />
+          </button>
 
-        {/* NAV */}
-        <div className="flex-1 overflow-y-auto pb-32 mt-6 text-sm">
-          <nav className="flex flex-col gap-y-5">
+          {/* Logo */}
+          <button
+            onClick={() => handleNav("/dashboard")}
+            className="flex items-center justify-center"
+          >
+            <Image
+              src="/p&p_logo_cream.svg"
+              alt="Pages & Peace logo"
+              width={100}
+              height={100}
+            />
+          </button>
 
-            <button onClick={() => handleNav("/dashboard")} className="text-left hover:text-[#5DA865]">
-              Dashboard
-            </button>
+          {/* NAVIGATION — now scrollable */}
+          <div className="mt-6 text-sm max-h-[60vh] overflow-y-auto pr-2 pb-4">
+            <nav className="flex flex-col gap-y-5">
 
-            <button onClick={() => handleNav("/dashboard/events")} className="text-left hover:text-[#5DA865]">
-              Events
-            </button>
+              <button onClick={() => handleNav("/dashboard")} className="text-left hover:text-[#5DA865]">
+                Dashboard
+              </button>
 
-            <button onClick={() => handleNav("/dashboard/orders")} className="text-left hover:text-[#5DA865]">
-              Orders
-            </button>
+              <button onClick={() => handleNav("/dashboard/events")} className="text-left hover:text-[#5DA865]">
+                Events
+              </button>
 
-            <button onClick={() => handleNav("/shop")} className="text-left hover:text-[#5DA865]">
-              Shop
-            </button>
+              <button onClick={() => handleNav("/dashboard/orders")} className="text-left hover:text-[#5DA865]">
+                Orders
+              </button>
 
-            <button
-              onClick={() => handleNav("/dashboard/chapters-club")}
-              className="text-left hover:text-[#5DA865] flex items-center gap-2"
-            >
-              <span>Chapters Club</span>
-              <span className="bg-[#E5F7E4] text-[#2f6b3a] rounded-full border px-2.5 py-1 text-xs font-semibold">
-                Coming Soon 🚀
-              </span>
-            </button>
-          </nav>
+              <button onClick={() => handleNav("/shop")} className="text-left hover:text-[#5DA865]">
+                Shop
+              </button>
+
+              <button
+                onClick={() => handleNav("/dashboard/chapters-club")}
+                className="text-left hover:text-[#5DA865] flex items-center gap-2"
+              >
+                <span>Chapters Club</span>
+                <span className="bg-[#E5F7E4] text-[#2f6b3a] rounded-full border px-2.5 py-1 text-xs font-semibold">
+                  Coming Soon 🚀
+                </span>
+              </button>
+            </nav>
+          </div>
         </div>
 
-        {/* ACCOUNT SECTION */}
-        <div ref={accountRef} className="absolute bottom-6 left-0 px-6 w-full">
+        {/* BOTTOM ACCOUNT SECTION — FIXED ALWAYS */}
+        <div ref={accountRef} className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1]">
           {!loading && user ? (
             <>
               <button
@@ -128,9 +131,7 @@ export default function Sidebar({
                 />
 
                 <div className="flex flex-col">
-                  <span className="font-medium text-sm">
-                    {user.name || "User"}
-                  </span>
+                  <span className="font-medium text-sm">{user.name || "User"}</span>
 
                   {user.loyaltyprogram && (
                     <span className="mt-1 inline-block text-xs bg-[#5DA865] text-white px-2 py-0.5 rounded-full">
@@ -141,9 +142,8 @@ export default function Sidebar({
               </button>
 
               {menuOpen && (
-                <div className="absolute bottom-14 left-6 bg-white border rounded-md shadow p-1 w-44">
+                <div className="absolute bottom-20 left-6 bg-white border rounded-md shadow p-1 w-44">
 
-                  {/* My Account */}
                   <button
                     onClick={() => handleNav("/dashboard/account")}
                     className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
@@ -151,7 +151,6 @@ export default function Sidebar({
                     My Account
                   </button>
 
-                  {/* Settings (NEW) */}
                   <button
                     onClick={() => handleNav("/dashboard/settings")}
                     className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
@@ -159,7 +158,6 @@ export default function Sidebar({
                     Settings
                   </button>
 
-                  {/* Sign out */}
                   <button
                     onClick={handleSignOut}
                     className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-[#FAF6F1]"

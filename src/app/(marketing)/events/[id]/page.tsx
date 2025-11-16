@@ -74,8 +74,6 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
 
       {/* FULL WIDTH HERO */}
       <div className="relative w-full h-[55vh] min-h-[320px]">
-
-
         <Image
           src={event.imageUrl || "/placeholder-event.jpg"}
           alt={event.title}
@@ -83,9 +81,7 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
           className="object-cover object-center"
           priority
         />
-
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-
         <h1 className="absolute bottom-8 left-8 text-white text-4xl font-extrabold drop-shadow-xl tracking-tight">
           {event.title}
         </h1>
@@ -157,8 +153,13 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
           )}
         </section>
 
-        {/* CTA */}
-        <div className="text-center">
+        {/* MATCHED CTA CARD — SAME AS DASHBOARD */}
+        <section className="bg-white border border-[#e7dfd4] rounded-xl shadow-sm p-8 text-center">
+          <h2 className="text-2xl font-semibold mb-2">Book Your Place</h2>
+          <p className="text-neutral-600 mb-6">
+            Reserve your seat now.
+          </p>
+
           {soldOut ? (
             <button
               disabled
@@ -169,17 +170,14 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
           ) : (
             <BookNowButton eventId={event.id} />
           )}
-        </div>
 
-        {/* TERMS LINK — ★ NEW ★ */}
-        <div className="text-center mt-4">
           <Link
             href="/dashboard/legal/event-booking-terms"
-            className="text-[var(--accent)] underline text-sm hover:opacity-80"
+            className="mt-4 block text-[var(--accent)] underline text-sm hover:opacity-80"
           >
             Booking Terms & Conditions
           </Link>
-        </div>
+        </section>
 
       </div>
     </main>
