@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2025-10-29.clover",
+  apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
 });
 
 type Delivery = "email_now" | "schedule" | "print";

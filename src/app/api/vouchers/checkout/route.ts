@@ -30,9 +30,10 @@ if (!PUBLIC_SITE_URL) {
 
 // If you want to pin an API version, you can try the literal below.
 // If types ever complain (because SDK bumped LatestApiVersion), just omit apiVersion to use the account default.
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  // apiVersion: "2024-06-20", // safe to uncomment if your @stripe/stripe-js types accept this literal
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
 });
+
 
 function normalizedBaseUrl(raw: string): string {
   return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;

@@ -82,7 +82,10 @@ export async function POST(req: Request) {
     // ------------------------------
     // CHECKOUT
     // ------------------------------
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
+});
+
 
     const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 

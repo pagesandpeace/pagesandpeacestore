@@ -11,7 +11,10 @@ if (!STRIPE_SECRET_KEY) {
 // Use account default API version (no `any` cast). If you want to pin a version,
 // uncomment the next line and ensure your installed @stripe/stripe-node supports that literal.
 // const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" as Stripe.LatestApiVersion });
-const stripe = new Stripe(STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
+});
+
 
 export async function GET(req: NextRequest) {
   try {

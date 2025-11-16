@@ -6,8 +6,8 @@ import Stripe from "stripe";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-10-29.clover",
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
 });
 
 export async function POST(req: Request) {

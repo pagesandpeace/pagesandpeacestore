@@ -5,8 +5,8 @@ import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { auth } from "@/lib/auth";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-10-29.clover",
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
 });
 
 export async function POST(
