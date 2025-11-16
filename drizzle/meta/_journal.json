@@ -43,6 +43,13 @@
       "when": 1763243262338,
       "tag": "0005_natural_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1763262817239,
+      "tag": "0006_flawless_chimera",
+      "breakpoints": true
     }
   ]
 }

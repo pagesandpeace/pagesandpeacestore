@@ -8,7 +8,7 @@ import { Resend } from "resend";
 const resend = new Resend(process.env.RESEND_API_KEY);
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
-});
+});;
 
 export async function POST(req: Request) {
   try {
@@ -39,6 +39,14 @@ export async function POST(req: Request) {
       );
     }
 
+    // Prevent double refund attempts
+    if (booking.refunded) {
+      return NextResponse.json(
+        { status: "already_refunded", refundId: booking.stripeRefundId },
+        { status: 200 }
+      );
+    }
+
     // ------------------------------------------------------------------
     // FETCH EVENT
     // ------------------------------------------------------------------
@@ -61,19 +69,22 @@ export async function POST(req: Request) {
     const eventDate = new Date(event.date);
     const hoursBefore = (eventDate.getTime() - now.getTime()) / 3600000;
 
-    let status: "refunded" | "cancelled_no_refund" | "too_late";
-
-    // ------------------------------------------------------------------
-    // TOO LATE TO CANCEL (<48 hours)
-    // ------------------------------------------------------------------
+    // < 48 hours → too late
     if (hoursBefore < 48) {
-      status = "too_late";
-      return NextResponse.json({ status }, { status: 200 });
+      return NextResponse.json(
+        { status: "too_late" },
+        { status: 200 }
+      );
     }
 
+    let status: "refunded" | "cancelled_no_refund";
+
     // ------------------------------------------------------------------
-    // REAL STRIPE REFUND
+    // STRIPE REFUND
     // ------------------------------------------------------------------
+    let refundId: string | null = null;
+    let refundTime: string | null = null;
+
     if (booking.paid && booking.stripeCheckoutSessionId) {
       // Get Stripe checkout session → payment intent
       const session = await stripe.checkout.sessions.retrieve(
@@ -81,33 +92,38 @@ export async function POST(req: Request) {
         { expand: ["payment_intent"] }
       );
 
-      const pi = session.payment_intent as Stripe.PaymentIntent | null;
+      const pi = session.payment_intent as Stripe.PaymentIntent;
 
-      if (!pi || !pi.id) {
-        console.error("❌ Could not retrieve payment intent for refund.");
+      if (!pi?.id) {
         return NextResponse.json(
-          { error: "Unable to refund; missing payment intent." },
+          { error: "Payment Intent missing" },
           { status: 500 }
         );
       }
 
-      // Issue the refund
-      await stripe.refunds.create({
+      // 🔥 Create refund
+      const refund = await stripe.refunds.create({
         payment_intent: pi.id,
       });
 
-      // Update booking
+      refundId = refund.id;
+      refundTime = new Date(refund.created * 1000).toISOString();
+
+      // Update DB
       await db
         .update(eventBookings)
         .set({
           cancelled: true,
-          refunded: true, // ⭐ Now true because Stripe refund is real
+          refunded: true,
+          stripeRefundId: refundId,
+          refundProcessedAt: refundTime,
         })
         .where(eq(eventBookings.id, bookingId));
 
       status = "refunded";
+
     } else {
-      // Not paid → cancel without refund
+      // Not paid → cancel only
       await db
         .update(eventBookings)
         .set({
@@ -120,7 +136,7 @@ export async function POST(req: Request) {
     }
 
     // ------------------------------------------------------------------
-    // SEND EMAIL TO CUSTOMER
+    // SEND EMAIL — only if booking.email exists
     // ------------------------------------------------------------------
     if (booking.email) {
       await resend.emails.send({
@@ -138,7 +154,7 @@ export async function POST(req: Request) {
 
             ${
               status === "refunded"
-                ? "<p>A refund has been issued through Stripe and should appear in 5–10 working days.</p>"
+                ? `<p>A refund has been issued. Refund ID: <strong>${refundId}</strong>. Funds will appear within 5–10 working days.</p>`
                 : "<p>No refund was due for this booking.</p>"
             }
 
@@ -150,7 +166,10 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ status }, { status: 200 });
+    return NextResponse.json(
+      { status, refundId, refundTime },
+      { status: 200 }
+    );
 
   } catch (err) {
     console.error("❌ Cancel booking error:", err);

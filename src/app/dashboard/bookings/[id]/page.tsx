@@ -9,18 +9,41 @@ import { redirect } from "next/navigation";
 import BookingDetailClient from "./BookingDetailClient";
 
 export default async function BookingDetailPage({ params }: { params: { id: string } }) {
-  const bookingId = params.id;
+  const { id: bookingId } = await params;
   const user = await getCurrentUserServer();
 
-  if (!user) redirect(`/sign-in?callbackURL=/dashboard/bookings/${bookingId}`);
+  if (!user) {
+    redirect(`/sign-in?callbackURL=/dashboard/bookings/${bookingId}`);
+  }
 
+  /* ----------------------------------------------------------
+     FETCH BOOKING (NOW WITH REFUND FIELDS)
+  ---------------------------------------------------------- */
   const booking =
     (
       await db
-        .select()
-        .from(eventBookings)
-        .where(eq(eventBookings.id, bookingId))
-    )[0];
+      .select({
+        id: eventBookings.id,
+        eventId: eventBookings.eventId,
+        name: eventBookings.name,
+        email: eventBookings.email,
+        paid: eventBookings.paid,
+        cancelled: eventBookings.cancelled,
+        cancellationRequested: eventBookings.cancellationRequested,
+        refunded: eventBookings.refunded,
+
+        // ⭐ Correct fields from your schema:
+        stripeRefundId: eventBookings.stripeRefundId,
+        refundProcessedAt: eventBookings.refundProcessedAt,
+
+        stripeCheckoutSessionId: eventBookings.stripeCheckoutSessionId,
+        stripePaymentIntentId: eventBookings.stripePaymentIntentId,
+
+        createdAt: eventBookings.createdAt,
+      })
+      .from(eventBookings)
+      .where(eq(eventBookings.id, bookingId))
+  )[0];
 
   if (!booking) {
     return (
@@ -33,9 +56,15 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
     );
   }
 
+  /* ----------------------------------------------------------
+     FETCH EVENT
+  ---------------------------------------------------------- */
   const event =
     (
-      await db.select().from(events).where(eq(events.id, booking.eventId))
+      await db
+        .select()
+        .from(events)
+        .where(eq(events.id, booking.eventId))
     )[0];
 
   return (
@@ -46,7 +75,7 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
           <h1 className="text-3xl font-semibold tracking-widest">Booking Details</h1>
         </div>
 
-        {/* 🔥 Client component handles all live updating */}
+        {/* 🔥 FULL LOGIC NOW LIVES IN CLIENT COMPONENT */}
         <BookingDetailClient booking={booking} event={event} />
 
         <Link href="/dashboard/events" className="text-accent underline text-sm">

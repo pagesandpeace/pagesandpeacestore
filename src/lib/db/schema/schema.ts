@@ -267,6 +267,9 @@ export const eventBookings = pgTable("event_bookings", {
   // Required for Stripe reconciliation
   stripeCheckoutSessionId: text("stripe_checkout_session_id"),
 stripePaymentIntentId: text("stripe_payment_intent_id"),
+
+ stripeRefundId: text("stripe_refund_id"),
+  refundProcessedAt: timestamp("refund_processed_at", { mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .defaultNow()
     .notNull(),

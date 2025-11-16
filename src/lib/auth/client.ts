@@ -2,7 +2,7 @@
 
 export async function getCurrentUserClient() {
   try {
-    const res = await fetch("/api/auth/me", {
+    const res = await fetch("/api/me", {
       credentials: "include",
       cache: "no-store",
     });

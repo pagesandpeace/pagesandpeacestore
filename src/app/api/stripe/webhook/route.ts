@@ -1,4 +1,4 @@
-/* FIXED VERSION – ONLY CHANGES: Ensure total & price fields are strings */
+/* FIXED + CLEAN VERSION – ALL TYPESCRIPT ERRORS REMOVED */
 
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -16,9 +16,12 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { sendVoucherEmails } from "@/lib/email/vouchers";
+import { Resend } from "resend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
@@ -76,9 +79,7 @@ export async function POST(req: Request) {
     const body = await readRawBody(req.body as ReadableStream);
     event = stripe.webhooks.constructEvent(body, sig, secret);
   } catch (error) {
-    const message = (error as Error).message;
-    console.error("❌ Webhook signature error:", message);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 
   if (event.type === "checkout.session.completed") {
@@ -96,15 +97,13 @@ export async function POST(req: Request) {
         const buyerEmail =
           md.buyerEmail || session.customer_details?.email || session.customer_email || "";
 
-        const already = await db
+        const exists = await db
           .select({ id: vouchers.id })
           .from(vouchers)
           .where(eq(vouchers.stripeCheckoutSessionId, session.id))
           .limit(1);
 
-        let createdCode: string | null = null;
-
-        if (already.length === 0) {
+        if (!exists.length) {
           const code = generateVoucherCode();
           const expiresAt = addMonths(new Date(), 24);
 
@@ -123,10 +122,6 @@ export async function POST(req: Request) {
             expiresAt,
           });
 
-          createdCode = code;
-        }
-
-        if (createdCode) {
           await sendVoucherEmails({
             delivery: asDelivery(md.delivery),
             buyerEmail,
@@ -134,59 +129,53 @@ export async function POST(req: Request) {
             toName: md.toName || null,
             fromName: md.fromName || null,
             message: md.message || null,
-            code: createdCode,
+            code,
             amountPence,
             currency: session.currency ?? "gbp",
-            voucherUrl: `${SITE_URL}/vouchers/${createdCode}`,
+            voucherUrl: `${SITE_URL}/vouchers/${code}`,
             sendDateISO: md.sendDate || null,
           });
         }
       }
 
       /* ======================================
-   EVENT BOOKINGS
-====================================== */
-if (md.kind === "event") {
-  console.log("🎉 Processing event booking (EVENT)");
+         EVENT BOOKINGS
+      ====================================== */
+      if (md.kind === "event") {
+        console.log("🎉 Processing event booking");
 
-  const eventId = md.eventId;
-  const userId = md.userId;
-  const bookingId = md.bookingId;
+        const eventId = md.eventId;
+        const userId = md.userId;
+        const bookingId = md.bookingId;
 
-  if (!eventId || !userId || !bookingId) {
-    console.log("⚠ Missing eventId/userId/bookingId in metadata");
-    return NextResponse.json({ received: true }, { status: 200 });
-  }
+        if (!eventId || !userId || !bookingId) {
+          console.log("⚠ Missing metadata for event booking");
+          return NextResponse.json({ received: true }, { status: 200 });
+        }
 
-  console.log("🧾 Inserting event booking with session id:", session.id);
+        const paymentIntentId =
+          typeof session.payment_intent === "string" ? session.payment_intent : null;
 
-// ⭐ Extract Payment Intent ID
-const eventPaymentIntentId =
-  typeof session.payment_intent === "string" ? session.payment_intent : null;
+        const [booking] = await db
+          .insert(eventBookings)
+          .values({
+            id: bookingId,
+            eventId,
+            userId,
+            paid: true,
+            cancelled: false,
+            email: session.customer_details?.email || session.customer_email || null,
+            name: session.customer_details?.name || null,
+            stripeCheckoutSessionId: session.id,
+            stripePaymentIntentId: paymentIntentId,
+          })
+          .returning();
 
-
-const [booking] = await db
-  .insert(eventBookings)
-  .values({
-    id: bookingId,
-    eventId,
-    userId,
-    paid: true,
-    cancelled: false,
-    email: session.customer_details?.email || session.customer_email || null,
-    name: session.customer_details?.name || null,
-
-    // ⭐ Save Stripe IDs for refunding later
-    stripeCheckoutSessionId: session.id,
-    stripePaymentIntentId: eventPaymentIntentId,
-  })
-  .returning();
-
-console.log("✅ Booking inserted:", booking);
-
-
-
-        const [ev] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+        const [ev] = await db
+          .select()
+          .from(events)
+          .where(eq(events.id, eventId))
+          .limit(1);
 
         if (!ev) return NextResponse.json({ received: true }, { status: 200 });
 
@@ -195,9 +184,6 @@ console.log("✅ Booking inserted:", booking);
           .from(products)
           .where(eq(products.id, ev.productId))
           .limit(1);
-
-        const paymentIntentId =
-          typeof session.payment_intent === "string" ? session.payment_intent : null;
 
         let receiptUrl: string | null = null;
         let cardBrand: string | null = null;
@@ -222,7 +208,7 @@ console.log("✅ Booking inserted:", booking);
         await db.insert(orders).values({
           id: orderId,
           userId,
-          total: String(product.price), // FIX
+          total: String(product.price),
           status: "completed",
           stripeCheckoutSessionId: session.id,
           stripePaymentIntentId: paymentIntentId,
@@ -237,7 +223,36 @@ console.log("✅ Booking inserted:", booking);
           orderId,
           productId: product.id,
           quantity: 1,
-          price: String(product.price), // FIX
+          price: String(product.price),
+        });
+
+        /* SEND EVENT CONFIRMATION EMAIL (INSIDE BLOCK) */
+        const eventDate = new Date(ev.date).toLocaleString("en-GB", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        const storeAddress = "Pages & Peace, Leeds LS1";
+
+        await resend.emails.send({
+          from: "Pages & Peace <noreply@pagesandpeace.co.uk>",
+          to: booking.email || session.customer_details?.email || "",
+          subject: `Your Booking: ${ev.title}`,
+          html: `
+            <div style="font-family: Arial; line-height: 1.6;">
+              <h2>Your Pages & Peace Event Booking is Confirmed 📚</h2>
+              <p>Thank you for booking with us.</p>
+              <p><strong>Event:</strong> ${ev.title}</p>
+              <p><strong>Date:</strong> ${eventDate}</p>
+              <p><strong>Location:</strong> ${storeAddress}</p>
+              <p><strong>Booking ID:</strong> ${booking.id}</p>
+              <p style="margin-top:24px;">Warm regards,<br/>Pages & Peace</p>
+            </div>
+          `,
         });
 
         return NextResponse.json({ received: true }, { status: 200 });
@@ -285,7 +300,6 @@ console.log("✅ Booking inserted:", booking);
         const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
           expand: ["latest_charge"],
         });
-
         const charge = pi.latest_charge as Stripe.Charge | null;
 
         receipt = {
@@ -305,7 +319,7 @@ console.log("✅ Booking inserted:", booking);
         await db.insert(orders).values({
           id: orderId,
           userId: md.userId,
-          total: String(total), // FIX
+          total: String(total),
           status: "completed",
           stripeCheckoutSessionId: session.id,
           stripePaymentIntentId: paymentIntentId,
@@ -327,7 +341,7 @@ console.log("✅ Booking inserted:", booking);
             orderId,
             productId: found[0] ? found[0].id : "unlinked",
             quantity: li.quantity ?? 1,
-            price: String(li.amount_total ? li.amount_total / 100 : 0), // FIX
+            price: String(li.amount_total ? li.amount_total / 100 : 0),
           });
         }
 
@@ -353,7 +367,7 @@ console.log("✅ Booking inserted:", booking);
         id: guestOrderId,
         email: guestEmail,
         guestToken,
-        total: String(total), // FIX
+        total: String(total),
         status: "completed",
         stripeCheckoutSessionId: session.id,
         stripePaymentIntentId: paymentIntentId,
@@ -375,13 +389,13 @@ console.log("✅ Booking inserted:", booking);
           guestOrderId,
           productId: found[0] ? found[0].id : "unlinked",
           quantity: li.quantity ?? 1,
-          price: String(li.amount_total ? li.amount_total / 100 : 0), // FIX
+          price: String(li.amount_total ? li.amount_total / 100 : 0),
         });
       }
 
       return NextResponse.json({ received: true }, { status: 200 });
-    } catch (error) {
-      console.error("❌ Webhook DB error:", error);
+    } catch (err) {
+      console.error("❌ Webhook error:", err);
       return NextResponse.json({ received: true }, { status: 200 });
     }
   }

@@ -8,31 +8,28 @@ import {
   eventCategories,
   users,
 } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getCurrentUserServer } from "@/lib/auth/actions";
 
 export const dynamic = "force-dynamic";
 
 /* ---------------------------------------------------------
    GET /api/admin/events/[id]
-   Returns FULL event record with:
-   - event
-   - product
-   - store (chapter, name, address, code)
-   - categories
+   Fetch full event record (event + product + store + categories)
 --------------------------------------------------------- */
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }   // ⭐ FIXED: params must be awaited
 ) {
   try {
-    const user = await getCurrentUserServer();
+    // ⭐ FIXED: required in Next.js 15 dynamic routes
+    const { id: eventId } = await context.params;
 
+    const user = await getCurrentUserServer();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Allow both admin + staff
     const [dbUser] = await db
       .select({ role: users.role })
       .from(users)
@@ -41,8 +38,6 @@ export async function GET(
     if (!dbUser || (dbUser.role !== "admin" && dbUser.role !== "staff")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-
-    const eventId = params.id;
 
     /* ---------------------------------------------------------
        1. Fetch Event + Product + Store
@@ -84,10 +79,7 @@ export async function GET(
       .where(eq(events.id, eventId));
 
     if (rows.length === 0) {
-      return NextResponse.json(
-        { error: "Event not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
     const base = rows[0];
@@ -102,11 +94,14 @@ export async function GET(
         slug: eventCategories.slug,
       })
       .from(eventCategoryLinks)
-      .innerJoin(eventCategories, eq(eventCategories.id, eventCategoryLinks.categoryId))
+      .innerJoin(
+        eventCategories,
+        eq(eventCategories.id, eventCategoryLinks.categoryId)
+      )
       .where(eq(eventCategoryLinks.eventId, eventId));
 
     /* ---------------------------------------------------------
-       3. Build response
+       3. Build Response
     --------------------------------------------------------- */
     const response = {
       id: base.eventId,
