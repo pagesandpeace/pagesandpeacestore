@@ -4,6 +4,11 @@ import type { NextRequest } from "next/server";
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // 🔥 CRITICAL: Never touch webhook
+  if (pathname.startsWith("/api/stripe/webhook")) {
+    return NextResponse.next();
+  }
+
   // Skip static / API
   if (
     pathname.startsWith("/_next") ||
@@ -13,7 +18,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Fetch user role via Safe Node route
   const roleRes = await fetch(`${req.nextUrl.origin}/api/auth/role`, {
     headers: req.headers,
   });
@@ -25,14 +29,10 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/account") ||
     pathname === "/";
 
-  /* ----------------------------------------------------
-     FIX: redirect logged-in customers away from "/" → /dashboard
-  ------------------------------------------------------ */
   if (pathname === "/" && role && role !== "admin" && role !== "staff") {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  // 🔐 Protect admin area
   if (isAdminRoute) {
     if (!role) {
       return NextResponse.redirect(new URL("/(auth)/sign-in", req.url));
@@ -43,7 +43,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Admin trying to access customer areas → push them back to /admin
   if (isCustomerRoute && (role === "admin" || role === "staff")) {
     return NextResponse.redirect(new URL("/admin", req.url));
   }
