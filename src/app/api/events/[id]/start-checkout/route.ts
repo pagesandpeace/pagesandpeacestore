@@ -70,7 +70,7 @@ export async function POST(
       },
     ],
 
-    success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/events/success?session_id={CHECKOUT_SESSION_ID}&eid=${eventId}`,
+    success_url: `${process.env.NEXT_PUBLIC_SITE_URL}//dashboard/events/[id]/success?session_id={CHECKOUT_SESSION_ID}&eid=${eventId}`,
     cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/events/${eventId}`,
 
     metadata: {

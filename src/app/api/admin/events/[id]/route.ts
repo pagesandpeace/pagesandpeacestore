@@ -1,12 +1,26 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { events } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  events,
+  products,
+  stores,
+  eventCategoryLinks,
+  eventCategories,
+  users,
+} from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { getCurrentUserServer } from "@/lib/auth/actions";
 
-/* --------------------------------------------------------
-   GET SINGLE EVENT
--------------------------------------------------------- */
+export const dynamic = "force-dynamic";
+
+/* ---------------------------------------------------------
+   GET /api/admin/events/[id]
+   Returns FULL event record with:
+   - event
+   - product
+   - store (chapter, name, address, code)
+   - categories
+--------------------------------------------------------- */
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
@@ -14,58 +28,125 @@ export async function GET(
   try {
     const user = await getCurrentUserServer();
 
-    if (!user || (user.role !== "admin" && user.role !== "staff")) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Allow both admin + staff
+    const [dbUser] = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, user.id));
+
+    if (!dbUser || (dbUser.role !== "admin" && dbUser.role !== "staff")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const eventId = params.id;
 
-    const result = await db
-      .select()
+    /* ---------------------------------------------------------
+       1. Fetch Event + Product + Store
+    --------------------------------------------------------- */
+    const rows = await db
+      .select({
+        // event
+        eventId: events.id,
+        eventTitle: events.title,
+        eventSubtitle: events.subtitle,
+        eventShortDescription: events.shortDescription,
+        eventDescription: events.description,
+        eventDate: events.date,
+        eventCapacity: events.capacity,
+        eventPricePence: events.pricePence,
+        eventImageUrl: events.imageUrl,
+        eventPublished: events.published,
+
+        // product
+        productId: products.id,
+        productName: products.name,
+        productSlug: products.slug,
+        productDescription: products.description,
+        productPrice: products.price,
+        productImageUrl: products.imageUrl,
+        productType: products.productType,
+        productMetadata: products.metadata,
+
+        // store
+        storeId: stores.id,
+        storeName: stores.name,
+        storeAddress: stores.address,
+        storeChapter: stores.chapter,
+        storeCode: stores.code,
+      })
       .from(events)
-      .where(eq(events.id, eventId))
-      .limit(1);
+      .innerJoin(products, eq(products.id, events.productId))
+      .innerJoin(stores, eq(stores.id, events.storeId))
+      .where(eq(events.id, eventId));
 
-    const event = result[0];
-
-    if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    if (rows.length === 0) {
+      return NextResponse.json(
+        { error: "Event not found" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json(event);
+    const base = rows[0];
+
+    /* ---------------------------------------------------------
+       2. Fetch Categories
+    --------------------------------------------------------- */
+    const categoryRows = await db
+      .select({
+        id: eventCategories.id,
+        name: eventCategories.name,
+        slug: eventCategories.slug,
+      })
+      .from(eventCategoryLinks)
+      .innerJoin(eventCategories, eq(eventCategories.id, eventCategoryLinks.categoryId))
+      .where(eq(eventCategoryLinks.eventId, eventId));
+
+    /* ---------------------------------------------------------
+       3. Build response
+    --------------------------------------------------------- */
+    const response = {
+      id: base.eventId,
+      title: base.eventTitle,
+      subtitle: base.eventSubtitle,
+      shortDescription: base.eventShortDescription,
+      description: base.eventDescription,
+      date: base.eventDate,
+      capacity: base.eventCapacity,
+      pricePence: base.eventPricePence,
+      imageUrl: base.eventImageUrl,
+      published: base.eventPublished,
+
+      product: {
+        id: base.productId,
+        name: base.productName,
+        slug: base.productSlug,
+        description: base.productDescription,
+        price: base.productPrice,
+        imageUrl: base.productImageUrl,
+        productType: base.productType,
+        metadata: base.productMetadata,
+      },
+
+      store: {
+        id: base.storeId,
+        name: base.storeName,
+        chapter: base.storeChapter,
+        address: base.storeAddress,
+        code: base.storeCode,
+      },
+
+      categories: categoryRows,
+    };
+
+    return NextResponse.json(response);
   } catch (err) {
-    console.error("❌ GET event error:", err);
+    console.error("❌ [admin/event detail] Error:", err);
     return NextResponse.json(
-      { error: "Server error fetching event" },
-      { status: 500 }
-    );
-  }
-}
-
-/* --------------------------------------------------------
-   DELETE EVENT  
-   (cascade removes bookings automatically)
--------------------------------------------------------- */
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const user = await getCurrentUserServer();
-
-    if (!user || (user.role !== "admin" && user.role !== "staff")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const id = params.id;
-
-    await db.delete(events).where(eq(events.id, id));
-
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("❌ DELETE event error:", err);
-    return NextResponse.json(
-      { error: "Server error deleting event" },
+      { error: "Failed to fetch event" },
       { status: 500 }
     );
   }

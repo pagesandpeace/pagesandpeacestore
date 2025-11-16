@@ -1,47 +1,59 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
+import AuthPromptModal from "@/components/ui/AuthPromptModal";
 
 export default function BookNowButton({ eventId }: { eventId: string }) {
-  const [isPending, startTransition] = useTransition();
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleBook = () => {
-    if (isPending) return;
-
+  const handleBookNow = async () => {
     setLoading(true);
 
-    startTransition(async () => {
-      const res = await fetch("/api/events/start-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ eventId }),
-      });
+    // Check if logged in
+    const res = await fetch("/api/me");
+    const me = await res.json();
 
-      const data = await res.json();
-
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        window.location.href = `/events/${eventId}?error=checkout`;
-      }
-
+    if (!me?.id) {
+      // Not logged in → show modal
+      setShowAuthPrompt(true);
       setLoading(false);
+      return;
+    }
+
+    // Logged in → Begin event checkout
+    const checkoutRes = await fetch("/api/events/checkout", {
+      method: "POST",
+      body: JSON.stringify({ eventId }),
     });
+
+    const data = await checkoutRes.json();
+
+    if (!checkoutRes.ok) {
+      alert("Failed to start checkout");
+      setLoading(false);
+      return;
+    }
+
+    // Redirect to Stripe
+    window.location.href = data.url;
   };
 
   return (
-    <button
-      onClick={handleBook}
-      disabled={isPending || loading}
-      className="
-        bg-[#5DA865] hover:bg-[#4c8a55]
-        text-white px-8 py-3 rounded-lg font-semibold
-        transition-colors duration-200
-      "
-    >
-      {isPending || loading ? "Redirecting…" : "Book Now"}
-    </button>
+    <>
+      <button
+        onClick={handleBookNow}
+        disabled={loading}
+        className="bg-[var(--accent)] text-white px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition"
+      >
+        {loading ? "Loading…" : "Book Now"}
+      </button>
+
+      <AuthPromptModal
+        open={showAuthPrompt}
+        onClose={() => setShowAuthPrompt(false)}
+        callbackURL={`/dashboard/events/${eventId}`}  // ⭐ FIXED
+      />
+    </>
   );
 }

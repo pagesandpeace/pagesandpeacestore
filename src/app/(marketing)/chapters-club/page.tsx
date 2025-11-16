@@ -43,46 +43,32 @@ export default function ChaptersClubPage() {
       </section>
 
       {/* ---- Call to Action ---- */}
-<div className="mt-14 flex flex-col sm:flex-row flex-wrap justify-center gap-4">
-  {/* 🟢 Join the Club */}
-  <Link
-    href="/sign-up?join=loyalty"
-    className="inline-block text-center rounded-full px-10 py-3 text-lg font-semibold
-               bg-[#189458]
-               text-white
-               border-2 border-[#d4af37]
-               hover:bg-[#157c46] hover:border-[#d4af37]
-               transition-all duration-200 shadow-sm"
-  >
-    Join the Club
-  </Link>
+      <div className="mt-14 flex flex-col sm:flex-row flex-wrap justify-center gap-4">
+        {/* 🟢 Join the Club */}
+        <Link
+          href="/sign-up?join=loyalty"
+          className="inline-block text-center rounded-full px-10 py-3 text-lg font-semibold
+                     bg-[#189458]
+                     text-white
+                     border-2 border-[#d4af37]
+                     hover:bg-[#157c46] hover:border-[#d4af37]
+                     transition-all duration-200 shadow-sm"
+        >
+          Join the Club
+        </Link>
 
-  {/* ⚪ Already a Member */}
-  <Link
-    href="/sign-in"
-    className="inline-block text-center rounded-full px-10 py-3 text-lg font-semibold
-               text-[#189458]
-               border-2 border-[#d4af37]
-               hover:bg-[#d4af37] hover:text-white
-               transition-all duration-200 shadow-sm"
-  >
-    Already a Member? Sign In
-  </Link>
-
-  {/* 🔙 Back to Home */}
-  <Link
-    href="/"
-    className="inline-block text-center rounded-full px-10 py-3 text-lg font-medium
-               text-[#111]
-               border-2 border-[#dcd6cf]
-               hover:bg-[#f0ece7]
-               transition-all duration-200"
-  >
-    ← Back to Home
-  </Link>
-</div>
-
-
+        {/* ⚪ Already a Member */}
+        <Link
+          href="/sign-in"
+          className="inline-block text-center rounded-full px-10 py-3 text-lg font-semibold
+                     text-[#189458]
+                     border-2 border-[#d4af37]
+                     hover:bg-[#d4af37] hover:text-white
+                     transition-all duration-200 shadow-sm"
+        >
+          Already a Member? Sign In
+        </Link>
+      </div>
 
       {/* ---- Chapter Identity ---- */}
       <section className="mt-20 text-center max-w-3xl space-y-4">

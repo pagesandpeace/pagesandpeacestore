@@ -63,9 +63,13 @@ export const auth = betterAuth({
      EMAIL+PASSWORD
   --------------------------------------------- */
   emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: true,
-  },
+  enabled: true,
+  requireEmailVerification: true,
+
+  providerId: "email", // ⭐ tells BetterAuth this is the credentials provider
+  accountIdStrategy: "email", // ⭐ use email as unique accountID
+},
+
 
   /* ---------------------------------------------
      SOCIAL PROVIDERS

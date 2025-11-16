@@ -3,7 +3,13 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-type BadgeColor = "green" | "red" | "blue" | "yellow" | "neutral";
+type BadgeColor =
+  | "green"
+  | "red"
+  | "blue"
+  | "yellow"
+  | "neutral"
+  | "purple"; // ⭐ added
 
 interface BadgeProps {
   children: React.ReactNode;
@@ -18,6 +24,7 @@ export function Badge({ children, color = "neutral", className }: BadgeProps) {
     blue: "bg-blue-200 text-blue-800",
     yellow: "bg-yellow-200 text-yellow-800",
     neutral: "bg-gray-200 text-gray-800",
+    purple: "bg-purple-200 text-purple-800", // ⭐ added
   };
 
   return (

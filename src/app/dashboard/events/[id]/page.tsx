@@ -1,53 +1,76 @@
 export const dynamic = "force-dynamic";
 
 import { db } from "@/lib/db";
-import { eventBookings, events } from "@/lib/db/schema";
+import {
+  eventBookings,
+  events,
+  eventCategoryLinks,
+  eventCategories,
+  stores,
+} from "@/lib/db/schema";
+
 import { getCurrentUserServer } from "@/lib/auth/actions";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { StartEventCheckout } from "@/components/StartEventCheckout";
 
 export default async function DashboardEventDetailPage(props: {
   params: Promise<{ id: string }>;
 }) {
-  // ⭐ FIX: Await params
   const { id: eventId } = await props.params;
 
   const user = await getCurrentUserServer();
-  if (!user) {
-    redirect(`/sign-in?callbackURL=/dashboard/events/${eventId}`);
-  }
+  if (!user) redirect(`/sign-in?callbackURL=/dashboard/events/${eventId}`);
 
-  /* --------------------------------------------------
-     FETCH EVENT
-  -------------------------------------------------- */
+  /* FETCH EVENT */
   const event = (
-    await db.select().from(events).where(eq(events.id, eventId))
+    await db.select().from(events).where(eq(events.id, eventId)).limit(1)
   )[0];
 
   if (!event) {
     return (
       <main className="min-h-screen bg-[#FAF6F1] px-6 py-12 text-center">
         <h1 className="text-2xl font-semibold">Event Not Found</h1>
-        <Link
-          href="/dashboard/events"
-          className="text-accent underline mt-4 inline-block"
-        >
-          Back to Events
-        </Link>
       </main>
     );
   }
 
-  /* --------------------------------------------------
-     FETCH USER BOOKINGS (does NOT create new ones)
-  -------------------------------------------------- */
+  /* FETCH CATEGORY IDS */
+  const categoryLinks = await db
+    .select()
+    .from(eventCategoryLinks)
+    .where(eq(eventCategoryLinks.eventId, eventId));
+
+  const categoryIds = categoryLinks.map((c) => c.categoryId);
+
+  /* FETCH CATEGORIES */
+  const categories =
+    categoryIds.length > 0
+      ? await db
+          .select()
+          .from(eventCategories)
+          .where(inArray(eventCategories.id, categoryIds))
+      : [];
+
+  /* FETCH STORE */
+  const store = event.storeId
+    ? (
+        await db
+          .select()
+          .from(stores)
+          .where(eq(stores.id, event.storeId))
+          .limit(1)
+      )[0]
+    : null;
+
+  /* USER BOOKINGS */
   const bookings = await db
     .select()
     .from(eventBookings)
     .where(
-      and(eq(eventBookings.eventId, eventId), eq(eventBookings.userId, user.id))
+      and(eq(eventBookings.userId, user.id), eq(eventBookings.eventId, eventId))
     );
 
   const formattedDate = new Date(event.date).toLocaleString("en-GB", {
@@ -59,97 +82,115 @@ export default async function DashboardEventDetailPage(props: {
   });
 
   return (
-    <main className="min-h-screen bg-[#FAF6F1] px-6 py-12">
-      <div className="max-w-3xl mx-auto space-y-10">
+    <main className="min-h-screen bg-[#FAF6F1]">
 
-        {/* HEADER */}
-        <div className="space-y-2 border-b border-[#dcd6cf] pb-6">
-          <h1 className="text-3xl font-semibold tracking-widest">{event.title}</h1>
-          <p className="text-[#111]/70 text-sm">
-            Full event details and your booking history.
+      {/* FULL WIDTH HERO */}
+      <div className="relative w-full h-[50vh] min-h-[320px]">
+        <Image
+          src={event.imageUrl || "/placeholder-event.jpg"}
+          alt={event.title}
+          fill
+          className="object-cover object-center"
+        />
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+
+        <h1 className="absolute bottom-8 left-8 text-white text-4xl font-extrabold drop-shadow-xl tracking-tight">
+          {event.title}
+        </h1>
+      </div>
+
+      <div className="max-w-3xl mx-auto px-6 mt-10 space-y-10">
+
+        {/* SUBTITLE */}
+        {event.subtitle && (
+          <p className="text-xl text-neutral-700 italic text-center">
+            {event.subtitle}
           </p>
-        </div>
+        )}
 
-        {/* EVENT DETAILS */}
-        <section className="bg-white border border-[#e7dfd4] rounded-xl p-6 space-y-4 shadow-sm">
-          <h2 className="text-xl font-semibold">Event Details</h2>
-
-          <p className="text-neutral-700">
-            <span className="font-semibold">Date:</span> {formattedDate}
+        {/* SHORT DESCRIPTION */}
+        {event.shortDescription && (
+          <p className="text-center text-neutral-700 text-lg leading-relaxed max-w-2xl mx-auto">
+            {event.shortDescription}
           </p>
+        )}
 
-          <p className="text-neutral-700">
-            <span className="font-semibold">Price:</span>{" "}
-            £{(event.pricePence / 100).toFixed(2)}
-          </p>
+        {/* CATEGORIES */}
+        {categories.length > 0 && (
+          <section className="bg-white border border-[#e7dfd4] rounded-xl p-6 shadow-sm">
+            <h2 className="text-lg font-semibold mb-3 text-[#111]">Categories</h2>
 
-          <p className="text-neutral-700">
-            <span className="font-semibold">Capacity:</span> {event.capacity} seats
-          </p>
-        </section>
-
-        {/* USER BOOKINGS — LIST */}
-        {bookings.length > 0 && (
-          <section className="bg-white border border-[#e7dfd4] rounded-xl p-6 space-y-6 shadow-sm">
-            <h2 className="text-xl font-semibold">Your Bookings</h2>
-
-            <div className="space-y-4">
-              {bookings.map((b) => (
-                <div
-                  key={b.id}
-                  className="p-4 border border-[#eee] rounded-lg bg-[#fafafa]"
+            <div className="flex flex-wrap gap-2">
+              {categories.map((c) => (
+                <span
+                  key={c.id}
+                  className="px-3 py-1 bg-[#fff7e6] text-[#c67b00] border border-[#f2e6cc] rounded-full text-xs"
                 >
-                  <p>
-                    <span className="font-semibold">Booking ID:</span> {b.id}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Status:</span>{" "}
-                    {b.cancelled ? (
-                      <span className="text-red-600 font-semibold">Cancelled</span>
-                    ) : (
-                      <span className="text-green-600 font-semibold">Active</span>
-                    )}
-                  </p>
-                </div>
+                  {c.name}
+                </span>
               ))}
             </div>
-
-            <Link
-              href="/dashboard/events"
-              className="block text-accent underline text-sm"
-            >
-              ← Back to Events
-            </Link>
           </section>
         )}
 
-        {/* CHECKOUT CTA */}
-        <section className="bg-white border border-[#e7dfd4] rounded-xl p-6 shadow-sm space-y-6 text-center">
+        {/* EVENT DETAILS */}
+        <section className="space-y-6 text-neutral-700 text-lg">
+
+          <div className="border-b border-neutral-300 pb-4">
+            <strong className="text-[#111] block mb-1">Date & Time</strong>
+            {formattedDate}
+          </div>
+
+          <div className="border-b border-neutral-300 pb-4">
+            <strong className="text-[#111] block mb-1">Location</strong>
+            {store?.address || store?.name || "Pages & Peace"}
+          </div>
+
+          <div className="border-b border-neutral-300 pb-4">
+            <strong className="text-[#111] block mb-1">Price</strong>
+            £{(event.pricePence / 100).toFixed(2)}
+          </div>
+
+          <div className="border-b border-neutral-300 pb-4">
+            <strong className="text-[#111] block mb-1">Capacity</strong>
+            {event.capacity} seats
+          </div>
+
+          {event.description && (
+            <div className="pt-2">
+              <strong className="text-[#111] block mb-2">About This Event</strong>
+              <p className="leading-relaxed whitespace-pre-line">
+                {event.description}
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* CHECKOUT */}
+        <section className="bg-white border border-[#e7dfd4] rounded-xl p-6 shadow-sm text-center space-y-6">
+          
           <h2 className="text-xl font-semibold">
-            {bookings.length > 0
-              ? "Already Booked"
-              : "You haven't booked this event yet"}
+            {bookings.length > 0 ? "Bring a Friend" : "Book Your Place"}
           </h2>
 
-          {bookings.length > 0 ? (
-            <p className="text-neutral-700">
-              You already reserved a seat.
-              <br />
-              Want to bring a friend?
-            </p>
-          ) : (
-            <p className="text-neutral-700">Tap below to reserve your seat.</p>
-          )}
+          <p className="text-neutral-700">
+            {bookings.length > 0
+              ? "You already have a seat. Want to add another?"
+              : "Reserve your seat now."}
+          </p>
 
-          {/* ⭐ Checkout Button (ONLY ONE ENTRYPOINT) */}
           <StartEventCheckout eventId={eventId} />
 
-          <Link
-            href="/dashboard/events"
-            className="block text-accent underline text-sm mt-4"
-          >
-            ← Back to Events
-          </Link>
+          {/* TERMS LINK BELOW BUTTON */}
+          <div className="pt-2">
+            <Link
+              href="/events/booking-terms"
+              className="underline text-sm text-[var(--accent)] hover:opacity-80 block"
+            >
+              Booking Terms & Conditions
+            </Link>
+          </div>
         </section>
       </div>
     </main>

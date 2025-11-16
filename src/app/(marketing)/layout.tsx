@@ -5,23 +5,40 @@ import { useEffect, useState } from "react";
 import LoyaltyJoinModal from "@/components/LoyaltyJoinModal";
 import Navbar from "@/components/Navbar";
 
-export default function MarketingLayout({ children }: { children: React.ReactNode }) {
+export default function MarketingLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [banner, setBanner] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // On mount, check membership to set the banner copy
+  /* ----------------------------------------------------
+     SAFE USER LOAD — NEVER THROWS, NEVER CRASHES
+  ---------------------------------------------------- */
   useEffect(() => {
-    (async () => {
+    async function load() {
       try {
-        const res = await fetch("/api/me", { cache: "no-store" });
+        const res = await fetch("/api/me", {
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        // If API/me fails → treat as logged out
         if (!res.ok) {
+          console.warn("[MarketingLayout] /api/me returned non-OK:", res.status);
           setJoined(false);
           setBanner("🌿 Join the Pages & Peace Loyalty Club and earn points!");
           return;
         }
-        const me = await res.json();
+
+        const me = await res.json().catch((e) => {
+          console.warn("[MarketingLayout] JSON parse failed:", e);
+          return null;
+        });
+
         if (me?.loyaltyprogram) {
           setJoined(true);
           setBanner("✅ You’re in the Pages & Peace Loyalty Club!");
@@ -30,16 +47,17 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           setBanner("🌿 Join the Pages & Peace Loyalty Club and earn points!");
         }
       } catch (err) {
-        console.error("[MarketingLayout] /api/me failed:", err);
+        console.warn("[MarketingLayout] Fetch /api/me failed:", err);
         setJoined(false);
         setBanner("🌿 Join the Pages & Peace Loyalty Club and earn points!");
       } finally {
         setLoading(false);
       }
-    })();
+    }
+
+    load();
   }, []);
 
-  // Open modal unconditionally; let the modal handle auth (redirect on 401)
   const handleJoinClick = () => setShowModal(true);
 
   return (
@@ -58,13 +76,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {/* Navbar sits directly under the banner; no extra padding/margin here */}
       <Navbar />
 
-      {/* Only page content scrolls; footer remains visible via RootLayout */}
-      <main className="flex-1 min-h-0 overflow-y-auto">
-        {children}
-      </main>
+      <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
 
       {showModal && (
         <LoyaltyJoinModal

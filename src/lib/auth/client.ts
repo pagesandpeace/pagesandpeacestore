@@ -1,22 +1,19 @@
-export async function getCurrentUserClient() {
-  console.log("📡 [Client] getCurrentUserClient()");
+"use client";
 
+export async function getCurrentUserClient() {
   try {
-    const res = await fetch("/api/me", {
+    const res = await fetch("/api/auth/me", {
       credentials: "include",
       cache: "no-store",
     });
 
-    console.log("📡 [Client] /api/me status:", res.status);
+    if (!res.ok) return null;
 
-    const data = await res.json().catch(() => "JSON PARSE FAILED");
-    console.log("📡 [Client] data:", data);
+    const data = await res.json().catch(() => null);
 
-    if (!res.ok || !data?.id) return null;
-
-    return data;
+    return data?.id ? data : null;
   } catch (err) {
-    console.error("💥 [Client] getCurrentUserClient() failed:", err);
+    console.error("getCurrentUserClient failed:", err);
     return null;
   }
 }

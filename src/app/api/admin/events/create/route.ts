@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { events, users, products } from "@/lib/db/schema";
+import {
+  events,
+  products,
+  users,
+  eventCategoryLinks,
+} from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUserServer } from "@/lib/auth/actions";
 import crypto from "crypto";
 
-/**
- * POST /api/admin/events/create
- * Creates a new event (admin/staff only)
- */
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUserServer();
@@ -17,30 +18,46 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify admin/staff role
     const [dbUser] = await db
       .select({ role: users.role })
       .from(users)
-      .where(eq(users.id, user.id))
-      .limit(1);
+      .where(eq(users.id, user.id));
 
     if (!dbUser || (dbUser.role !== "admin" && dbUser.role !== "staff")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Parse payload
-    const { title, description, date, capacity, pricePence } = await req.json();
+    // -------------------------------
+    // Extract payload from frontend
+    // -------------------------------
+    const {
+      title,
+      subtitle,
+      shortDescription,
+      description,
+      date,
+      capacity,
+      pricePence,
+      storeId,
+      categoryIds,
+      imageUrl,
+      location,
+      published = true,
+    } = await req.json();
 
-    if (!title || !date || !capacity || !pricePence) {
+    // -------------------------------
+    // Validate inputs
+    // -------------------------------
+    if (!title || !date || !capacity || !pricePence || !storeId) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // ---------------------------------------------
-    // 1️⃣ CREATE PRODUCT FIRST (Shopify model)
-    // ---------------------------------------------
+    // -------------------------------
+    // 1) Create Product
+    // -------------------------------
     const productId = crypto.randomUUID();
     const slug = title
       .toLowerCase()
@@ -51,33 +68,57 @@ export async function POST(req: Request) {
       id: productId,
       name: title,
       slug,
-      description: description ?? "",
-      price: Number(pricePence) / 100,           // decimal £
-      productType: "event",                      // NEW TYPE
-      metadata: {},                              // optional data
-      imageUrl: null,
-      inventoryCount: 999999,                    // effectively unlimited
+      description: shortDescription || description || "",
+      price: String(Number(pricePence) / 100),
+      productType: "event",
+      metadata: {
+        subtitle: subtitle || null,
+        shortDescription: shortDescription || null,
+        location: location || null,
+        published: Boolean(published),
+      },
+      imageUrl: imageUrl || null,
+      inventoryCount: 999999,
     });
 
-    // ---------------------------------------------
-    // 2️⃣ CREATE EVENT AND LINK IT TO PRODUCT
-    // ---------------------------------------------
+    // -------------------------------
+    // 2) Create Event
+    // -------------------------------
     const eventId = crypto.randomUUID();
 
-    await db.insert(events).values({
-      id: eventId,
-      productId,
-      title,
-      description: description || "",
-      date: new Date(date),
-      capacity: Number(capacity),
-      pricePence: Number(pricePence),
-      imageUrl: null,
-      createdAt: new Date(),
-    });
+    // remove location, locationId
+await db.insert(events).values({
+  id: eventId,
+  productId,
+  title,
+  description: description ?? "",
+  date: new Date(date).toISOString(),
+  capacity: Number(capacity),
+  pricePence: Number(pricePence),
+  imageUrl: imageUrl ?? null,
+  storeId, // ONLY LOCATION FIELD
+  subtitle: subtitle || null,
+  shortDescription: shortDescription || null,
+  published: Boolean(published),
+});
+
+
+
+    // -------------------------------
+    // 3) Category Links (Many-to-Many)
+    // -------------------------------
+    if (Array.isArray(categoryIds) && categoryIds.length > 0) {
+      const rows = categoryIds.map((catId: string) => ({
+        id: crypto.randomUUID(),
+        eventId,
+        categoryId: catId,
+      }));
+
+      await db.insert(eventCategoryLinks).values(rows);
+    }
 
     return NextResponse.json({ ok: true, id: eventId });
-  } catch (err) {
+  } catch (err: any) {
     console.error("❌ Event Creation Error:", err);
     return NextResponse.json(
       { error: "Server error creating event" },

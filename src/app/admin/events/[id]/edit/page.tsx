@@ -9,64 +9,96 @@ import { TextArea } from "@/components/ui/TextArea";
 import { Card } from "@/components/ui/Card";
 import { Label } from "@/components/ui/Label";
 import { useToast } from "@/components/ui/UseToast";
-import { getCurrentUserClient } from "@/lib/auth/client"; // NEW: ensure admin access
+
+import { getCurrentUserClient } from "@/lib/auth/client";
+
+import EventImageUploader from "@/components/admin/EventImageUploader";
+import EventCategorySelector from "@/components/admin/EventCategorySelector";
+
+type Store = { id: string; name: string; address: string };
+type Category = { id: string; name: string; slug: string };
 
 export default function EditEventPage() {
   const router = useRouter();
   const params = useParams();
   const eventId = params?.id as string;
-
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Event fields
   const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
+  const [shortDescription, setShortDescription] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
-  const [capacity, setCapacity] = useState<number>(20);
-  const [pricePence, setPricePence] = useState<number>(0);
+  const [capacity, setCapacity] = useState<number>(10);
+  const [price, setPrice] = useState<number>(0);
+  const [published, setPublished] = useState<boolean>(true);
+  const [imageUrl, setImageUrl] = useState("");
 
-  // -------------------------------------
-  // ADMIN / STAFF ACCESS CHECK
-  // -------------------------------------
+  // Categories (full objects)
+  const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
+
+  // Store / Location
+  const [store, setStore] = useState<Store | null>(null);
+
+  /* -------------------------------------------------------
+     AUTH CHECK
+  ------------------------------------------------------- */
   useEffect(() => {
     async function verifyRole() {
       const user = await getCurrentUserClient();
 
-      if (!user || (user.role !== "admin" && user.role !== "staff")) {
-        toast({
-          title: "Access denied",
-          description: "You do not have permission to edit events.",
-          variant: "destructive",
-        });
-        router.push("/account");
+      if (!user) return router.replace("/sign-in");
+      if (user.role !== "admin" && user.role !== "staff") {
+        return router.replace("/dashboard");
       }
     }
-
     verifyRole();
-  }, [router, toast]);
+  }, []);
 
-  // -------------------------------------
-  // LOAD EXISTING EVENT DETAILS
-  // -------------------------------------
+  /* -------------------------------------------------------
+     LOAD EVENT (Joined API returns store + categories)
+  ------------------------------------------------------- */
   useEffect(() => {
     if (!eventId) return;
 
+    let active = true;
+
     async function load() {
       try {
-        const res = await fetch(`/api/admin/events/${eventId}`);
-        if (!res.ok) throw new Error("Failed to load");
+        const res = await fetch(`/api/admin/events/${eventId}`, {
+          cache: "no-store",
+        });
 
-        const data = await res.json();
-        if (!data?.id) throw new Error("Event not found");
+        if (!res.ok) throw new Error("Not found");
 
-        setTitle(data.title);
-        setDescription(data.description ?? "");
-        setDate(new Date(data.date).toISOString().slice(0, 16));
-        setCapacity(data.capacity);
-        setPricePence(data.pricePence);
-      } catch {
+        const event = await res.json();
+        if (!active) return;
+
+        // Populate event fields
+        setTitle(event.title ?? "");
+        setSubtitle(event.subtitle ?? "");
+        setShortDescription(event.shortDescription ?? "");
+        setDescription(event.description ?? "");
+
+        setDate(new Date(event.date).toISOString().slice(0, 16));
+
+        setCapacity(event.capacity);
+        setPrice(event.pricePence / 100);
+        setPublished(event.published);
+        setImageUrl(event.imageUrl ?? "");
+
+        // Store (joined from API)
+        setStore(event.store ?? null);
+
+        // Categories (joined from API)
+        setSelectedCategories(event.categories ?? []);
+
+      } catch (err) {
+        console.error("❌ Failed to load event:", err);
         toast({
           title: "Error loading event",
           description: "Unable to load event details.",
@@ -74,32 +106,43 @@ export default function EditEventPage() {
         });
         router.push("/admin/events");
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
     load();
-  }, [eventId, toast, router]);
+    return () => {
+      active = false;
+    };
+  }, [eventId]);
 
-  // -------------------------------------
-  // SUBMIT UPDATE
-  // -------------------------------------
+  /* -------------------------------------------------------
+     SAVE HANDLER
+  ------------------------------------------------------- */
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
 
     try {
+      const payload = {
+        id: eventId,
+        title,
+        subtitle,
+        shortDescription,
+        description,
+        date,
+        capacity,
+        pricePence: Math.round(price * 100),
+        published,
+        imageUrl,
+        categoryIds: selectedCategories.map((c) => c.id),
+        // storeId NOT editable
+      };
+
       const res = await fetch(`/api/admin/events/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: eventId,
-          title,
-          description,
-          date,
-          capacity,
-          pricePence,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();
@@ -107,7 +150,7 @@ export default function EditEventPage() {
       if (!res.ok) {
         toast({
           title: "Error updating event",
-          description: json?.error || "Something went wrong.",
+          description: json.error || "Something went wrong.",
           variant: "destructive",
         });
         return;
@@ -120,43 +163,46 @@ export default function EditEventPage() {
       });
 
       router.push(`/admin/events/${eventId}`);
-    } catch {
-      toast({
-        title: "Unexpected error",
-        description: "Something went wrong.",
-        variant: "destructive",
-      });
     } finally {
       setSaving(false);
     }
   }
 
-  // -------------------------------------
-  // RENDER
-  // -------------------------------------
-  if (loading) {
-    return <p className="text-center py-8">Loading event…</p>;
-  }
+  /* -------------------------------------------------------
+     UI
+  ------------------------------------------------------- */
+  if (loading) return <p className="text-center py-12">Loading…</p>;
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold">Edit Event</h1>
+    <div className="max-w-3xl mx-auto py-12 space-y-8">
+      <h1 className="text-3xl font-bold">Edit Event</h1>
 
-      <Card className="p-6 space-y-4">
-        <form onSubmit={onSubmit} className="space-y-4">
+      <Card className="p-6 space-y-6">
+        <form onSubmit={onSubmit} className="space-y-6">
+
           <div>
             <Label>Title</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+
+          <div>
+            <Label>Subtitle</Label>
+            <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
+          </div>
+
+          <div>
+            <Label>Short Description</Label>
+            <TextArea
+              rows={3}
+              value={shortDescription}
+              onChange={(e) => setShortDescription(e.target.value)}
             />
           </div>
 
           <div>
-            <Label>Description</Label>
+            <Label>Full Description</Label>
             <TextArea
-              rows={5}
+              rows={6}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -168,9 +214,23 @@ export default function EditEventPage() {
               type="datetime-local"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              required
             />
           </div>
+
+          {/* READ ONLY LOCATION */}
+          <div>
+            <Label>Location</Label>
+            <Input
+              disabled
+              value={store?.address || store?.name || "Unknown Location"}
+              className="bg-gray-100 cursor-not-allowed"
+            />
+          </div>
+
+          <EventCategorySelector
+            selected={selectedCategories}
+            onChange={setSelectedCategories}
+          />
 
           <div>
             <Label>Capacity</Label>
@@ -179,20 +239,30 @@ export default function EditEventPage() {
               min={1}
               value={capacity}
               onChange={(e) => setCapacity(Number(e.target.value))}
-              required
             />
           </div>
 
           <div>
-            <Label>Price (pence)</Label>
+            <Label>Price (£)</Label>
             <Input
               type="number"
+              step="0.01"
               min={0}
-              value={pricePence}
-              onChange={(e) => setPricePence(Number(e.target.value))}
-              required
+              value={price}
+              onChange={(e) => setPrice(Number(e.target.value))}
             />
           </div>
+
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={published}
+              onChange={(e) => setPublished(e.target.checked)}
+            />
+            <span>Published</span>
+          </div>
+
+          <EventImageUploader imageUrl={imageUrl} setImageUrl={setImageUrl} />
 
           <Button type="submit" disabled={saving}>
             {saving ? "Saving…" : "Save Changes"}

@@ -9,7 +9,7 @@ export const metadata = {
 export default function CookiePolicyPage() {
   return (
     <main className="max-w-3xl mx-auto px-6 py-16 font-[Montserrat] text-[var(--foreground)] leading-relaxed">
-      <BackLink />
+      <BackLink href="/" label="Back" />
 
       <h1 className="text-4xl font-semibold mb-6 text-[var(--accent)]">
         Cookie Policy

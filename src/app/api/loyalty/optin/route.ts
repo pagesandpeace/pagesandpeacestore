@@ -6,22 +6,21 @@ import {
   loyaltyLedger,
   idempotencyKeys,
 } from "@/lib/db/schema";
- // <-- new file you added
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { randomUUID } from "crypto";
 
 export async function POST(req: Request) {
   try {
-    // 1️⃣ Authenticate the user
     const session = await auth.api.getSession({ headers: await headers() });
     const user = session?.user;
+
     if (!user)
       return new Response(JSON.stringify({ error: "Not signed in" }), {
         status: 401,
       });
 
-    // 2️⃣ Verify email before allowing opt-in
+    // Get user and check email verification
     const [dbUser] = await db
       .select()
       .from(schema.users)
@@ -37,21 +36,26 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3️⃣ Parse body for consent info
-    const { termsVersion, marketingConsent } = (await req.json().catch(() => ({}))) || {};
-    const idemKey = req.headers.get("Idempotency-Key") ?? null;
+    const { termsVersion, marketingConsent } =
+      (await req.json().catch(() => ({}))) || {};
 
-    // 4️⃣ Handle idempotency (safe retries)
+    const idemKey = req.headers.get("Idempotency-Key");
+
+    // Idempotency check
     if (idemKey) {
       const [hit] = await db
         .select()
         .from(idempotencyKeys)
         .where(eq(idempotencyKeys.key, idemKey))
         .limit(1);
-      if (hit) return new Response(JSON.stringify(hit.response), { status: 200 });
+
+      if (hit)
+        return new Response(JSON.stringify(hit.response), { status: 200 });
     }
 
-    // 5️⃣ Upsert loyalty_members record
+    const now = new Date().toISOString();
+
+    // UPSERT loyalty_members
     await db
       .insert(loyaltyMembers)
       .values({
@@ -60,8 +64,8 @@ export async function POST(req: Request) {
         tier: "starter",
         marketingConsent: !!marketingConsent,
         termsVersion: termsVersion ?? "v1.0",
-        joinedAt: new Date(),
-        updatedAt: new Date(),
+        joinedAt: now,
+        updatedAt: now,
       })
       .onConflictDoUpdate({
         target: loyaltyMembers.userId,
@@ -69,26 +73,25 @@ export async function POST(req: Request) {
           status: "active",
           marketingConsent: !!marketingConsent,
           termsVersion: termsVersion ?? "v1.0",
-          updatedAt: new Date(),
+          updatedAt: now,
         },
       });
 
-    // 6️⃣ Give a join bonus
-    const joinBonus = 50;
+    // Add join bonus (loyalty_ledger)
     await db.insert(loyaltyLedger).values({
       id: randomUUID(),
       userId: user.id,
       type: "join_bonus",
-      points: joinBonus,
+      points: 50,
       source: "web",
       metadata: { reason: "welcome" },
-      createdAt: new Date(),
+      createdAt: now,
     });
 
-    // 7️⃣ Update legacy field for backward compatibility
+    // Update legacy field
     await db
       .update(schema.users)
-      .set({ loyaltyprogram: true, updatedAt: new Date() })
+      .set({ loyaltyprogram: true, updatedAt: now })
       .where(eq(schema.users.id, user.id));
 
     const response = {
@@ -97,12 +100,11 @@ export async function POST(req: Request) {
       member: {
         userId: user.id,
         tier: "starter",
-        joinBonus,
+        joinBonus: 50,
         marketingConsent: !!marketingConsent,
       },
     };
 
-    // 8️⃣ Save idempotency record
     if (idemKey) {
       await db
         .insert(idempotencyKeys)
@@ -110,7 +112,7 @@ export async function POST(req: Request) {
           key: idemKey,
           scope: "loyalty.optin",
           response,
-          createdAt: new Date(),
+          createdAt: now,
         })
         .onConflictDoNothing();
     }

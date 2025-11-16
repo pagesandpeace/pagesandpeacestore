@@ -16,21 +16,24 @@ const COOKIE_OPTIONS = {
   maxAge: 60 * 60 * 24 * 7,
 };
 
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 /*                             GUEST SESSION HELPERS                          */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 
 export async function createGuestSession() {
   const cookieStore = await cookies();
   const existing = cookieStore.get("guest_session");
+
   if (existing?.value)
     return { ok: true, sessionToken: existing.value };
 
   const sessionToken = randomUUID();
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + COOKIE_OPTIONS.maxAge * 1000);
+  const expiresAt = new Date(Date.now() + COOKIE_OPTIONS.maxAge * 1000).toISOString();
 
-  await db.insert(schema.guests).values({ sessionToken, expiresAt });
+  await db.insert(schema.guests).values({
+    sessionToken,
+    expiresAt,
+  });
 
   cookieStore.set({
     name: "guest_session",
@@ -46,18 +49,23 @@ export async function guestSession() {
   const token = cookieStore.get("guest_session")?.value;
   if (!token) return { sessionToken: null };
 
-  const now = new Date();
+  const nowIso = new Date().toISOString();
 
   await db
     .delete(schema.guests)
-    .where(and(eq(schema.guests.sessionToken, token), lt(schema.guests.expiresAt, now)));
+    .where(
+      and(
+        eq(schema.guests.sessionToken, token),
+        lt(schema.guests.expiresAt, nowIso)
+      )
+    );
 
   return { sessionToken: token };
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                SIGN UP                                     */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
+/*                                  SIGN UP                                    */
+/* ========================================================================== */
 
 const emailSchema = z.string().email();
 const passwordSchema = z.string().min(8).max(128);
@@ -72,7 +80,7 @@ const signUpSchema = z.object({
 export async function signUp(formData: FormData) {
   const data = signUpSchema.parse({
     name: formData.get("name") as string,
-    email: formData.get("email") as string,
+    email: (formData.get("email") as string).toLowerCase(),
     password: formData.get("password") as string,
   });
 
@@ -90,29 +98,31 @@ export async function signUp(formData: FormData) {
     .update(schema.users)
     .set({
       loyaltyprogram: loyaltyProgramOptIn,
-      updatedAt: new Date(),
+      updatedAt: new Date().toISOString(),
     })
     .where(eq(schema.users.id, userId));
 
   if (loyaltyProgramOptIn) {
-    await db.insert(schema.loyaltyMembers).values({
-      userId,
-      status: "active",
-      tier: "starter",
-      marketingConsent,
-      termsVersion: "v1.0",
-      joinedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: schema.loyaltyMembers.userId,
-      set: {
+    await db
+      .insert(schema.loyaltyMembers)
+      .values({
+        userId,
         status: "active",
+        tier: "starter",
         marketingConsent,
         termsVersion: "v1.0",
-        updatedAt: new Date(),
-      },
-    });
+        joinedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+      .onConflictDoUpdate({
+        target: schema.loyaltyMembers.userId,
+        set: {
+          status: "active",
+          marketingConsent,
+          termsVersion: "v1.0",
+          updatedAt: new Date().toISOString(),
+        },
+      });
   }
 
   await migrateGuestToUser();
@@ -120,69 +130,138 @@ export async function signUp(formData: FormData) {
   return { ok: true, userId, redirectTo: "/verify-pending" };
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                SIGN IN                                     */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
+/*                                SIGN-IN SCHEMA                              */
+/* ========================================================================== */
 
 const signInSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
 });
 
+/* ========================================================================== */
+/*                                  SIGN IN                                   */
+/* ========================================================================== */
+
 export async function signIn(formData: FormData) {
-  const data = signInSchema.parse({
-    email: formData.get("email") as string,
+  console.log("\n\n========== 🚀 SIGN-IN START ==========");
+
+  const data = {
+    email: (formData.get("email") as string)?.toLowerCase(),
     password: formData.get("password") as string,
-  });
+  };
 
+  console.log("📥 Incoming formData:", data);
+
+  // --------------------------------------------
+  // 1) VALIDATION - PASSWORD TOO SHORT / INVALID
+  // --------------------------------------------
   try {
-    // Authenticate via BetterAuth
-    const result = await auth.api.signInEmail({ body: data });
+    signInSchema.parse(data);
+  } catch (err) {
+    console.error("❌ Zod validation failed:", err);
+    return {
+      ok: false,
+      type: "validation",
+      message: "Password must be at least 8 characters.",
+    };
+  }
 
-    // Migrate guest → user session
-    await migrateGuestToUser();
+  const callbackURL = formData.get("callbackURL") as string | null;
+  console.log("🔗 callbackURL:", callbackURL);
 
-    const callbackURL = formData.get("callbackURL") as string | null;
+  // --------------------------------------------
+  // 2) LOOK UP USER + ACCOUNT
+  // --------------------------------------------
+  console.log("🔍 Checking users table for:", data.email);
 
-    // Fetch full DB user including role
-    const [dbUser] = await db
+  const [existingUser] = await db
+    .select({
+      id: schema.users.id,
+      email: schema.users.email,
+      name: schema.users.name,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.email, data.email))
+    .limit(1);
+
+  console.log("📀 User lookup:", existingUser);
+
+  if (existingUser) {
+    const [accountRow] = await db
       .select({
-        id: schema.users.id,
-        email: schema.users.email,
-        name: schema.users.name,
-        role: schema.users.role,
+        providerId: schema.accounts.providerId,
+        password: schema.accounts.password,
       })
-      .from(schema.users)
-      .where(eq(schema.users.id, result.user!.id))
+      .from(schema.accounts)
+      .where(eq(schema.accounts.userId, existingUser.id))
       .limit(1);
 
-    const role = dbUser?.role ?? "customer";
+    console.log("📀 Account row:", accountRow);
 
-    // Default redirect based on role
-    let redirectTo =
-      role === "admin" || role === "staff"
-        ? "/admin"
-        : "/dashboard";
-
-    // Callback override
-    if (callbackURL) {
-      redirectTo = callbackURL;
+    if (accountRow && !accountRow.password) {
+      return {
+        ok: false,
+        type: "google-only",
+        message: "This email is linked to a Google account.",
+      };
     }
+  }
+
+  // --------------------------------------------
+  // 3) ATTEMPT PASSWORD LOGIN
+  // --------------------------------------------
+  console.log("🔐 Calling BetterAuth signInEmail()…");
+  let result;
+
+  try {
+    result = await auth.api.signInEmail({ body: data });
+    console.log("🔓 BetterAuth SUCCESS:", result);
+  } catch (err: unknown) {
+    console.error("❌ BetterAuth FAILED:", err);
 
     return {
-      ok: true,
-      userId: result.user!.id,
-      redirectTo,
+      ok: false,
+      type: "invalid-credentials",
+      message: "Incorrect email or password.",
     };
-  } catch (err) {
-    console.error("❌ Sign-in failed:", err);
-    return { ok: false };
   }
+
+  // --------------------------------------------
+  // 4) MIGRATE GUEST SESSION
+  // --------------------------------------------
+  await migrateGuestToUser();
+
+  // --------------------------------------------
+  // 5) ROLE & REDIRECT
+  // --------------------------------------------
+  const [dbUser] = await db
+    .select({
+      id: schema.users.id,
+      role: schema.users.role,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, result.user!.id))
+    .limit(1);
+
+  const role = dbUser?.role ?? "customer";
+
+  let redirectTo =
+    role === "admin" || role === "staff" ? "/admin" : "/dashboard";
+
+  if (callbackURL) redirectTo = callbackURL;
+
+  return {
+    ok: true,
+    userId: result.user!.id,
+    redirectTo,
+  };
 }
 
-/* -------------------------------------------------------------------------- */
-/*                             MIGRATE GUEST                                  */
-/* -------------------------------------------------------------------------- */
+
+/* ========================================================================== */
+/*                             MIGRATE GUEST → USER                           */
+/* ========================================================================== */
 
 async function migrateGuestToUser() {
   const cookieStore = await cookies();
@@ -193,9 +272,9 @@ async function migrateGuestToUser() {
   cookieStore.delete("guest_session");
 }
 
-/* -------------------------------------------------------------------------- */
-/*                               GET CURRENT USER                             */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
+/*                              GET CURRENT USER                              */
+/* ========================================================================== */
 
 export async function getCurrentUserServer() {
   try {
@@ -204,28 +283,15 @@ export async function getCurrentUserServer() {
 
     if (!session?.user?.id) return null;
 
-    // Get full DBUser (including role)
     const [fullUser] = await db
       .select()
       .from(schema.users)
       .where(eq(schema.users.id, session.user.id))
       .limit(1);
 
-    if (!fullUser) return null;
-
-    return {
-      id: fullUser.id,
-      email: fullUser.email,
-      name: fullUser.name,
-      image: fullUser.image,
-      role: fullUser.role,
-      loyaltyprogram: fullUser.loyaltyprogram,
-      loyaltypoints: fullUser.loyaltypoints,
-      createdAt: fullUser.createdAt,
-      updatedAt: fullUser.updatedAt,
-    };
+    return fullUser || null;
   } catch (err) {
-    console.error("❌ [getCurrentUserServer] error:", err);
+    console.error("❌ getCurrentUserServer error:", err);
     return null;
   }
 }
@@ -240,14 +306,14 @@ export async function getCurrentUserClient() {
     if (!res.ok) return null;
     return await res.json();
   } catch (err) {
-    console.error("❌ [getCurrentUserClient] error:", err);
+    console.error("❌ getCurrentUserClient error:", err);
     return null;
   }
 }
 
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 /*                                   SIGN OUT                                 */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 
 export async function signOut() {
   try {
@@ -264,9 +330,9 @@ export async function signOut() {
       name: "auth_session",
       value: "",
       path: "/",
+      expires: new Date(0),
       maxAge: 0,
     });
-
   } catch (err) {
     console.error("❌ signOut() fatal error:", err);
   }
@@ -274,9 +340,9 @@ export async function signOut() {
   return { ok: true };
 }
 
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 /*                              CHANGE PASSWORD                               */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 
 export async function changePassword(currentPassword: string, newPassword: string) {
   try {
@@ -298,7 +364,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
 
     return { ok: true };
   } catch (err: unknown) {
-    console.error("❌ changePassword() error:", err);
+    console.error("❌ changePassword error:", err);
 
     const msg =
       err instanceof Error

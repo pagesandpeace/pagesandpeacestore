@@ -15,8 +15,9 @@ export default function ChaptersClubTermsPage() {
     <main className="max-w-3xl mx-auto px-6 py-16 font-[Montserrat] text-[var(--foreground)] leading-relaxed">
       {/* Back link needs Suspense because it uses useSearchParams in a client component */}
       <Suspense fallback={null}>
-        <BackLink />
-      </Suspense>
+  <BackLink href="/dashboard" label="Back" />
+</Suspense>
+
 
       <h1 className="text-4xl font-semibold mb-6 text-[var(--accent)]">
         Pages & Peace Chapters Club Terms (v1.0)

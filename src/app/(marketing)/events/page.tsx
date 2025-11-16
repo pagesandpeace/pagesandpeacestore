@@ -1,4 +1,4 @@
-// src/app/events/page.tsx
+// src/app/(marketing)/events/page.tsx
 import { db } from "@/lib/db";
 import { events, eventBookings } from "@/lib/db/schema";
 import Link from "next/link";

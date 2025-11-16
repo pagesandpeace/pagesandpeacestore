@@ -3,15 +3,22 @@ import * as dotenv from "dotenv";
 
 dotenv.config({ path: ".env.local" });
 
-// ✅ Disable strict SSL validation for Supabase’s self-signed certificate
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 export default defineConfig({
-  schema: "./src/lib/db/schema/index.ts",
-  out: "./drizzle",
   dialect: "postgresql",
+
+  // required in your drizzle version
+  schema: "./src/lib/db/schema/index.ts",
+
+  introspect: {
+    casing: "preserve",
+  },
+
   dbCredentials: {
     url: process.env.DATABASE_URL!,
   },
+
+  out: "./drizzle",
   strict: true,
 });

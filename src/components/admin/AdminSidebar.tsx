@@ -31,8 +31,15 @@ export default function AdminSidebar() {
   };
 
   return (
-    <aside className="w-64 bg-white border-r px-6 py-10 flex flex-col space-y-8">
-      
+    <aside
+      className="
+        fixed top-0 left-0 z-50
+        w-64 h-screen
+        bg-white border-r border-neutral-200
+        flex flex-col
+        px-6 py-10
+      "
+    >
       {/* Logo */}
       <div className="flex justify-center">
         <Image
@@ -45,7 +52,7 @@ export default function AdminSidebar() {
       </div>
 
       {/* Admin Nav */}
-      <nav className="space-y-4 text-sm font-medium">
+      <nav className="space-y-4 text-sm font-medium mt-10">
         <Link href="/admin" className="block hover:text-[var(--secondary)]">
           Dashboard
         </Link>
@@ -63,6 +70,7 @@ export default function AdminSidebar() {
         </Link>
       </nav>
 
+      {/* Push account section to bottom */}
       <div className="flex-1" />
 
       {/* Account Section */}
@@ -79,6 +87,7 @@ export default function AdminSidebar() {
               height={40}
               className="rounded-full border border-neutral-300 object-cover"
             />
+
             <div className="flex flex-col">
               <span className="text-sm font-medium">{user.name || "Admin"}</span>
 

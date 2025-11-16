@@ -62,12 +62,13 @@ export async function GET(req: Request) {
 
     // ✅ Mark verified
     await db
-      .update(schema.users)
-      .set({
-        emailVerified: true,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.users.id, user.id));
+  .update(schema.users)
+  .set({
+    emailVerified: true,
+    updatedAt: new Date().toISOString(), // ✅ FIXED
+  })
+  .where(eq(schema.users.id, user.id));
+
 
     // 🧹 Delete used token
     await db

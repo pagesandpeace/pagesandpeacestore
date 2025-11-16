@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 
 import DeleteEventButton from "@/components/admin/DeleteEventButton";
-import CancelBookingButton from "@/components/admin/CancelBookingButton";
+import CancelBookingButton from "@/components/events/CancelBookingButton";
 import MarkAttendedButton from "@/components/admin/MarkAttendedButton";
 import { getCurrentUserServer } from "@/lib/auth/actions";
 
@@ -177,26 +177,36 @@ export default async function AdminEventDetailPage(props: {
                       <td className="p-3">{attendee.email}</td>
 
                       <td className="p-3">
-                        {attendee.paid ? (
-                          <Badge color="green">Paid</Badge>
-                        ) : (
-                          <Badge color="yellow">Pending</Badge>
-                        )}
-                      </td>
+  {attendee.refunded ? (
+    <Badge color="purple">Refunded</Badge>
+  ) : attendee.paid ? (
+    <Badge color="green">Paid</Badge>
+  ) : (
+    <Badge color="yellow">Pending</Badge>
+  )}
+</td>
+
 
                       <td className="p-3">
-                        {attendee.cancelled ? (
-                          <Badge color="red">Cancelled</Badge>
-                        ) : (
-                          <Badge color="blue">Active</Badge>
-                        )}
-                      </td>
+  {attendee.refunded ? (
+    <Badge color="purple">Refunded</Badge>
+  ) : attendee.cancelled ? (
+    <Badge color="red">Cancelled</Badge>
+  ) : attendee.cancellationRequested ? (
+    <Badge color="yellow">Cancellation Requested</Badge>
+  ) : (
+    <Badge color="blue">Active</Badge>
+  )}
+</td>
 
                       <td className="p-3 space-x-3">
-                        {!attendee.cancelled && (
-                          <CancelBookingButton bookingId={attendee.id} />
-                        )}
+                        {!attendee.cancelled && !attendee.refunded && (
+  <CancelBookingButton bookingId={attendee.id} />
+)}
                         {attendee.paid && <MarkAttendedButton />}
+                      {!attendee.cancelled && !attendee.refunded && !attendee.cancellationRequested && (
+  <CancelBookingButton bookingId={attendee.id} />
+)}
                       </td>
                     </tr>
                   ))}

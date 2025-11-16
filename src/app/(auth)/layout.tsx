@@ -51,7 +51,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </p>
       </section>
 
-      {/* RIGHT SECTION — Form Area (scrollable if content exceeds viewport) */}
+      {/* RIGHT SECTION — Form Area */}
       <section
         className="
           relative flex flex-1 items-center justify-center
@@ -61,9 +61,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           overflow-y-auto
         "
       >
-        {/* Back link (top-left, like an app) */}
+        {/* Back link (top-left) */}
         <div className="absolute left-4 top-4 z-10">
-          <BackLink />
+          <BackLink href="/" label="Back" />
         </div>
 
         <div
