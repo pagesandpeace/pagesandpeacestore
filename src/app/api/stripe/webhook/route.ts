@@ -1,4 +1,4 @@
-/* FIXED + CLEAN VERSION – ALL TYPESCRIPT ERRORS REMOVED */
+/* FIXED + CLEAN VERSION – ALL TYPESCRIPT ERRORS REMOVED + REAL STORE ADDRESS ADDED */
 
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -12,6 +12,7 @@ import {
   guestOrderItems,
   events,
   eventBookings,
+  stores,            // ⭐ NEW: import stores table
 } from "@/lib/db/schema";
 import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
@@ -185,6 +186,15 @@ export async function POST(req: Request) {
           .where(eq(products.id, ev.productId))
           .limit(1);
 
+        /* ⭐ NEW: Fetch store address dynamically */
+        const [store] = await db
+          .select()
+          .from(stores)
+          .where(eq(stores.id, ev.storeId))
+          .limit(1);
+
+        const storeAddress = store?.address || "Pages & Peace Bookshop";
+
         let receiptUrl: string | null = null;
         let cardBrand: string | null = null;
         let last4: string | null = null;
@@ -226,7 +236,7 @@ export async function POST(req: Request) {
           price: String(product.price),
         });
 
-        /* SEND EVENT CONFIRMATION EMAIL (INSIDE BLOCK) */
+        /* SEND EVENT CONFIRMATION EMAIL */
         const eventDate = new Date(ev.date).toLocaleString("en-GB", {
           weekday: "long",
           day: "numeric",
@@ -236,8 +246,6 @@ export async function POST(req: Request) {
           minute: "2-digit",
         });
 
-        const storeAddress = "Pages & Peace, Leeds LS1";
-
         await resend.emails.send({
           from: "Pages & Peace <noreply@pagesandpeace.co.uk>",
           to: booking.email || session.customer_details?.email || "",
@@ -246,10 +254,13 @@ export async function POST(req: Request) {
             <div style="font-family: Arial; line-height: 1.6;">
               <h2>Your Pages & Peace Event Booking is Confirmed 📚</h2>
               <p>Thank you for booking with us.</p>
+
+              <h3>Event Details</h3>
               <p><strong>Event:</strong> ${ev.title}</p>
-              <p><strong>Date:</strong> ${eventDate}</p>
+              <p><strong>Date & Time:</strong> ${eventDate}</p>
               <p><strong>Location:</strong> ${storeAddress}</p>
               <p><strong>Booking ID:</strong> ${booking.id}</p>
+
               <p style="margin-top:24px;">Warm regards,<br/>Pages & Peace</p>
             </div>
           `,
@@ -261,6 +272,7 @@ export async function POST(req: Request) {
       /* ======================================
          STORE ORDERS
       ====================================== */
+
       const isStoreOrder =
         md.kind === "store" || (md.userId || md.guestToken || md.mode === "guest");
 

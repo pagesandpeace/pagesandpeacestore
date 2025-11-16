@@ -92,7 +92,9 @@ await db.insert(events).values({
   productId,
   title,
   description: description ?? "",
-  date: new Date(date).toISOString(),
+  date: new Date(
+  new Date(date).toLocaleString("en-GB", { timeZone: "Europe/London" })
+).toISOString(),
   capacity: Number(capacity),
   pricePence: Number(pricePence),
   imageUrl: imageUrl ?? null,
