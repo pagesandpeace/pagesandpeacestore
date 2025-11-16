@@ -136,3 +136,23 @@ button:disabled,
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* --------------------------------------------
+   🌐 Safe Area Helpers (iOS Safari Fix)
+--------------------------------------------- */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@supports (padding: max(0px)) {
+  .safe-top {
+    padding-top: max(env(safe-area-inset-top), 0px);
+  }
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+}
+

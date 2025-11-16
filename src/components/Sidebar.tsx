@@ -23,10 +23,7 @@ export default function Sidebar({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (
-        accountRef.current &&
-        !accountRef.current.contains(e.target as Node)
-      ) {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
     };
@@ -51,16 +48,19 @@ export default function Sidebar({
 
       {/* SIDEBAR */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-screen w-64 bg-[#FAF6F1] border-r border-[#dcd6cf] 
-        flex flex-col justify-between 
-        transition-transform duration-300 
-        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} 
-        md:translate-x-0`}
+        className={`
+          fixed top-0 left-0 z-50
+          w-64 bg-[#FAF6F1] border-r border-[#dcd6cf]
+          flex flex-col justify-between
+          transition-transform duration-300
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+          md:translate-x-0
+          min-h-[100dvh] safe-bottom
+        `}
       >
         {/* TOP SECTION */}
         <div className="px-6 pt-10">
 
-          {/* Close button (mobile) */}
           <button
             className="md:hidden absolute right-3 top-3 p-2 hover:bg-black/5 rounded"
             onClick={() => setSidebarOpen(false)}
@@ -69,10 +69,7 @@ export default function Sidebar({
           </button>
 
           {/* Logo */}
-          <button
-            onClick={() => handleNav("/dashboard")}
-            className="flex items-center justify-center"
-          >
+          <button onClick={() => handleNav("/dashboard")} className="flex items-center justify-center">
             <Image
               src="/p&p_logo_cream.svg"
               alt="Pages & Peace logo"
@@ -81,10 +78,9 @@ export default function Sidebar({
             />
           </button>
 
-          {/* NAVIGATION — now scrollable */}
-          <div className="mt-6 text-sm max-h-[60vh] overflow-y-auto pr-2 pb-4">
+          {/* NAV SCROLL AREA */}
+          <div className="mt-6 text-sm max-h-[60dvh] overflow-y-auto pr-2 pb-4">
             <nav className="flex flex-col gap-y-5">
-
               <button onClick={() => handleNav("/dashboard")} className="text-left hover:text-[#5DA865]">
                 Dashboard
               </button>
@@ -114,8 +110,11 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* BOTTOM ACCOUNT SECTION — FIXED ALWAYS */}
-        <div ref={accountRef} className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1]">
+        {/* ACCOUNT SECTION — fixed with safe bottom */}
+        <div
+          ref={accountRef}
+          className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1] safe-bottom"
+        >
           {!loading && user ? (
             <>
               <button
@@ -142,8 +141,7 @@ export default function Sidebar({
               </button>
 
               {menuOpen && (
-                <div className="absolute bottom-20 left-6 bg-white border rounded-md shadow p-1 w-44">
-
+                <div className="absolute bottom-[110px] left-6 bg-white border rounded-md shadow p-1 w-44">
                   <button
                     onClick={() => handleNav("/dashboard/account")}
                     className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"

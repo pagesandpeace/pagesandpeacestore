@@ -13,9 +13,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
 
-  /* -----------------------------------------
-     PREFETCH KEY ROUTES WHEN SIDEBAR OPENS
-  ----------------------------------------- */
+  /* Prefetch key dashboard routes when sidebar opens */
   useEffect(() => {
     if (!sidebarOpen) return;
 
@@ -28,36 +26,27 @@ export default function DashboardLayout({
     router.prefetch("/shop");
   }, [sidebarOpen, router]);
 
-  /* -----------------------------------------
-     ULTRA-SMOOTH NAVIGATION HANDLER
-  ----------------------------------------- */
   const handleNav = (href: string) => {
-    // Begin route change immediately
     startTransition(() => {
       router.push(href);
     });
-
-    // Smoothly close sidebar just after transition starts
-    setTimeout(() => {
-      setSidebarOpen(false);
-    }, 30);
+    setTimeout(() => setSidebarOpen(false), 30);
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
-
-      {/* SIDEBAR (fixed) */}
+    <div className="flex bg-background min-h-[100dvh] safe-bottom">
+      {/* SIDEBAR */}
       <Sidebar
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         handleNav={handleNav}
       />
 
-      {/* MAIN CONTENT AREA */}
+      {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col md:ml-64 transition-all duration-300">
 
-        {/* TOP BAR (mobile only) */}
-        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-white px-4 md:hidden">
+        {/* MOBILE TOP BAR */}
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-white px-4 md:hidden safe-top">
           <button
             type="button"
             aria-label="Open menu"
@@ -74,7 +63,6 @@ export default function DashboardLayout({
             {children}
           </Suspense>
         </main>
-
       </div>
     </div>
   );
