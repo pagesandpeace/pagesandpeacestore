@@ -1,9 +1,11 @@
 // src/app/(marketing)/events/page.tsx
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { db } from "@/lib/db";
 import { events, eventBookings } from "@/lib/db/schema";
 import Link from "next/link";
 
-export const revalidate = 30; // Refresh events listing every 30s
 
 export default async function EventsPage() {
   // Fetch all upcoming events
