@@ -20,7 +20,7 @@ export default async function AdminHomePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Welcome to the best test Admin Dashboard</h1>
+      <h1 className="text-3xl font-bold">Welcome to the max test Admin Dashboard</h1>
 
       <p>Select a section from the sidebar.</p>
 
