@@ -34,6 +34,7 @@ export default async function DashboardEventsPage() {
 
   const allEvents = await db.select().from(events);
 
+  // Fetch only this user's orders
   const ordersRows = await db
     .select()
     .from(orders)
@@ -41,11 +42,17 @@ export default async function DashboardEventsPage() {
 
   const now = new Date();
 
+  /* --------------------------------------------------
+     CORRECT BOOKING → ORDER RELATIONSHIP
+     Matches via stripeCheckoutSessionId
+  -------------------------------------------------- */
   const bookingData = bookings.map((b) => {
     const event = allEvents.find((e) => e.id === b.eventId);
+
     const order = ordersRows.find(
-      (o) => o.id === b.id || o.stripeCheckoutSessionId === b.id
+      (o) => o.stripeCheckoutSessionId === b.stripeCheckoutSessionId
     );
+
     return { booking: b, event, order };
   });
 
@@ -202,7 +209,7 @@ export default async function DashboardEventsPage() {
         </div>
 
         {/* ============================================================
-             SECTION 2 — BROWSE EVENTS (View Event → Book)
+             SECTION 2 — BROWSE EVENTS
         ============================================================ */}
         <div className="space-y-6 pt-10 border-t border-[#dcd6cf]">
           <h2 className="text-2xl font-semibold tracking-wide">Browse Events</h2>
@@ -229,20 +236,19 @@ export default async function DashboardEventsPage() {
                   £{(evt.pricePence / 100).toFixed(2)}
                 </p>
 
-                {/* Seats */}
                 <div className="mt-3">
-                  {evt.soldOut ? (
-                    <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-red-200 text-red-700 border border-red-300">
-                      Sold Out
-                    </span>
-                  ) : (
-                    <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-[#E5F7E4] text-[#2f6b3a] border border-[#5DA865]/30">
-                      {evt.remaining} seats left
-                    </span>
-                  )}
-                </div>
+  {evt.soldOut ? (
+    <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-red-200 text-red-700 border border-red-300">
+      Sold Out
+    </span>
+  ) : (
+    <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-[#E5F7E4] text-[#2f6b3a] border border-[#5DA865]/30">
+      {evt.remaining} seats left
+    </span>
+  )}
+</div>
 
-                {/* ⭐ REPLACED BOOK NOW WITH VIEW EVENT */}
+
                 <div className="mt-4">
                   <Link
                     href={`/dashboard/events/${evt.id}`}

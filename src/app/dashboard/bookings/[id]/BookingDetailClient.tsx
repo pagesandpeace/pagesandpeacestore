@@ -12,7 +12,6 @@ interface Booking {
   paid: boolean;
   refunded: boolean;
 
-  // ⭐ NEW FIELDS
   refundId?: string | null;
   refundedAt?: string | null;
   stripeCheckoutSessionId?: string | null;
@@ -24,12 +23,20 @@ interface Event {
   pricePence: number;
 }
 
+interface Order {
+  stripeReceiptUrl: string | null;
+  stripeCardBrand: string | null;
+  stripeLast4: string | null;
+  paidAt: string | null;
+}
+
 interface Props {
   booking: Booking;
   event: Event;
+  order?: Order | null;
 }
 
-export default function BookingDetailClient({ booking, event }: Props) {
+export default function BookingDetailClient({ booking, event, order }: Props) {
   const [localRequested, setLocalRequested] = useState(
     booking.cancellationRequested
   );
@@ -39,11 +46,6 @@ export default function BookingDetailClient({ booking, event }: Props) {
   function markRequested() {
     setLocalRequested(true);
   }
-
-  // Stripe receipt link (if we have the checkout session)
-  const stripeReceiptLink = booking.stripeCheckoutSessionId
-    ? `https://dashboard.stripe.com/payments/${booking.stripeCheckoutSessionId}`
-    : null;
 
   return (
     <section className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
@@ -78,6 +80,39 @@ export default function BookingDetailClient({ booking, event }: Props) {
         )}
       </p>
 
+      {/* RECEIPT & PAYMENT DETAILS */}
+      {order && (
+        <div className="mt-4 p-4 border rounded-lg bg-blue-50 space-y-2">
+          <h3 className="font-semibold text-blue-800">Payment Details</h3>
+
+          <p>
+            <strong>Paid At:</strong>{" "}
+            {order.paidAt
+              ? new Date(order.paidAt).toLocaleString("en-GB")
+              : "Unavailable"}
+          </p>
+
+          <p>
+            <strong>Card:</strong>{" "}
+            {order.stripeCardBrand
+              ? `${order.stripeCardBrand.toUpperCase()} •••• ${order.stripeLast4}`
+              : "Unavailable"}
+          </p>
+
+          {order.stripeReceiptUrl && (
+            <a
+              href={order.stripeReceiptUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="ghost" size="sm" className="text-blue-700">
+                View Stripe Receipt
+              </Button>
+            </a>
+          )}
+        </div>
+      )}
+
       {/* REFUND DETAILS */}
       {localRefunded && (
         <div className="mt-4 p-4 border rounded-lg bg-purple-50 space-y-2">
@@ -94,18 +129,6 @@ export default function BookingDetailClient({ booking, event }: Props) {
               ? new Date(booking.refundedAt).toLocaleString("en-GB")
               : "Timestamp unavailable"}
           </p>
-
-          {stripeReceiptLink && (
-            <a
-              href={stripeReceiptLink}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button variant="ghost" size="sm" className="text-purple-700">
-                View Stripe Receipt
-              </Button>
-            </a>
-          )}
         </div>
       )}
 

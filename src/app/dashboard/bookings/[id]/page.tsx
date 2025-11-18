@@ -1,14 +1,18 @@
 export const dynamic = "force-dynamic";
 
 import { db } from "@/lib/db";
-import { eventBookings, events } from "@/lib/db/schema";
+import { eventBookings, events, orders } from "@/lib/db/schema";
 import { getCurrentUserServer } from "@/lib/auth/actions";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import BookingDetailClient from "./BookingDetailClient";
 
-export default async function BookingDetailPage({ params }: { params: { id: string } }) {
+export default async function BookingDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const { id: bookingId } = await params;
   const user = await getCurrentUserServer();
 
@@ -17,33 +21,33 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
   }
 
   /* ----------------------------------------------------------
-     FETCH BOOKING (NOW WITH REFUND FIELDS)
+     FETCH BOOKING
   ---------------------------------------------------------- */
   const booking =
     (
       await db
-      .select({
-        id: eventBookings.id,
-        eventId: eventBookings.eventId,
-        name: eventBookings.name,
-        email: eventBookings.email,
-        paid: eventBookings.paid,
-        cancelled: eventBookings.cancelled,
-        cancellationRequested: eventBookings.cancellationRequested,
-        refunded: eventBookings.refunded,
+        .select({
+          id: eventBookings.id,
+          eventId: eventBookings.eventId,
+          name: eventBookings.name,
+          email: eventBookings.email,
+          paid: eventBookings.paid,
+          cancelled: eventBookings.cancelled,
+          cancellationRequested: eventBookings.cancellationRequested,
+          refunded: eventBookings.refunded,
 
-        // ⭐ Correct fields from your schema:
-        stripeRefundId: eventBookings.stripeRefundId,
-        refundProcessedAt: eventBookings.refundProcessedAt,
+          // ⭐ Refund fields
+          refundId: eventBookings.stripeRefundId,
+          refundedAt: eventBookings.refundProcessedAt,
 
-        stripeCheckoutSessionId: eventBookings.stripeCheckoutSessionId,
-        stripePaymentIntentId: eventBookings.stripePaymentIntentId,
+          stripeCheckoutSessionId: eventBookings.stripeCheckoutSessionId,
+          stripePaymentIntentId: eventBookings.stripePaymentIntentId,
 
-        createdAt: eventBookings.createdAt,
-      })
-      .from(eventBookings)
-      .where(eq(eventBookings.id, bookingId))
-  )[0];
+          createdAt: eventBookings.createdAt,
+        })
+        .from(eventBookings)
+        .where(eq(eventBookings.id, bookingId))
+    )[0];
 
   if (!booking) {
     return (
@@ -54,6 +58,32 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
         </Link>
       </main>
     );
+  }
+
+  /* ----------------------------------------------------------
+     FETCH ORDER (NULL-SAFE, DRIZZLE-CORRECT)
+  ---------------------------------------------------------- */
+
+  let order: {
+    stripeReceiptUrl: string | null;
+    stripeCardBrand: string | null;
+    stripeLast4: string | null;
+    paidAt: string | null;
+  } | null = null;
+
+  if (booking.stripeCheckoutSessionId) {
+    const rows =
+      await db
+        .select({
+          stripeReceiptUrl: orders.stripeReceiptUrl,
+          stripeCardBrand: orders.stripeCardBrand,
+          stripeLast4: orders.stripeLast4,
+          paidAt: orders.paidAt,
+        })
+        .from(orders)
+        .where(eq(orders.stripeCheckoutSessionId, booking.stripeCheckoutSessionId));
+
+    order = rows[0] || null;
   }
 
   /* ----------------------------------------------------------
@@ -72,11 +102,13 @@ export default async function BookingDetailPage({ params }: { params: { id: stri
       <div className="max-w-3xl mx-auto space-y-10">
 
         <div className="border-b pb-6">
-          <h1 className="text-3xl font-semibold tracking-widest">Booking Details</h1>
+          <h1 className="text-3xl font-semibold tracking-widest">
+            Booking Details
+          </h1>
         </div>
 
-        {/* 🔥 FULL LOGIC NOW LIVES IN CLIENT COMPONENT */}
-        <BookingDetailClient booking={booking} event={event} />
+        {/* 🔥 Pass order into client component */}
+        <BookingDetailClient booking={booking} event={event} order={order} />
 
         <Link href="/dashboard/events" className="text-accent underline text-sm">
           ← Back to My Bookings

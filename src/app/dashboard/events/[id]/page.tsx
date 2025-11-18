@@ -73,6 +73,18 @@ export default async function DashboardEventDetailPage(props: {
       and(eq(eventBookings.userId, user.id), eq(eventBookings.eventId, eventId))
     );
 
+  /* SEAT AVAILABILITY */
+  const allBookings = await db
+    .select()
+    .from(eventBookings)
+    .where(eq(eventBookings.eventId, eventId));
+
+  const activeBookings = allBookings.filter((b) => !b.cancelled).length;
+  const remainingSeats = event.capacity - activeBookings;
+
+  const soldOut = remainingSeats <= 0;
+  const limited = !soldOut && remainingSeats <= 5;
+
   const formattedDate = new Date(event.date).toLocaleString("en-GB", {
     weekday: "long",
     day: "numeric",
@@ -84,7 +96,7 @@ export default async function DashboardEventDetailPage(props: {
   return (
     <main className="min-h-screen bg-[#FAF6F1]">
 
-      {/* FULL WIDTH HERO */}
+      {/* HERO */}
       <div className="relative w-full h-[50vh] min-h-[320px]">
         <Image
           src={event.imageUrl || "/placeholder-event.jpg"}
@@ -137,26 +149,42 @@ export default async function DashboardEventDetailPage(props: {
         {/* EVENT DETAILS */}
         <section className="space-y-6 text-neutral-700 text-lg">
 
+          {/* DATE */}
           <div className="border-b border-neutral-300 pb-4">
             <strong className="text-[#111] block mb-1">Date & Time</strong>
             {formattedDate}
           </div>
 
+          {/* LOCATION */}
           <div className="border-b border-neutral-300 pb-4">
             <strong className="text-[#111] block mb-1">Location</strong>
             {store?.address || store?.name || "Pages & Peace"}
           </div>
 
+          {/* PRICE */}
           <div className="border-b border-neutral-300 pb-4">
             <strong className="text-[#111] block mb-1">Price</strong>
             £{(event.pricePence / 100).toFixed(2)}
           </div>
 
+          {/* UPDATED AVAILABILITY */}
           <div className="border-b border-neutral-300 pb-4">
-            <strong className="text-[#111] block mb-1">Capacity</strong>
-            {event.capacity} seats
+            <strong className="text-[#111] block mb-1">Availability</strong>
+
+            {soldOut ? (
+              <span className="text-red-600 font-semibold">Sold Out</span>
+            ) : limited ? (
+              <span className="text-orange-600 font-semibold">
+                Limited seats available
+              </span>
+            ) : (
+              <span className="text-green-700 font-semibold">
+                Seats available
+              </span>
+            )}
           </div>
 
+          {/* DESCRIPTION */}
           {event.description && (
             <div className="pt-2">
               <strong className="text-[#111] block mb-2">About This Event</strong>
@@ -180,9 +208,19 @@ export default async function DashboardEventDetailPage(props: {
               : "Reserve your seat now."}
           </p>
 
-          <StartEventCheckout eventId={eventId} />
+          {/* Button always visible unless sold out */}
+          {soldOut ? (
+            <button
+              disabled
+              className="bg-red-300 text-white px-8 py-3 rounded-lg font-semibold opacity-70 cursor-not-allowed"
+            >
+              Sold Out
+            </button>
+          ) : (
+            <StartEventCheckout eventId={eventId} />
+          )}
 
-          {/* TERMS LINK BELOW BUTTON */}
+          {/* TERMS */}
           <div className="pt-2">
             <Link
               href="/dashboard/legal/event-booking-terms"

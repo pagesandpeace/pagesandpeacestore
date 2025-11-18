@@ -88,17 +88,16 @@ export default async function EventsPage() {
             </p>
 
             {/* STATUS BADGE */}
-            <div className="mt-4">
-              {evt.remaining > 0 ? (
-                <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-[#E5F7E4] text-[#2f6b3a] border border-[#5DA865]/30">
-                  {evt.remaining} seats left
-                </span>
-              ) : (
-                <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-red-200 text-red-700 border border-red-300">
-                  Sold Out
-                </span>
-              )}
-            </div>
+            {evt.remaining > 0 ? (
+  <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-amber-100 text-amber-800 border border-amber-300">
+    Limited seats available
+  </span>
+) : (
+  <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-red-200 text-red-700 border border-red-300">
+    Sold Out
+  </span>
+)}
+
           </Link>
         ))}
       </div>

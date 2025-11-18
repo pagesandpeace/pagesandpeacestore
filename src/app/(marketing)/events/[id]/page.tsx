@@ -134,12 +134,20 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
             £{(event.pricePence / 100).toFixed(2)}
           </div>
 
+          {/* UPDATED AVAILABILITY SECTION */}
           <div className="border-b border-neutral-300 pb-4">
-            <strong className="text-[#111] block mb-1">Seats Remaining</strong>
+            <strong className="text-[#111] block mb-1">Availability</strong>
+
             {soldOut ? (
               <span className="text-red-600 font-semibold">Sold Out</span>
+            ) : remainingSeats <= 5 ? (
+              <span className="text-orange-600 font-semibold">
+                Limited seats available
+              </span>
             ) : (
-              <span className="text-green-700 font-semibold">{remainingSeats}</span>
+              <span className="text-green-700 font-semibold">
+                Seats available
+              </span>
             )}
           </div>
 
@@ -153,7 +161,7 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
           )}
         </section>
 
-        {/* MATCHED CTA CARD — SAME AS DASHBOARD */}
+        {/* CTA CARD */}
         <section className="bg-white border border-[#e7dfd4] rounded-xl shadow-sm p-8 text-center">
           <h2 className="text-2xl font-semibold mb-2">Book Your Place</h2>
           <p className="text-neutral-600 mb-6">
