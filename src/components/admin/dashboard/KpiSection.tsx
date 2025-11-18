@@ -2,13 +2,21 @@
 
 import { Card } from "@/components/ui/Card";
 
-export default function KPISection({ data }: { data: any }) {
+type KPIData = {
+  todayRevenue: number;
+  weekRevenue: number;
+  monthRevenue: number;
+  totalBookings: number;
+  loyaltySignups: number;
+};
+
+export default function KPISection({ data }: { data: KPIData }) {
   const cards = [
     { label: "Today’s Revenue", value: `£${data.todayRevenue.toFixed(2)}` },
     { label: "This Week", value: `£${data.weekRevenue.toFixed(2)}` },
     { label: "This Month", value: `£${data.monthRevenue.toFixed(2)}` },
-    { label: "Total Bookings", value: data.totalBookings },
-    { label: "Loyalty Signups (30 days)", value: data.loyaltySignups },
+    { label: "Total Bookings", value: data.totalBookings.toString() },
+    { label: "Loyalty Signups (30 days)", value: data.loyaltySignups.toString() },
   ];
 
   return (

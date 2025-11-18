@@ -439,5 +439,21 @@ export const eventCategoryLinks = pgTable("event_category_links", {
   categoryId: uuid("category_id").notNull(),
 });
 
+/* =========================================================
+   FEEDBACK (Customer Feedback via QR)
+========================================================= */
+
+export const feedback = pgTable("feedback", {
+  id: uuid().defaultRandom().primaryKey(),
+
+  rating: integer("rating").notNull(),      // 1–5
+  message: text("message").notNull(),       // feedback text
+  email: text("email"),                     // optional
+
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+    mode: "string",
+  }).defaultNow().notNull(),
+});
 
 

@@ -7,7 +7,9 @@ type Props = {
   totalEvents: number;
   totalBookings: number;
   refundRate: number;
-  totalSignups: number; // ⭐ NEW FIELD
+  totalSignups: number;
+  totalFeedback: number;
+  averageRating: number;
 };
 
 export default function DashboardKpiCards({
@@ -15,7 +17,9 @@ export default function DashboardKpiCards({
   totalEvents,
   totalBookings,
   refundRate,
-  totalSignups,   // ⭐ NEW FIELD
+  totalSignups,
+  totalFeedback,
+  averageRating,
 }: Props) {
   const cards = [
     {
@@ -43,10 +47,22 @@ export default function DashboardKpiCards({
       value: totalSignups,
       color: "text-amber-700",
     },
+    {
+      label: "Feedback Count",
+      value: totalFeedback,
+      color: "text-indigo-700",
+    },
+    {
+      label: "Average Rating",
+      value: Number.isFinite(averageRating)
+        ? `${averageRating.toFixed(1)} / 5`
+        : "N/A",
+      color: "text-lime-700",
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+    <div className="grid grid-cols-2 lg:grid-cols-7 gap-6">
       {cards.map((item) => (
         <Card key={item.label} className="shadow-sm">
           <CardHeader>

@@ -209,53 +209,52 @@ export default async function DashboardEventsPage() {
         </div>
 
         {/* ============================================================
-             SECTION 2 — BROWSE EVENTS
-        ============================================================ */}
-        <div className="space-y-6 pt-10 border-t border-[#dcd6cf]">
-          <h2 className="text-2xl font-semibold tracking-wide">Browse Events</h2>
+     SECTION 2 — BROWSE EVENTS
+============================================================ */}
+<div className="space-y-6 pt-10 border-t border-[#dcd6cf]">
+  <h2 className="text-2xl font-semibold tracking-wide">Browse Events</h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {browseEvents.map((evt) => (
-              <div
-                key={evt.id}
-                className="bg-white border border-[#e7dfd4] rounded-xl p-6 shadow-sm hover:shadow-md transition"
-              >
-                <h3 className="text-xl font-semibold">{evt.title}</h3>
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    {browseEvents.map((evt) => (
+      <div
+        key={evt.id}
+        className="bg-white border border-[#e7dfd4] rounded-xl p-6 shadow-sm hover:shadow-md transition"
+      >
+        <h3 className="text-xl font-semibold">{evt.title}</h3>
 
-                <p className="mt-2 text-neutral-700">
-                  {new Date(evt.date).toLocaleString("en-GB", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
+        <p className="mt-2 text-neutral-700">
+          {new Date(evt.date).toLocaleString("en-GB", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </p>
 
-                <p className="mt-3 font-medium text-[#2f6b3a]">
-                  £{(evt.pricePence / 100).toFixed(2)}
-                </p>
+        <p className="mt-3 font-medium text-[#2f6b3a]">
+          £{(evt.pricePence / 100).toFixed(2)}
+        </p>
 
-                <div className="mt-3">
-  {evt.soldOut ? (
-    <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-red-200 text-red-700 border border-red-300">
-      Sold Out
-    </span>
-  ) : (
-    <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-[#E5F7E4] text-[#2f6b3a] border border-[#5DA865]/30">
-      {evt.remaining} seats left
-    </span>
-  )}
-</div>
+        <div className="mt-3">
+          {evt.soldOut ? (
+            <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-red-200 text-red-700 border border-red-300">
+              Sold Out
+            </span>
+          ) : (
+            <span className="inline-block rounded-full px-4 py-1 text-sm font-medium bg-[#E5F7E4] text-[#2f6b3a] border border-[#5DA865]/30">
+              Limited availability
+            </span>
+          )}
+        </div>
 
-
-                <div className="mt-4">
-                  <Link
-                    href={`/dashboard/events/${evt.id}`}
-                    className="block w-full text-center px-4 py-2 rounded-md bg-accent text-white text-sm font-medium hover:opacity-90"
-                  >
-                    View Event
-                  </Link>
+        <div className="mt-4">
+          <Link
+            href={`/dashboard/events/${evt.id}`}
+            className="block w-full text-center px-4 py-2 rounded-md bg-accent text-white text-sm font-medium hover:opacity-90"
+          >
+            View Event
+          </Link>
                 </div>
               </div>
             ))}

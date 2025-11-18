@@ -1,3 +1,4 @@
+// src/app/admin/dashboard/page.tsx
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -7,6 +8,7 @@ import {
   eventBookings,
   orders,
   users,
+  feedback,
 } from "@/lib/db/schema";
 import { getCurrentUserServer } from "@/lib/auth/actions";
 import { redirect } from "next/navigation";
@@ -25,7 +27,7 @@ export default async function AdminDashboardPage() {
   if (user.role !== "admin") redirect("/dashboard");
 
   /* ------------------------------------------------------
-     1. TOTAL REVENUE (Stripe totals)
+     1. TOTAL REVENUE
   ------------------------------------------------------ */
   const revenueRows = await db
     .select({
@@ -64,7 +66,7 @@ export default async function AdminDashboardPage() {
       : 0;
 
   /* ------------------------------------------------------
-     4. MONTHLY REVENUE (Stripe)
+     4. MONTHLY REVENUE
   ------------------------------------------------------ */
   const monthlyRevenue = await db
     .select({
@@ -102,9 +104,24 @@ export default async function AdminDashboardPage() {
     .orderBy(sql`MIN(${users.createdAt})`);
 
   /* ------------------------------------------------------
-     7. TOTAL SIGNUPS ⭐ NEW KPI
+     7. TOTAL SIGNUPS
   ------------------------------------------------------ */
   const totalSignups = (await db.select().from(users)).length;
+
+  /* ------------------------------------------------------
+     8. FEEDBACK: COUNT + AVERAGE RATING
+  ------------------------------------------------------ */
+  const feedbackRows = await db.select().from(feedback);
+
+  const sumRatings = feedbackRows.reduce(
+    (acc, f) => acc + Number(f.rating),
+    0
+  );
+
+  const averageRating =
+    feedbackRows.length > 0 ? sumRatings / feedbackRows.length : 0;
+
+  const totalFeedback = feedbackRows.length;
 
   /* ------------------------------------------------------
      RENDER PAGE
@@ -118,7 +135,9 @@ export default async function AdminDashboardPage() {
         totalEvents={totalEvents}
         totalBookings={totalBookings}
         refundRate={refundRate}
-        totalSignups={totalSignups}   // ⭐ ADDED
+        totalSignups={totalSignups}
+        totalFeedback={totalFeedback}
+        averageRating={averageRating}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
