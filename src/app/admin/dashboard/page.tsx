@@ -1,4 +1,3 @@
-// src/app/admin/dashboard/page.tsx
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -9,7 +8,9 @@ import {
   orders,
   users,
   feedback,
+  newsletterSubscribers,
 } from "@/lib/db/schema";
+
 import { getCurrentUserServer } from "@/lib/auth/actions";
 import { redirect } from "next/navigation";
 
@@ -109,7 +110,7 @@ export default async function AdminDashboardPage() {
   const totalSignups = (await db.select().from(users)).length;
 
   /* ------------------------------------------------------
-     8. FEEDBACK: COUNT + AVERAGE RATING
+     8. FEEDBACK (COUNT & AVERAGE RATING)
   ------------------------------------------------------ */
   const feedbackRows = await db.select().from(feedback);
 
@@ -122,6 +123,13 @@ export default async function AdminDashboardPage() {
     feedbackRows.length > 0 ? sumRatings / feedbackRows.length : 0;
 
   const totalFeedback = feedbackRows.length;
+
+  /* ------------------------------------------------------
+     9. EMAIL SUBSCRIBERS (Beehiiv via our table)
+  ------------------------------------------------------ */
+  const totalEmailSubscribers = (
+    await db.select().from(newsletterSubscribers)
+  ).length;
 
   /* ------------------------------------------------------
      RENDER PAGE
@@ -138,6 +146,7 @@ export default async function AdminDashboardPage() {
         totalSignups={totalSignups}
         totalFeedback={totalFeedback}
         averageRating={averageRating}
+        totalEmailSubscribers={totalEmailSubscribers}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

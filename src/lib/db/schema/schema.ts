@@ -456,4 +456,57 @@ export const feedback = pgTable("feedback", {
   }).defaultNow().notNull(),
 });
 
+export const newsletterSubscribers = pgTable("newsletter_subscribers", {
+  id: uuid().defaultRandom().primaryKey(),
+  email: varchar("email", { length: 255 }).notNull(),
+  source: text("source").default("manual"),   // ⭐ ADD THIS
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+    mode: "string",
+  }).defaultNow().notNull(),
+});
 
+
+export const emailBlasts = pgTable("email_blasts", {
+  id: uuid().defaultRandom().primaryKey(),
+  subject: text().notNull(),
+  body: text().notNull(),
+  recipientCount: integer("recipient_count").notNull(),
+
+  // ⭐ NEW FIELD
+  category: text("category").default("general").notNull(),
+
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+    mode: "string",
+  })
+    .defaultNow()
+    .notNull(),
+});
+
+export const emailTemplates = pgTable("email_templates", {
+  id: uuid().defaultRandom().primaryKey(),
+  name: text().notNull(),        // “June Letter Base”, “Event Promo”, etc
+  category: text("category").default("general").notNull(),
+  subject: text().notNull(),
+  body: text().notNull(),        // raw HTML body, not wrapped
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+});
+
+export const emailEvents = pgTable("email_events", {
+  id: uuid().defaultRandom().primaryKey(),
+
+  blastId: uuid("blast_id").notNull(), // links to emailBlasts.id
+  subscriber: text().notNull(),         // email address
+  eventType: text("event_type").notNull(), // delivered, opened, clicked, bounced
+  timestamp: timestamp("timestamp", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+
+  metadata: jsonb("metadata"), // store click url, etc.
+});

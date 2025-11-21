@@ -10,6 +10,7 @@ type Props = {
   totalSignups: number;
   totalFeedback: number;
   averageRating: number;
+  totalEmailSubscribers: number; // ⭐ NEW FIELD
 };
 
 export default function DashboardKpiCards({
@@ -20,6 +21,7 @@ export default function DashboardKpiCards({
   totalSignups,
   totalFeedback,
   averageRating,
+  totalEmailSubscribers,
 }: Props) {
   const cards = [
     {
@@ -59,10 +61,15 @@ export default function DashboardKpiCards({
         : "N/A",
       color: "text-lime-700",
     },
+    {
+      label: "Email Subscribers",
+      value: totalEmailSubscribers,
+      color: "text-sky-700",
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-7 gap-6">
+    <div className="grid grid-cols-2 lg:grid-cols-8 gap-6">
       {cards.map((item) => (
         <Card key={item.label} className="shadow-sm">
           <CardHeader>
@@ -71,7 +78,9 @@ export default function DashboardKpiCards({
             </p>
           </CardHeader>
           <CardBody>
-            <p className={`text-3xl font-bold ${item.color}`}>{item.value}</p>
+            <p className={`text-3xl font-bold ${item.color}`}>
+              {item.value}
+            </p>
           </CardBody>
         </Card>
       ))}
