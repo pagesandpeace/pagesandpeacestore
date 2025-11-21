@@ -1,14 +1,14 @@
+// src/app/api/newsletter/test/route.ts
 import { NextResponse } from "next/server";
 import { resend, FROM } from "@/lib/email/client";
 import newsletterTemplate from "@/lib/email/templates/newsletterTemplate";
+import { applyTracking } from "@/lib/email/track/applyTracking";
 
 export async function POST(req: Request) {
   try {
     console.log("🚀 TEST ROUTE HIT");
 
-    const { subject, body, category = "general", to } = await req.json();
-
-    console.log("📨 Parsed body:", { subject, bodyLength: body?.length, to });
+    const { subject, body, to } = await req.json();
 
     if (!subject || !body || !to) {
       return NextResponse.json(
@@ -17,12 +17,17 @@ export async function POST(req: Request) {
       );
     }
 
+    // Fake blast ID for testing
     const blastId = "test-" + Date.now();
     const recipient = to;
 
-    const finalHtml = newsletterTemplate(body, blastId, recipient);
+    // Apply click tracking
+    const trackedHtml = applyTracking(body, blastId, recipient);
 
-    console.log("📬 Sending email via Resend...");
+    // Apply full template + open pixel
+    const finalHtml = newsletterTemplate(trackedHtml, blastId, recipient);
+
+    console.log("📬 Sending TEST email via Resend…");
 
     const response = await resend.emails.send({
       from: FROM,
@@ -35,7 +40,6 @@ export async function POST(req: Request) {
     console.log("✅ RESEND RESPONSE:", response);
 
     return NextResponse.json({ ok: true });
-
   } catch (err) {
     console.error("❌ TEST EMAIL ERROR:", err);
     return NextResponse.json(

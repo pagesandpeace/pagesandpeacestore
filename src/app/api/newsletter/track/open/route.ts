@@ -23,7 +23,8 @@ export async function GET(req: Request) {
     const device = detectDevice(req);
     console.log("📱 Device:", device);
 
-    console.log("📝 Inserting OPEN event into DB…");
+    console.log("📝 INSERT OPEN", { blastId, subscriber, device });
+
     await db.insert(emailEvents).values({
       blastId,
       subscriber,
@@ -32,7 +33,6 @@ export async function GET(req: Request) {
     });
 
     console.log("✅ OPEN Event Logged");
-
   } catch (err) {
     console.error("🔥 DB INSERT ERROR (OPEN):", err);
   }
@@ -53,6 +53,8 @@ export async function GET(req: Request) {
 
 function detectDevice(req: Request) {
   const agent = req.headers.get("user-agent") || "";
+  console.log("🕵️ User-Agent:", agent);
+
   if (/mobile/i.test(agent)) return "mobile";
   if (/tablet/i.test(agent)) return "tablet";
   return "desktop";

@@ -3,12 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import NewsletterAIAssistant from "@/components/admin/newsletter/NewsletterAIAssistant";
+import newsletterTemplate from "@/lib/email/templates/newsletterTemplate";
 
 // ❌ REMOVE THIS — it caused the Resend API key error
 // import newsletterTemplate from "@/lib/email/templates/newsletterTemplate";
-
-// ✅ SAFE PREVIEW-ONLY WRAPPER
-import newsletterPreview from "@/lib/email/templates/newsletterPreview";
 
 /* ------------------------------------------
    TYPES
@@ -252,7 +250,8 @@ export default function NewsletterAdminPage() {
       ) : (
         <div
           className="w-full border p-4 rounded bg-white shadow-sm overflow-auto max-h-[700px]"
-          dangerouslySetInnerHTML={{ __html: newsletterPreview(body) }}
+          dangerouslySetInnerHTML={{ __html: newsletterTemplate(body, "preview", "preview") }}
+
         />
       )}
 
