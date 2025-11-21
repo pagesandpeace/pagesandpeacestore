@@ -42,7 +42,6 @@ export default function AdminSidebar() {
     >
       {/* TOP SECTION */}
       <div className="px-6 pt-10">
-
         {/* Logo */}
         <button
           onClick={() => router.push("/admin")}
@@ -81,16 +80,32 @@ export default function AdminSidebar() {
               Create Event
             </button>
 
+            {/* --- NEWSLETTER MANAGER --- */}
+            <button
+              onClick={() => router.push("/admin/newsletter")}
+              className="text-left hover:text-[#5DA865]"
+            >
+              Newsletter Manager
+            </button>
+
+            <button
+              onClick={() => router.push("/admin/newsletter/history")}
+              className="text-left hover:text-[#5DA865]"
+            >
+              Blast History
+            </button>
 
           </nav>
         </div>
       </div>
 
-      {/* BOTTOM ACCOUNT SECTION – FIXED */}
-      <div ref={accountRef} className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1]">
+      {/* BOTTOM ACCOUNT SECTION */}
+      <div
+        ref={accountRef}
+        className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1]"
+      >
         {!loading && user ? (
           <>
-            {/* Profile button */}
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               className="flex items-center gap-3 w-full text-left rounded-md px-2 py-2 hover:bg-[#f1ede7]"
@@ -102,42 +117,34 @@ export default function AdminSidebar() {
                 height={36}
                 className="rounded-full border object-cover"
               />
-
               <div className="flex flex-col">
                 <span className="font-medium text-sm">{user.name || "Admin"}</span>
-
-                {/* Admin badge */}
                 <span className="mt-1 inline-block text-xs bg-red-200 text-red-700 px-2 py-0.5 rounded-full border border-red-300">
                   Admin
                 </span>
               </div>
             </button>
 
-            {/* Dropdown */}
             {menuOpen && (
               <div className="absolute bottom-20 left-6 bg-white border rounded-md shadow p-1 w-44">
-
                 <button
                   onClick={() => router.push("/admin/account")}
                   className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
                 >
                   My Account
                 </button>
-
                 <button
                   onClick={() => router.push("/admin/settings")}
                   className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
                 >
                   Settings
                 </button>
-
                 <button
                   onClick={handleSignOut}
                   className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-[#FAF6F1]"
                 >
                   Sign out
                 </button>
-
               </div>
             )}
           </>

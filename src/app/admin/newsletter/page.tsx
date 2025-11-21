@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import NewsletterAIAssistant from "@/components/admin/newsletter/NewsletterAIAssistant";
 
-// ✅ CLIENT-SAFE PREVIEW
+// SAFE client-only preview helper
 import newsletterPreview from "@/lib/email/templates/newsletterPreview";
 
 /* ------------------------------------------
@@ -32,6 +32,8 @@ export default function NewsletterAdminPage() {
 
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState("general");
+  const [customRecipients, setCustomRecipients] = useState("");
+
   const [body, setBody] = useState("");
   const [previewMode, setPreviewMode] = useState<"raw" | "template">("raw");
   const [sending, setSending] = useState(false);
@@ -86,28 +88,38 @@ export default function NewsletterAdminPage() {
      SEND BLAST
   ------------------------------------------- */
   async function sendBlast() {
-    setSending(true);
-    setMessage("");
+  setSending(true);
+  setMessage("");
 
-    const res = await fetch("/api/newsletter/blast", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject, body, category }),
-    });
+  const res = await fetch("/api/newsletter/blast", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      subject,
+      body,
+      category,
+      customRecipients: customRecipients
+        .split(/[\n,]+/)
+        .map((e) => e.trim())
+        .filter(Boolean),
+    }),
+  });
 
-    const data = await res.json();
-    setSending(false);
+  const data = await res.json();
+  setSending(false);
 
-    if (!data.ok) {
-      setMessage("❌ " + data.error);
-      return;
-    }
-
-    setMessage(`✅ Email sent to ${data.sentTo} subscribers.`);
-    setSubject("");
-    setBody("");
-    router.refresh();
+  if (!data.ok) {
+    setMessage("❌ " + data.error);
+    return;
   }
+
+  setMessage(`✅ Email sent to ${data.sentTo} recipients.`);
+  setSubject("");
+  setBody("");
+  setCustomRecipients(""); // reset the custom list
+  router.refresh();
+}
+
 
   /* ------------------------------------------
      SEND TEST EMAIL
@@ -134,7 +146,7 @@ export default function NewsletterAdminPage() {
   }
 
   /* ------------------------------------------
-     CATEGORY BADGE COLORS
+     CATEGORY BADGE COLOURS
   ------------------------------------------- */
   const badgeColors: Record<string, string> = {
     event: "bg-blue-100 text-blue-700",
@@ -212,6 +224,23 @@ export default function NewsletterAdminPage() {
           <option value="follow_up">Follow-up</option>
         </select>
       </div>
+
+      {/* CUSTOM RECIPIENTS */}
+<div className="space-y-2">
+  <label className="font-semibold">
+    Custom Recipients (optional)
+  </label>
+  <textarea
+    className="w-full border p-2 rounded bg-white h-32"
+    placeholder="One email per line…"
+    value={customRecipients}
+    onChange={(e) => setCustomRecipients(e.target.value)}
+  />
+  <p className="text-xs text-gray-500">
+    If filled, the newsletter will ONLY send to these emails.
+  </p>
+</div>
+
 
       {/* PREVIEW MODE SWITCH */}
       <div className="flex gap-4 mt-4">
@@ -299,7 +328,9 @@ export default function NewsletterAdminPage() {
                 <div className="flex justify-between items-start">
                   <p className="font-semibold text-lg">{h.subject}</p>
 
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${badgeStyle}`}>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-medium ${badgeStyle}`}
+                  >
                     {h.category}
                   </span>
                 </div>

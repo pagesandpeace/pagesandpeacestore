@@ -497,16 +497,3 @@ export const emailTemplates = pgTable("email_templates", {
     .defaultNow()
     .notNull(),
 });
-
-export const emailEvents = pgTable("email_events", {
-  id: uuid().defaultRandom().primaryKey(),
-
-  blastId: uuid("blast_id").notNull(), // links to emailBlasts.id
-  subscriber: text().notNull(),         // email address
-  eventType: text("event_type").notNull(), // delivered, opened, clicked, bounced
-  timestamp: timestamp("timestamp", { withTimezone: true, mode: "string" })
-    .defaultNow()
-    .notNull(),
-
-  metadata: jsonb("metadata"), // store click url, etc.
-});
