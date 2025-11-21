@@ -1,3 +1,8 @@
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
+
+
 import { ReactNode } from "react";
 import { getCurrentUserServer } from "@/lib/auth/actions";
 import { redirect } from "next/navigation";
