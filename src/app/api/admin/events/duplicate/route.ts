@@ -9,72 +9,95 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { originalEventId, title, date, pricePence, categoryIds } = body;
+  try {
+    const body = await req.json();
+    const { originalEventId, title, date, pricePence, categoryIds } = body;
 
-  const [original] = await db
-    .select()
-    .from(events)
-    .where(eq(events.id, originalEventId));
+    const [original] = await db
+      .select()
+      .from(events)
+      .where(eq(events.id, originalEventId));
 
-  if (!original) {
-    return NextResponse.json({ error: "Event not found" }, { status: 404 });
-  }
+    if (!original) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
 
-  /* ------------------------------------------------
-     1) NEW PRODUCT FOR DUPLICATED EVENT
-  ------------------------------------------------ */
-  const newProductId = crypto.randomUUID();
+    /* ------------------------------------------------
+       1) NEW PRODUCT
+    ------------------------------------------------ */
+    const newProductId = crypto.randomUUID();
 
-  await db.insert(products).values({
-    id: newProductId,
-    name: title,
-    slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-    description: original.shortDescription || original.description || "",
-    price: String(Number(pricePence) / 100),
-    productType: "event",
-    imageUrl: original.imageUrl,
-    metadata: {
-      subtitle: original.subtitle,
-      shortDescription: original.shortDescription,
-      published: original.published,
-    },
-    inventoryCount: 999999,
-  });
+    const safePrice = (Number(pricePence) / 100).toFixed(2);
 
-  /* ------------------------------------------------
-     2) NEW EVENT USING THIS PRODUCT
-  ------------------------------------------------ */
-  const [inserted] = await db
-    .insert(events)
-    .values({
-      id: crypto.randomUUID(),
-      productId: newProductId,
-      title,
-      description: original.description,
-      subtitle: original.subtitle,
-      shortDescription: original.shortDescription,
-      date,
-      capacity: original.capacity,
-      pricePence,
+    await db.insert(products).values({
+      id: newProductId,
+      name: title,
+      slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      description: original.shortDescription || original.description || "",
+      price: safePrice,              // ⭐ FIXED - always valid numeric(10,2)
+      productType: "event",
       imageUrl: original.imageUrl,
-      storeId: original.storeId,
-      published: original.published,
-    })
-    .returning();
+      metadata: {
+        subtitle: original.subtitle,
+        shortDescription: original.shortDescription,
+        published: original.published,
+      },
+      inventoryCount: 999999,
+    });
 
-  /* ------------------------------------------------
-     3) CATEGORY LINKS
-  ------------------------------------------------ */
-  if (categoryIds?.length) {
-    await db.insert(eventCategoryLinks).values(
-      categoryIds.map((id: string) => ({
+    /* ------------------------------------------------
+       2) NEW EVENT
+    ------------------------------------------------ */
+    const [inserted] = await db
+      .insert(events)
+      .values({
         id: crypto.randomUUID(),
-        eventId: inserted.id,
-        categoryId: id,
-      }))
+        productId: newProductId,
+        title,
+        description: original.description,
+        subtitle: original.subtitle,
+        shortDescription: original.shortDescription,
+        date,
+        capacity: original.capacity,
+        pricePence,
+        imageUrl: original.imageUrl,
+        storeId: original.storeId,
+        published: original.published,
+      })
+      .returning();
+
+    /* ------------------------------------------------
+       3) CATEGORY LINKS — SAFE GUARD
+    ------------------------------------------------ */
+    if (Array.isArray(categoryIds) && categoryIds.length > 0) {
+      // Ensure IDs are valid UUIDs
+      const safeCategories = categoryIds.filter((id: string) =>
+        /^[0-9a-fA-F-]{36}$/.test(id)
+      );
+
+      if (safeCategories.length > 0) {
+        await db.insert(eventCategoryLinks).values(
+          safeCategories.map((id: string) => ({
+            id: crypto.randomUUID(),
+            eventId: inserted.id,
+            categoryId: id,
+          }))
+        );
+      }
+    }
+
+    return NextResponse.json({ ok: true, newEventId: inserted.id });
+  } catch (err) {
+  const message =
+    err instanceof Error
+      ? err.message
+      : "Unknown error";
+
+  console.error("❌ Duplicating event failed:", err);
+
+  return NextResponse.json(
+    { error: message },
+    { status: 500 }
     );
   }
-
-  return NextResponse.json({ ok: true, newEventId: inserted.id });
 }
