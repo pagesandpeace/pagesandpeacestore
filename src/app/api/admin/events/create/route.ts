@@ -54,21 +54,24 @@ export async function POST(req: Request) {
       .replace(/(^-|-$)/g, "");
 
     await db.insert(products).values({
-      id: productId,
-      name: title,
-      slug,
-      description: shortDescription || description || "",
-      price: String(Number(pricePence) / 100),
-      productType: "event",
-      metadata: {
-        subtitle: subtitle || null,
-        shortDescription: shortDescription || null,
-        location: location || null,
-        published: Boolean(published),
-      },
-      imageUrl: imageUrl || null,
-      inventoryCount: 999999,
-    });
+  id: productId,
+  name: title,
+  slug,
+  description: shortDescription || description || "",
+  price: String(Number(pricePence) / 100),
+
+  product_type: "event",   // ⭐ FIXED
+  metadata: {
+    subtitle: subtitle || null,
+    shortDescription: shortDescription || null,
+    location: location || null,
+    published: Boolean(published),
+  },
+
+  image_url: imageUrl || null, // ⭐ FIXED
+  inventory_count: 999999,     // ⭐ FIXED
+});
+
 
     /* ------------------------------------------------
        2) CREATE EVENT LINKED TO THIS PRODUCT

@@ -8,13 +8,29 @@ import React, {
   useState,
 } from "react";
 
+/* =========================================================
+   CART ITEM TYPE — FIXED & EXTENDED
+========================================================= */
+
 export type CartItem = {
   id: string;
   name: string;
   price: number;
-  imageUrl?: string;
+  imageUrl?: string | null;
   quantity: number;
+
+  // 🔥 Supports blind-date metadata
+  metadata?: {
+    genreSelected?: string;
+    colour?: string;
+    difficulty?: string;
+    trinkets?: string[];
+  };
 };
+
+/* =========================================================
+   CONTEXT TYPE
+========================================================= */
 
 type CartContextType = {
   cart: CartItem[];
@@ -22,21 +38,26 @@ type CartContextType = {
   removeFromCart: (id: string) => void;
   clearCart: () => void;
   updateQuantity: (id: string, quantity: number) => void;
-  total: number; // £ total
-  totalQty: number; // total items badge
+  total: number;
+  totalQty: number;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+/* =========================================================
+   PROVIDER
+========================================================= */
+
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // Load from localStorage (once, on mount)
+  // Load from storage
   useEffect(() => {
     try {
-      const stored = typeof window !== "undefined"
-        ? window.localStorage.getItem("cart")
-        : null;
+      const stored =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("cart")
+          : null;
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
@@ -44,31 +65,41 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
     } catch (err) {
-      console.warn("⚠️ Failed to read cart from localStorage:", err);
+      console.warn("⚠️ Failed to read cart:", err);
     }
   }, []);
 
-  // Save to localStorage on change
+  // Save to storage
   useEffect(() => {
     try {
       if (typeof window !== "undefined") {
         window.localStorage.setItem("cart", JSON.stringify(cart));
       }
     } catch (err) {
-      console.warn("⚠️ Failed to write cart to localStorage:", err);
+      console.warn("⚠️ Failed to write cart:", err);
     }
   }, [cart]);
 
+  /* -----------------------------
+     ADD TO CART
+  ----------------------------- */
   const addToCart = (item: CartItem) => {
     setCart((prev) => {
       const existing = prev.find((p) => p.id === item.id);
+
       if (existing) {
+        // Merge metadata if blind-date
         return prev.map((p) =>
           p.id === item.id
-            ? { ...p, quantity: p.quantity + item.quantity }
+            ? {
+                ...p,
+                quantity: p.quantity + item.quantity,
+                metadata: item.metadata ?? p.metadata,
+              }
             : p
         );
       }
+
       return [...prev, item];
     });
   };
@@ -80,7 +111,9 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const updateQuantity = (id: string, quantity: number) => {
     setCart((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, quantity: quantity < 1 ? 1 : quantity } : item
+        item.id === id
+          ? { ...item, quantity: quantity < 1 ? 1 : quantity }
+          : item
       )
     );
   };
@@ -88,22 +121,17 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const clearCart = () => {
     setCart([]);
     try {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem("cart");
-      }
-    } catch (err) {
-      console.warn("⚠️ Failed to clear cart localStorage:", err);
-    }
+      window.localStorage.removeItem("cart");
+    } catch {}
   };
 
   const total = useMemo(
-    () =>
-      cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
+    () => cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
     [cart]
   );
 
   const totalQty = useMemo(
-    () => cart.reduce((sum, item) => sum + (item.quantity || 0), 0),
+    () => cart.reduce((sum, item) => sum + item.quantity, 0),
     [cart]
   );
 
@@ -124,8 +152,12 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+/* =========================================================
+   HOOK
+========================================================= */
+
 export const useCart = () => {
-  const context = useContext(CartContext);
-  if (!context) throw new Error("useCart must be used within CartProvider");
-  return context;
+  const ctx = useContext(CartContext);
+  if (!ctx) throw new Error("useCart must be used within CartProvider");
+  return ctx;
 };

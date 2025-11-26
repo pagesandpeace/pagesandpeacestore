@@ -1,115 +1,115 @@
-"use client";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-import { useEffect, useState } from "react";
+import { db } from "@/lib/db";
+import { products } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 
-interface Product {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-  price: number;
-  image_url?: string;
-  genre_id?: string;
-}
+import AddToCartButton from "@/components/product/AddToCartButton";
+import BuyNowButton from "@/components/product/BuyNowButton";
+import StockStatus from "@/components/product/StockStatus";
+import FulfilmentInfo from "@/components/product/FulfilmentInfo";
+import PriceDisplay from "@/components/product/PriceDisplay";
+import ProductBadge from "@/components/product/ProductBadge";
 
-export default function ProductPage() {
-  const { slug } = useParams();
-  const [product, setProduct] = useState<Product | null>(null);
+export default async function ProductDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
 
-  // Local seed data (fallback)
-  const seedProducts: Product[] = [
-    {
-      id: "1",
-      name: "Pages & Peace Tote Bag",
-      slug: "pages-peace-tote",
-      description:
-        "Eco-friendly tote bag with our logo. Perfect for carrying your next read or coffee beans.",
-      price: 12.99,
-      image_url: "/coming_soon.svg",
-    },
-    {
-      id: "2",
-      name: "House Blend Coffee Beans 250g",
-      slug: "house-blend-250g",
-      description:
-        "Smooth, balanced blend roasted locally. Notes of chocolate, nuts, and caramel sweetness.",
-      price: 9.99,
-      image_url: "/coming_soon.svg",
-    },
-    {
-      id: "3",
-      name: "Monthly Book Club Membership",
-      slug: "book-club-membership",
-      description:
-        "Join our book club and receive one new read each month, plus early access to events.",
-      price: 29.99,
-      image_url: "/coming_soon.svg",
-    },
-  ];
+  const [product] = await db
+    .select()
+    .from(products)
+    .where(eq(products.slug, slug));
 
-  // Load correct product by slug
-  useEffect(() => {
-    const found = seedProducts.find((p) => p.slug === slug);
-    setProduct(found || null);
-  }, [slug]);
-
-  // Product not found
   if (!product) {
     return (
-      <main className="min-h-screen flex flex-col justify-center items-center text-center bg-[var(--background)] text-[var(--foreground)] px-6">
-        <h2 className="text-2xl font-semibold mb-4">Product not found</h2>
-        <Link href="/shop" className="btn-outline">
-          ← Back to Shop
+      <main className="py-20 text-center">
+        <h1 className="text-3xl font-semibold mb-4">Product Not Found</h1>
+        <Link href="/shop">
+          <button className="px-6 py-3 border rounded-full mt-4">
+            Back to Shop
+          </button>
         </Link>
       </main>
     );
   }
 
-  // Product display
+  const image = product.image_url || "/coming_soon.svg";
+  const price = Number(product.price) || 0;
+
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] px-6 py-16">
-      <section className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-        
-        {/* Image */}
-        <div className="flex justify-center">
-          <Image
-            src={product.image_url || "/coming_soon.svg"}
-            alt={product.name}
-            width={500}
-            height={500}
-            className="rounded-2xl shadow-md object-contain bg-white p-4"
-          />
+    <main className="bg-background min-h-screen py-10 px-4 font-[Montserrat]">
+      {/* Breadcrumbs */}
+      <div className="max-w-5xl mx-auto mb-6 text-sm">
+        <Link href="/shop" className="text-accent hover:underline">
+          Shop
+        </Link>{" "}
+        / <span className="text-neutral-500">{product.name}</span>
+      </div>
+
+      <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
+        {/* IMAGE */}
+        <div className="relative w-full h-[500px] rounded-2xl overflow-hidden shadow">
+          <Image src={image} alt={product.name} fill className="object-cover" />
         </div>
 
-        {/* Details */}
-        <div className="flex flex-col space-y-6">
-          <h1 className="text-4xl font-semibold">{product.name}</h1>
+        {/* RIGHT SIDE */}
+        <div className="space-y-6">
+          {/* ProductBadge expects { genre }, not { productType } */}
+          <ProductBadge genre={product.genre_id ?? null} />
 
-          <p className="text-[color:var(--foreground)]/80 leading-relaxed">
-            {product.description}
-          </p>
+          <h1 className="text-4xl font-bold text-foreground">
+            {product.name}
+          </h1>
 
-          <p className="text-2xl font-bold text-[var(--accent)]">
-            £{Number(product.price).toFixed(2)}
-          </p>
+          {product.author && (
+            <p className="text-lg text-foreground/70">
+              by {product.author}
+            </p>
+          )}
 
-          {/* 🚫 Buy Now disabled — Coming Soon Button */}
-          <button
-            disabled
-            className="bg-[var(--accent)]/20 text-[var(--accent)] border border-[var(--accent)]/40 cursor-not-allowed rounded-full px-4 py-3 text-base font-semibold w-full md:w-auto"
-          >
-            🕒 Coming Soon
-          </button>
+          <PriceDisplay price={price} />
 
-          {/* Back to shop */}
-          <Link href="/shop" className="btn-outline w-full md:w-auto text-center">
-            ← Back to Shop
-          </Link>
+          {/* StockStatus expects only { count } */}
+          <StockStatus count={product.inventory_count} />
+
+          {product.description && (
+            <p className="leading-relaxed text-foreground/80 whitespace-pre-line">
+              {product.description}
+            </p>
+          )}
+
+          {/* CTA BUTTONS */}
+          <div className="pt-4 space-y-4">
+            <AddToCartButton
+              product={{
+                id: product.id,
+                slug: product.slug,
+                name: product.name,
+                price,
+                imageUrl: image,
+              }}
+            />
+
+            <BuyNowButton
+              product={{
+                id: product.id,
+                slug: product.slug,
+                name: product.name,
+                price,
+                imageUrl: image,
+              }}
+            />
+          </div>
+
+          <FulfilmentInfo />
         </div>
-      </section>
+      </div>
     </main>
   );
 }

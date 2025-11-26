@@ -30,20 +30,22 @@ export async function POST(req: Request) {
     const safePrice = (Number(pricePence) / 100).toFixed(2);
 
     await db.insert(products).values({
-      id: newProductId,
-      name: title,
-      slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      description: original.shortDescription || original.description || "",
-      price: safePrice,              // ⭐ FIXED - always valid numeric(10,2)
-      productType: "event",
-      imageUrl: original.imageUrl,
-      metadata: {
-        subtitle: original.subtitle,
-        shortDescription: original.shortDescription,
-        published: original.published,
-      },
-      inventoryCount: 999999,
-    });
+  id: newProductId,
+  name: title,
+  slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+  description: original.shortDescription || original.description || "",
+  price: safePrice,
+
+  product_type: "event",            // ⭐ FIXED
+  image_url: original.imageUrl,     // ⭐ FIXED
+  metadata: {
+    subtitle: original.subtitle,
+    shortDescription: original.shortDescription,
+    published: original.published,
+  },
+  inventory_count: 999999,          // ⭐ FIXED
+});
+
 
     /* ------------------------------------------------
        2) NEW EVENT

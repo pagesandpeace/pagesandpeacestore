@@ -57,14 +57,14 @@ export async function GET(
         eventPublished: events.published,
 
         // product
-        productId: products.id,
-        productName: products.name,
-        productSlug: products.slug,
-        productDescription: products.description,
-        productPrice: products.price,
-        productImageUrl: products.imageUrl,
-        productType: products.productType,
-        productMetadata: products.metadata,
+productId: products.id,
+productName: products.name,
+productSlug: products.slug,
+productDescription: products.description,
+productPrice: products.price,
+productImageUrl: products.image_url,       // ⭐ FIXED
+productType: products.product_type,        // ⭐ FIXED
+productMetadata: products.metadata,
 
         // store
         storeId: stores.id,

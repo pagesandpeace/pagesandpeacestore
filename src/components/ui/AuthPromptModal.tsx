@@ -5,13 +5,17 @@ import { motion, AnimatePresence } from "framer-motion";
 interface AuthPromptModalProps {
   open: boolean;
   onClose: () => void;
-  callbackURL?: string;       // ✅ NEW
+  title?: string;          // ⭐ NEW
+  message?: string;        // ⭐ NEW
+  callbackURL?: string;
 }
 
 export default function AuthPromptModal({
   open,
   onClose,
-  callbackURL = "/dashboard/events", // fallback
+  title = "Sign in required",
+  message = "You need an account to continue.",
+  callbackURL = "/",
 }: AuthPromptModalProps) {
 
   const handleSignIn = () => {
@@ -42,16 +46,14 @@ export default function AuthPromptModal({
             exit={{ scale: 0.9, opacity: 0 }}
           >
             <h2 className="text-xl font-semibold text-[#111]">
-              Sign in required
+              {title}
             </h2>
 
             <p className="text-neutral-600 mt-3 text-sm leading-relaxed">
-              You need an account to book this event.
+              {message}
             </p>
 
             <div className="mt-6 flex flex-col gap-3">
-
-              {/* SIGN IN */}
               <button
                 onClick={handleSignIn}
                 className="bg-[var(--accent)] text-white py-2 rounded-lg font-semibold hover:opacity-90 transition"
@@ -59,7 +61,6 @@ export default function AuthPromptModal({
                 Sign In
               </button>
 
-              {/* SIGN UP */}
               <button
                 onClick={handleSignUp}
                 className="bg-[#111] text-white py-2 rounded-lg font-semibold hover:bg-black transition"
@@ -73,7 +74,6 @@ export default function AuthPromptModal({
               >
                 Cancel
               </button>
-
             </div>
           </motion.div>
         </motion.div>

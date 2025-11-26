@@ -72,44 +72,55 @@ const exact = date.length === 16 ? date + ":00" : date;
     const finalDate = exact; // e.g., "2025-11-23T18:00:00"
 
     /* -----------------------------------------
-       UPDATE EVENT
-    ------------------------------------------ */
-    await db
-      .update(events)
-      .set({
-        title,
-        subtitle: subtitle || null,
-        shortDescription: shortDescription || null,
-        description: description || "",
+   UPDATE EVENT
+------------------------------------------ */
+await db
+  .update(events)
+  .set({
+    title,
+    subtitle: subtitle || null,
+    shortDescription: shortDescription || null,
+    description: description || "",
 
-        // ❗ EXACT TIME, ZERO SHIFTING
-        date: finalDate,
+    date: finalDate,
+    capacity: Number(capacity),
+    pricePence: Number(pricePence),
 
-        capacity: Number(capacity),
-        pricePence: Number(pricePence),
-        imageUrl: imageUrl || existing.imageUrl,
-        published: Boolean(published),
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(events.id, id));
+    // ⭐ EVENTS table uses camelCase
+    imageUrl: imageUrl || existing.imageUrl,
 
-    /* -----------------------------------------
-       UPDATE PRODUCT
-    ------------------------------------------ */
-    await db
-      .update(products)
-      .set({
-        name: title,
-        description: shortDescription || description || "",
-        imageUrl: imageUrl || existing.imageUrl,
-        metadata: {
-          subtitle: subtitle || null,
-          shortDescription: shortDescription || null,
-          published: Boolean(published),
-        },
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(products.id, productId));
+    published: Boolean(published),
+
+    // ⭐ EVENTS table uses camelCase
+    updatedAt: new Date().toISOString(),
+  })
+  .where(eq(events.id, id));
+
+
+/* -----------------------------------------
+   UPDATE PRODUCT
+------------------------------------------ */
+await db
+  .update(products)
+  .set({
+    name: title,
+    description: shortDescription || description || "",
+
+    // ⭐ PRODUCTS table uses snake_case
+    image_url: imageUrl || existing.imageUrl,
+
+    metadata: {
+      subtitle: subtitle || null,
+      shortDescription: shortDescription || null,
+      published: Boolean(published),
+    },
+
+    // ⭐ PRODUCTS table uses snake_case
+    updated_at: new Date().toISOString(),
+  })
+  .where(eq(products.id, productId));
+
+
 
     /* -----------------------------------------
        UPDATE CATEGORY LINKS

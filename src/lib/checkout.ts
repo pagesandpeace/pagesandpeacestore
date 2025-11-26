@@ -1,7 +1,11 @@
+"use client";
+
 export async function handleBuyNow(product: {
+  id: string;
   name: string;
   price: number;
   quantity?: number;
+  imageUrl?: string;
 }) {
   try {
     const res = await fetch("/api/checkout", {
@@ -10,25 +14,21 @@ export async function handleBuyNow(product: {
       body: JSON.stringify({
         items: [
           {
+            productId: product.id,
             name: product.name,
             price: product.price,
             quantity: product.quantity ?? 1,
+            imageUrl: product.imageUrl ?? null,
           },
         ],
       }),
     });
 
     const data = await res.json();
-
-    if (!res.ok) throw new Error(data.error || "Checkout failed");
-
-    if (data.url) {
-      window.location.href = data.url; // ✅ Redirect to Stripe Checkout
-    } else {
-      alert("No checkout URL returned.");
-    }
-  } catch (err) {
-    console.error("❌ Checkout error:", err);
-    alert("Something went wrong with checkout.");
+    if (data?.url) window.location.href = data.url;
+  } catch (_err) {
+    // underscore prevents ESLint warning
+    alert("Checkout failed.");
+    console.error("Checkout failed:", _err);
   }
 }

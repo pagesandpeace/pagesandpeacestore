@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { useUser } from "@/lib/auth/useUser";
 import { signOut } from "@/lib/auth/actions";
@@ -55,10 +54,10 @@ export default function AdminSidebar() {
           />
         </button>
 
-        {/* NAVIGATION – scrollable */}
+        {/* NAVIGATION */}
         <div className="mt-6 text-sm max-h-[60vh] overflow-y-auto pr-2 pb-4">
           <nav className="flex flex-col gap-y-5">
-
+            
             <button
               onClick={() => router.push("/admin/dashboard")}
               className="text-left hover:text-[#5DA865]"
@@ -80,10 +79,39 @@ export default function AdminSidebar() {
               Create Event
             </button>
 
-            {/* --- NEWSLETTER MANAGER --- */}
+            {/* PRODUCTS */}
+            <button
+              onClick={() => router.push("/admin/products")}
+              className="text-left hover:text-[#5DA865]"
+            >
+              Products
+            </button>
+
+            <button
+              onClick={() => router.push("/admin/products/new")}
+              className="text-left hover:text-[#5DA865]"
+            >
+              Add Product
+            </button>
+
+            {/* MARKETING */}
+            <div className="pt-3 border-t border-[#dcd6cf]">
+              <span className="text-xs uppercase text-gray-500 tracking-wider">
+                Marketing
+              </span>
+
+              <button
+                onClick={() => router.push("/admin/marketing")}
+                className="mt-3 text-left hover:text-[#5DA865]"
+              >
+                Shop Hero Banner
+              </button>
+            </div>
+
+            {/* NEWSLETTER MANAGER */}
             <button
               onClick={() => router.push("/admin/newsletter")}
-              className="text-left hover:text-[#5DA865]"
+              className="text-left hover:text-[#5DA865] mt-5"
             >
               Newsletter Manager
             </button>
@@ -118,7 +146,9 @@ export default function AdminSidebar() {
                 className="rounded-full border object-cover"
               />
               <div className="flex flex-col">
-                <span className="font-medium text-sm">{user.name || "Admin"}</span>
+                <span className="font-medium text-sm">
+                  {user.name || "Admin"}
+                </span>
                 <span className="mt-1 inline-block text-xs bg-red-200 text-red-700 px-2 py-0.5 rounded-full border border-red-300">
                   Admin
                 </span>

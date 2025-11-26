@@ -2,7 +2,6 @@ import {
   pgTable, serial, text, timestamp, boolean, integer, 
   numeric, jsonb, uuid, varchar, pgEnum 
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm/relations";
 
 /* =========================================================
@@ -87,26 +86,64 @@ export const guests = pgTable("guests", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow(),
 });
 
+/* =========================================================
+   PRODUCTS (UPDATED FOR BLIND DATE TYPE)
+========================================================= */
+
 export const products = pgTable("products", {
   id: text().primaryKey(),
+
+  // Core product info
   name: text().notNull(),
   slug: text().notNull(),
   description: text(),
+
   price: numeric({ precision: 10, scale: 2 }).notNull(),
-  imageUrl: text("image_url"),
-  genreId: text("genre_id"),
-  productType: text("product_type").default("physical").notNull(),
+
+  // Images
+  image_url: text("image_url"),
+
+  // Optional book-only relationship
+  genre_id: text("genre_id"),
+
+  /* 
+    Allowed product types:
+      - physical       (general product)
+      - book           (books)
+      - merch          (merch)
+      - coffee         (coffee bags / beans etc)
+      - subscription   (book boxes etc)
+      - blind-date     (wrapped mystery bundles)
+  */
+  product_type: text("product_type").default("physical").notNull(),
+
+  // JSON metadata for flexible attributes
   metadata: jsonb().default({}),
+
+  // Optional book fields
   author: text(),
   format: text(),
   language: text(),
-  stripeProductId: text("stripe_product_id"),
-  stripePriceId: text("stripe_price_id"),
-  inventoryCount: integer("inventory_count").default(0).notNull(),
-  isSubscription: boolean("is_subscription").default(false).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow(),
+
+  // Stripe integration (optional)
+  stripe_product_id: text("stripe_product_id"),
+  stripe_price_id: text("stripe_price_id"),
+
+  // Inventory
+  inventory_count: integer("inventory_count").default(0).notNull(),
+
+  is_subscription: boolean("is_subscription").default(false).notNull(),
+
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .defaultNow(),
 });
+
+
+/* =========================================================
+   ORDERS
+========================================================= */
 
 export const orders = pgTable("orders", {
   id: text().primaryKey(),
@@ -213,7 +250,6 @@ export const voucherRedemptions = pgTable("voucher_redemptions", {
   redeemedAmountPence: integer("redeemed_amount_pence").notNull(),
   note: text(),
   staffUserId: varchar("staff_user_id", { length: 64 }),
-
   redeemedAt: timestamp("redeemed_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 });
 
@@ -224,59 +260,36 @@ export const voucherRedemptions = pgTable("voucher_redemptions", {
 export const events = pgTable("events", {
   id: uuid().defaultRandom().primaryKey().notNull(),
   productId: text("product_id").notNull(),
-
   title: text().notNull(),
   description: text().notNull(),
   subtitle: text(),
   shortDescription: text("short_description"),
-
   date: timestamp({ mode: "string" }).notNull(),
   capacity: integer().notNull(),
   pricePence: integer("price_pence").notNull(),
-
   imageUrl: text("image_url"),
-
-  storeId: uuid("store_id").notNull(),   // ✔ the ONLY location reference
-
+  storeId: uuid("store_id").notNull(),
   published: boolean().default(true).notNull(),
-
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });
 
-
 export const eventBookings = pgTable("event_bookings", {
   id: uuid().defaultRandom().primaryKey(),
-
   eventId: uuid("event_id").notNull(),
   userId: text("user_id").notNull(),
-
   name: text(),
   email: varchar({ length: 255 }),
-
   paid: boolean().default(false).notNull(),
   cancelled: boolean().default(false).notNull(),
-
-  // ⭐ NEW FIELD — user requested a cancellation
-  cancellationRequested: boolean("cancellation_requested")
-    .default(false)
-    .notNull(),
-    refunded: boolean("refunded").default(false).notNull(),
-
-
-  // Required for Stripe reconciliation
+  cancellationRequested: boolean("cancellation_requested").default(false).notNull(),
+  refunded: boolean("refunded").default(false).notNull(),
   stripeCheckoutSessionId: text("stripe_checkout_session_id"),
-stripePaymentIntentId: text("stripe_payment_intent_id"),
-
- stripeRefundId: text("stripe_refund_id"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeRefundId: text("stripe_refund_id"),
   refundProcessedAt: timestamp("refund_processed_at", { mode: "string" }),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 });
-
-
-
 
 /* =========================================================
    RELATIONS
@@ -326,7 +339,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
 export const productsRelations = relations(products, ({ one, many }) => ({
   orderItems: many(orderItems),
   genre: one(genres, {
-    fields: [products.genreId],
+    fields: [products.genre_id],
     references: [genres.id],
   }),
   guestOrderItems: many(guestOrderItems),
@@ -391,8 +404,6 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   eventBookings: many(eventBookings),
 }));
 
-
-
 /* =========================================================
    STORES (Chapters)
 ========================================================= */
@@ -400,12 +411,12 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
 export const stores = pgTable("stores", {
   id: uuid().defaultRandom().primaryKey(),
   name: text().notNull(),
-  code: text().notNull(),                // ✔ exists (text)
-  address: text().notNull(),             // ✔ exists (text)
-  description: text(),                   // ✔ exists (text)
-  imageUrl: text("image_url"),           // ✔ exists (text)
-  chapter: integer().notNull(),          // ✔ exists (integer)
-  published: boolean().default(true).notNull(), // ✔ exists (boolean)
+  code: text().notNull(),
+  address: text().notNull(),
+  description: text(),
+  imageUrl: text("image_url"),
+  chapter: integer().notNull(),
+  published: boolean().default(true).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .defaultNow()
     .notNull(),
@@ -414,15 +425,14 @@ export const stores = pgTable("stores", {
     .notNull(),
 });
 
-
 /* =========================================================
    EVENT CATEGORIES
 ========================================================= */
 
 export const eventCategories = pgTable("event_categories", {
   id: uuid().defaultRandom().primaryKey(),
-  name: text().notNull(),  // e.g. "Poetry Night"
-  slug: text().notNull(),  // e.g. "poetry-night"
+  name: text().notNull(),
+  slug: text().notNull(),
   description: text(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .defaultNow()
@@ -430,7 +440,7 @@ export const eventCategories = pgTable("event_categories", {
 });
 
 /* =========================================================
-   EVENT CATEGORY LINKS (Many-to-many)
+   EVENT CATEGORY LINKS
 ========================================================= */
 
 export const eventCategoryLinks = pgTable("event_category_links", {
@@ -440,16 +450,14 @@ export const eventCategoryLinks = pgTable("event_category_links", {
 });
 
 /* =========================================================
-   FEEDBACK (Customer Feedback via QR)
+   FEEDBACK
 ========================================================= */
 
 export const feedback = pgTable("feedback", {
   id: uuid().defaultRandom().primaryKey(),
-
-  rating: integer("rating").notNull(),      // 1–5
-  message: text("message").notNull(),       // feedback text
-  email: text("email"),                     // optional
-
+  rating: integer("rating").notNull(),
+  message: text("message").notNull(),
+  email: text("email"),
   createdAt: timestamp("created_at", {
     withTimezone: true,
     mode: "string",
@@ -459,23 +467,19 @@ export const feedback = pgTable("feedback", {
 export const newsletterSubscribers = pgTable("newsletter_subscribers", {
   id: uuid().defaultRandom().primaryKey(),
   email: varchar("email", { length: 255 }).notNull(),
-  source: text("source").default("manual"),   // ⭐ ADD THIS
+  source: text("source").default("manual"),
   createdAt: timestamp("created_at", {
     withTimezone: true,
     mode: "string",
   }).defaultNow().notNull(),
 });
 
-
 export const emailBlasts = pgTable("email_blasts", {
   id: uuid().defaultRandom().primaryKey(),
   subject: text().notNull(),
   body: text().notNull(),
   recipientCount: integer("recipient_count").notNull(),
-
-  // ⭐ NEW FIELD
   category: text("category").default("general").notNull(),
-
   createdAt: timestamp("created_at", {
     withTimezone: true,
     mode: "string",
@@ -486,14 +490,35 @@ export const emailBlasts = pgTable("email_blasts", {
 
 export const emailTemplates = pgTable("email_templates", {
   id: uuid().defaultRandom().primaryKey(),
-  name: text().notNull(),        // “June Letter Base”, “Event Promo”, etc
+  name: text().notNull(),
   category: text("category").default("general").notNull(),
   subject: text().notNull(),
-  body: text().notNull(),        // raw HTML body, not wrapped
+  body: text().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .defaultNow()
     .notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
     .defaultNow()
     .notNull(),
+});
+
+export const marketing_blocks = pgTable("marketing_blocks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  key: text("key").notNull(), // e.g. "shop_hero", "blind_date_banner"
+  title: text("title"),
+  subtitle: text("subtitle"),
+  cta_text: text("cta_text"),
+  cta_link: text("cta_link"),
+
+  image_url: text("image_url"),
+
+  visible: boolean("visible").default(true),
+
+  // optional scheduling
+  starts_at: timestamp("starts_at", { mode: "string" }),
+  ends_at: timestamp("ends_at", { mode: "string" }),
+
+  created_at: timestamp("created_at", { mode: "string" }).defaultNow(),
+  updated_at: timestamp("updated_at", { mode: "string" }).defaultNow(),
 });
