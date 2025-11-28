@@ -139,11 +139,6 @@ export async function sendOrderConfirmationEmail({
           View Your Order
         </a>
       </div>
-
-      <!-- FOOTER -->
-      <p style="text-align: center; font-size: 12px; color: #777; margin-top: 40px;">
-        Pages & Peace · 1a West End Lane, Rossington, Doncaster DN11 0PQ · United Kingdom
-      </p>
     </div>
   </div>
 `;
