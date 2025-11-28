@@ -1,11 +1,11 @@
-export const dynamic = "force-dynamic";
+// REMOVE ANY "use client" ‼
+// This file MUST be server-side.
 
 import EditRouter from "@/components/admin/product-editors/EditRouter";
-import { use } from "react";
 
-export default function Page(props: { params: Promise<{ id: string }> }) {
-  // ⛔ params is a promise now — MUST unwrap with use()
-  const { id } = use(props.params);
+export const dynamic = "force-dynamic";
 
-  return <EditRouter id={id} />;
+export default function Page({ params }: { params: { id: string } }) {
+  // Server components CAN read params synchronously
+  return <EditRouter id={params.id} />;
 }

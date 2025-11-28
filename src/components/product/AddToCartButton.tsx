@@ -15,12 +15,15 @@ export default function AddToCartButton({
     name: string;
     price: number;
     imageUrl: string;
+    inventory_count?: number; // IMPORTANT: include stock!
   };
 }) {
   const { addToCart } = useCart();
   const [qty, setQty] = useState(1);
   const [showAuth, setShowAuth] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
+
+  const stock = product.inventory_count ?? 0;
 
   useEffect(() => {
     async function check() {
@@ -36,6 +39,16 @@ export default function AddToCartButton({
   }, []);
 
   function handleAdd() {
+    if (stock <= 0) {
+      alert("Sorry — this item is out of stock.");
+      return;
+    }
+
+    if (qty > stock) {
+      alert(`Only ${stock} left — please reduce quantity.`);
+      return;
+    }
+
     if (!loggedIn) {
       setShowAuth(true);
       return;
@@ -47,20 +60,28 @@ export default function AddToCartButton({
       price: product.price,
       imageUrl: product.imageUrl,
       quantity: qty,
+      inventory_count: stock,
     });
   }
 
   return (
     <>
-      <QuantitySelector qty={qty} setQty={setQty} />
+      <QuantitySelector
+        qty={qty}
+        setQty={(val) => {
+          if (val <= stock) setQty(val);
+        }}
+        max={stock}
+      />
 
       <Button
         variant="primary"
         size="lg"
         className="w-full"
         onClick={handleAdd}
+        disabled={stock <= 0}
       >
-        Add to Basket
+        {stock <= 0 ? "Out of Stock" : "Add to Basket"}
       </Button>
 
       <AuthPromptModal

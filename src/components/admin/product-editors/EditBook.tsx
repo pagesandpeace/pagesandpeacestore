@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
+import StockAdjustModal from "@/components/admin/StockAdjustModal";
 
 /* -------------------------------------------------------
    TYPES
@@ -45,6 +46,8 @@ export default function EditBookPage({ initial }: { initial: BookProduct }) {
 
   const [genres, setGenres] = useState<Genre[]>([]);
   const [loadingGenres, setLoadingGenres] = useState(true);
+
+  const [showStockModal, setShowStockModal] = useState(false);
 
   /* -------------------------------------------------------
      LOAD GENRES
@@ -151,6 +154,7 @@ export default function EditBookPage({ initial }: { initial: BookProduct }) {
       {error && <Alert type="error" message={error} />}
 
       <div className="bg-white p-6 rounded-xl shadow space-y-6">
+
         {/* Name */}
         <div>
           <label className="font-semibold">Name</label>
@@ -277,20 +281,18 @@ export default function EditBookPage({ initial }: { initial: BookProduct }) {
           />
         </div>
 
-        {/* Inventory */}
-        <div>
-          <label className="font-semibold">Inventory Count</label>
-          <input
-            type="number"
-            className="w-full p-2 border rounded"
-            value={form.inventory_count}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                inventory_count: Number(e.target.value),
-              })
-            }
-          />
+        {/* CURRENT INVENTORY + BUTTON */}
+        <div className="border rounded p-4 bg-gray-50">
+          <p className="font-semibold mb-1">Current Inventory</p>
+          <p className="text-xl font-bold">{form.inventory_count}</p>
+
+          <button
+            type="button"
+            onClick={() => setShowStockModal(true)}
+            className="mt-3 px-4 py-2 bg-accent text-white rounded-lg font-semibold"
+          >
+            Adjust Stock
+          </button>
         </div>
 
         {/* Image */}
@@ -313,6 +315,18 @@ export default function EditBookPage({ initial }: { initial: BookProduct }) {
           {saving ? "Saving…" : "Save Book"}
         </Button>
       </div>
+
+      {/* STOCK MODAL */}
+      {showStockModal && (
+        <StockAdjustModal
+          productId={initial.id}
+          currentStock={form.inventory_count}
+          onClose={() => {
+            setShowStockModal(false);
+            window.location.reload();
+          }}
+        />
+      )}
     </main>
   );
 }

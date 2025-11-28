@@ -7,6 +7,9 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
+const LOGO_URL =
+  "https://res.cloudinary.com/dadinnds6/image/upload/v1763726107/Logo_new_update_in_green_no_background_mk3ptz.png";
+
 export default async function SuccessPage(props: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ session_id?: string }>;
@@ -16,10 +19,13 @@ export default async function SuccessPage(props: {
 
   if (!session_id) {
     return (
-      <main className="p-8">
+      <main className="min-h-screen bg-[#FAF6F1] px-6 py-14">
         <h1 className="text-xl font-semibold">Missing checkout session</h1>
-        <p>Your booking was successful but we could not verify your session.</p>
-        <Link href="/dashboard/events" className="underline text-blue-700 mt-4 inline-block">
+        <p>Your booking succeeded but could not be verified.</p>
+        <Link
+          href="/dashboard/events"
+          className="underline text-green-700 mt-4 inline-block"
+        >
           Back to events
         </Link>
       </main>
@@ -34,160 +40,180 @@ export default async function SuccessPage(props: {
     );
   }
 
-  // Wait a moment for webhook
+  // Wait for webhook to insert data
   await new Promise((r) => setTimeout(r, 1200));
 
-  // -------------------------------
-  // CORRECT BOOKING LOOKUP
-  // -------------------------------
-  const booking = (
-    await db
-      .select()
-      .from(eventBookings)
-      .where(eq(eventBookings.stripeCheckoutSessionId, session_id))
-      .limit(1)
-  )[0];
+  // Booking
+  const booking =
+    (
+      await db
+        .select()
+        .from(eventBookings)
+        .where(eq(eventBookings.stripeCheckoutSessionId, session_id))
+        .limit(1)
+    )[0] || null;
 
-  // -------------------------------
-  // CORRECT ORDER LOOKUP
-  // -------------------------------
-  const order = (
-    await db
-      .select()
-      .from(orders)
-      .where(eq(orders.stripeCheckoutSessionId, session_id))
-      .limit(1)
-  )[0];
+  // Order
+  const order =
+    (
+      await db
+        .select()
+        .from(orders)
+        .where(eq(orders.stripeCheckoutSessionId, session_id))
+        .limit(1)
+    )[0] || null;
 
-  // Fetch event
-  const event = (
-    await db.select().from(events).where(eq(events.id, eventId)).limit(1)
-  )[0];
+  // Event
+  const event =
+    (
+      await db
+        .select()
+        .from(events)
+        .where(eq(events.id, eventId))
+        .limit(1)
+    )[0] || null;
 
   return (
     <main className="min-h-screen bg-[#FAF6F1] px-6 py-14">
-      <div className="max-w-2xl mx-auto space-y-10 bg-white border border-[#e7dfd4] p-8 rounded-xl shadow-sm">
 
-        {/* HEADER */}
-        <h1 className="text-3xl font-bold tracking-wide text-center">
-          🎉 Your Booking is Confirmed!
-        </h1>
+      {/* LOGO */}
+      <div className="flex justify-center mb-10">
+        <img
+          src={LOGO_URL}
+          alt="Pages & Peace Logo"
+          className="h-16 opacity-95"
+        />
+      </div>
 
-        <p className="text-center text-neutral-600">
-          You’re all set for <strong>{event?.title}</strong>.
-        </p>
+      {/* CONFIRMATION HEADER */}
+      <div className="text-center max-w-xl mx-auto mb-12">
+        <div className="bg-green-50 border border-green-200 text-green-900 p-5 rounded-lg shadow-sm mb-6">
+          <h1 className="text-2xl font-bold">🎉 Booking Confirmed</h1>
+          <p className="mt-1 text-neutral-700">
+            You’re all set for <strong>{event?.title}</strong>.
+          </p>
+        </div>
+      </div>
 
-        {!booking && (
-          <div className="bg-red-100 text-red-700 p-4 rounded">
-            Booking not found yet. Please wait or refresh.
-          </div>
-        )}
+      {/* SEPARATOR */}
+      <div className="border-t border-[#e7dfd4] max-w-xl mx-auto my-10" />
 
-        {/* BOOKING DETAILS */}
-        {booking && (
-          <section className="space-y-4 border-b pb-6">
-            <h2 className="text-xl font-semibold">Booking Details</h2>
+      {/* BOOKING DETAILS */}
+      {booking && (
+        <section className="max-w-xl mx-auto mb-10 space-y-2 text-neutral-700">
+          <h2 className="text-xl font-semibold text-green-900 mb-2">
+            Booking Details
+          </h2>
 
+          <p>
+            <strong>Booking ID:</strong> {booking.id}
+          </p>
+          <p>
+            <strong>Name:</strong> {booking.name}
+          </p>
+          <p>
+            <strong>Email:</strong> {booking.email}
+          </p>
+          <p>
+            <strong>Status:</strong>{" "}
+            <span className="text-green-700 font-semibold">Confirmed</span>
+          </p>
+        </section>
+      )}
+
+      {/* SEPARATOR */}
+      <div className="border-t border-[#e7dfd4] max-w-xl mx-auto my-10" />
+
+      {/* EVENT INFORMATION */}
+      {event && (
+        <section className="max-w-xl mx-auto mb-10 space-y-2 text-neutral-700">
+          <h2 className="text-xl font-semibold text-green-900 mb-2">
+            Event Information
+          </h2>
+
+          <p>
+            <strong>Event:</strong> {event.title}
+          </p>
+
+          <p>
+            <strong>Date:</strong>{" "}
+            {new Date(event.date).toLocaleString("en-GB", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+
+          <p>
+            <strong>Price:</strong> £{(event.pricePence / 100).toFixed(2)}
+          </p>
+        </section>
+      )}
+
+      {/* SEPARATOR */}
+      <div className="border-t border-[#e7dfd4] max-w-xl mx-auto my-10" />
+
+      {/* PAYMENT SUMMARY */}
+      {order && (
+        <section className="max-w-xl mx-auto mb-10 space-y-2 text-neutral-700">
+          <h2 className="text-xl font-semibold text-green-900 mb-2">
+            Payment Summary
+          </h2>
+
+          <p>
+            <strong>Amount Paid:</strong> £{order.total}
+          </p>
+
+          <p>
+            <strong>Card:</strong>{" "}
+            {order.stripeCardBrand?.toUpperCase()} •••• {order.stripeLast4}
+          </p>
+
+          {order.stripeReceiptUrl && (
             <p>
-              <span className="font-semibold">Booking ID:</span>{" "}
-              {booking.id}
-            </p>
-
-            <p>
-              <span className="font-semibold">Name:</span>{" "}
-              {booking.name}
-            </p>
-
-            <p>
-              <span className="font-semibold">Email:</span>{" "}
-              {booking.email}
-            </p>
-
-            <p>
-              <span className="font-semibold">Status:</span>{" "}
-              <span className="text-green-700 font-bold">Confirmed</span>
-            </p>
-          </section>
-        )}
-
-        {/* EVENT DETAILS */}
-        {event && (
-          <section className="space-y-4 border-b pb-6">
-            <h2 className="text-xl font-semibold">Event Information</h2>
-            <p>
-              <span className="font-semibold">Event:</span> {event.title}
-            </p>
-            <p>
-              <span className="font-semibold">Date:</span>{" "}
-              {new Date(event.date).toLocaleString("en-GB", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-            <p>
-              <span className="font-semibold">Price:</span>{" "}
-              £{(event.pricePence / 100).toFixed(2)}
-            </p>
-          </section>
-        )}
-
-        {/* ORDER DETAILS */}
-        {order && (
-          <section className="space-y-4 border-b pb-6">
-            <h2 className="text-xl font-semibold">Payment Summary</h2>
-
-            <p>
-              <span className="font-semibold">Amount Paid:</span>{" "}
-              £{order.total}
-            </p>
-
-            <p>
-              <span className="font-semibold">Card:</span>{" "}
-              {order.stripeCardBrand?.toUpperCase()} •••• {order.stripeLast4}
-            </p>
-
-            <p>
-              <span className="font-semibold">Receipt:</span>{" "}
               <a
-                href={order.stripeReceiptUrl ?? "#"}
+                href={order.stripeReceiptUrl}
                 target="_blank"
-                className="underline text-blue-700"
+                className="underline text-green-700"
               >
-                View Receipt
+                View Stripe Receipt
               </a>
             </p>
-          </section>
-        )}
-
-        {/* ACTIONS */}
-        <section className="text-center space-y-4">
-          <Link
-            href={`/dashboard/events/${eventId}`}
-            className="text-accent underline text-lg block"
-          >
-            View event details
-          </Link>
-
-          <Link
-            href={`/dashboard/events`}
-            className="underline text-neutral-700 text-sm"
-          >
-            Return to events list
-          </Link>
-
-          <div className="pt-6">
-            <Link
-              href={`/dashboard/events/${eventId}`}
-              className="bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90"
-            >
-              Bring a friend →
-            </Link>
-          </div>
+          )}
         </section>
-      </div>
+      )}
+
+      {/* SEPARATOR */}
+      <div className="border-t border-[#e7dfd4] max-w-xl mx-auto my-10" />
+
+      {/* ACTION BUTTONS */}
+      <section className="max-w-xl mx-auto mt-12 flex flex-col items-center space-y-4">
+
+        <Link
+          href={`/dashboard/events/${eventId}`}
+          className="text-green-800 underline text-lg font-medium"
+        >
+          View event details
+        </Link>
+
+        <Link
+          href="/dashboard/events"
+          className="underline text-neutral-600 text-sm"
+        >
+          Return to events list
+        </Link>
+
+        <Link
+          href={`/dashboard/events/${eventId}`}
+          className="bg-green-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-800 transition mt-4"
+        >
+          Bring a friend →
+        </Link>
+
+      </section>
     </main>
   );
 }

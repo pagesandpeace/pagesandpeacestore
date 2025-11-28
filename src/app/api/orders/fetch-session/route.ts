@@ -21,11 +21,12 @@ export async function GET(req: Request) {
     )[0];
 
     if (!dbOrder) {
-      return NextResponse.json(
-        { error: "Order not found in database" },
-        { status: 404 }
-      );
-    }
+  return NextResponse.json(
+    { order: null, status: "no-order-yet" },
+    { status: 200 }
+  );
+}
+
 
     // 2. Load order items + join products
     const items = await db

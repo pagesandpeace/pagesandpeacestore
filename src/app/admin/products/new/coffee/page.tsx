@@ -78,6 +78,7 @@ export default function CreateCoffeeProductPage() {
       if (!res.ok) throw new Error("Save failed");
 
       router.push("/admin/products");
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (err) {
       setError("Failed to save product");
     } finally {

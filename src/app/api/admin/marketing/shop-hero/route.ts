@@ -1,16 +1,42 @@
 import { db } from "@/lib/db";
 import { marketing_blocks } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";              // ✔ you were missing sql
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const [block] = await db
-    .select()
-    .from(marketing_blocks)
-    .where(eq(marketing_blocks.key, "shop_hero"))
-    .limit(1);
+  try {
+    const rows = await db
+      .select()
+      .from(marketing_blocks)
+      .where(eq(marketing_blocks.key, "shop_hero"))
+      .limit(1);
 
-  return NextResponse.json(block);
+    const block = rows[0];
+
+    // ❗ Always return valid JSON
+    if (!block) {
+      return NextResponse.json({
+        id: null,
+        key: "shop_hero",
+        title: "",
+        subtitle: "",
+        cta_text: "",
+        cta_link: "",
+        image_url: null,
+        visible: false,
+        starts_at: null,
+        ends_at: null,
+      });
+    }
+
+    return NextResponse.json(block);
+  } catch (err) {
+    console.error("SHOP HERO GET ERROR:", err);
+    return NextResponse.json(
+      { error: "Failed to load hero banner" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function PATCH(req: Request) {

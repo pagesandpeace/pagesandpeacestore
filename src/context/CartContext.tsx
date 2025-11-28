@@ -19,6 +19,9 @@ export type CartItem = {
   imageUrl?: string | null;
   quantity: number;
 
+  // 🔥 NEW: Track inventory for out-of-stock logic
+  inventory_count: number;
+
   // 🔥 Supports blind-date metadata
   metadata?: {
     genreSelected?: string;
@@ -51,13 +54,16 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // Load from storage
+  /* -----------------------------
+     LOAD FROM STORAGE
+  ----------------------------- */
   useEffect(() => {
     try {
       const stored =
         typeof window !== "undefined"
           ? window.localStorage.getItem("cart")
           : null;
+
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
@@ -69,7 +75,9 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, []);
 
-  // Save to storage
+  /* -----------------------------
+     SAVE TO STORAGE
+  ----------------------------- */
   useEffect(() => {
     try {
       if (typeof window !== "undefined") {
@@ -81,43 +89,74 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   }, [cart]);
 
   /* -----------------------------
-     ADD TO CART
+     ADD TO CART (WITH STOCK LOGIC)
   ----------------------------- */
   const addToCart = (item: CartItem) => {
     setCart((prev) => {
       const existing = prev.find((p) => p.id === item.id);
 
+      // Item already in cart
       if (existing) {
-        // Merge metadata if blind-date
+        const newQty = existing.quantity + item.quantity;
+
+        if (newQty > existing.inventory_count) {
+          alert(`Only ${existing.inventory_count} in stock.`);
+          return prev;
+        }
+
         return prev.map((p) =>
           p.id === item.id
             ? {
                 ...p,
-                quantity: p.quantity + item.quantity,
+                quantity: newQty,
                 metadata: item.metadata ?? p.metadata,
               }
             : p
         );
       }
 
+      // Adding new item to cart
+      if (item.quantity > item.inventory_count) {
+        alert(`Only ${item.inventory_count} in stock.`);
+        return prev;
+      }
+
       return [...prev, item];
     });
   };
 
+  /* -----------------------------
+     REMOVE FROM CART
+  ----------------------------- */
   const removeFromCart = (id: string) => {
     setCart((prev) => prev.filter((item) => item.id !== id));
   };
 
+  /* -----------------------------
+     UPDATE QUANTITY (WITH STOCK CHECK)
+  ----------------------------- */
   const updateQuantity = (id: string, quantity: number) => {
     setCart((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? { ...item, quantity: quantity < 1 ? 1 : quantity }
-          : item
-      )
+      prev.map((item) => {
+        if (item.id === id) {
+          if (quantity > item.inventory_count) {
+            alert(`Only ${item.inventory_count} available.`);
+            return item;
+          }
+
+          return {
+            ...item,
+            quantity: quantity < 1 ? 1 : quantity,
+          };
+        }
+        return item;
+      })
     );
   };
 
+  /* -----------------------------
+     CLEAR CART
+  ----------------------------- */
   const clearCart = () => {
     setCart([]);
     try {
@@ -125,8 +164,12 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     } catch {}
   };
 
+  /* -----------------------------
+     CALCULATE TOTALS
+  ----------------------------- */
   const total = useMemo(
-    () => cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
+    () =>
+      cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
     [cart]
   );
 

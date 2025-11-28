@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
+import StockAdjustModal from "@/components/admin/StockAdjustModal";
 
 /* -------------------------------------------------------
    TYPES
@@ -38,6 +39,8 @@ export default function EditCoffeePage({ initial }: { initial: CoffeeProduct }) 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [showStockModal, setShowStockModal] = useState(false);
 
   /* -------------------------------------------------------
      FORM STATE
@@ -80,7 +83,6 @@ export default function EditCoffeePage({ initial }: { initial: CoffeeProduct }) 
 
     const fd = new FormData();
     fd.append("file", file);
-
     setUploading(true);
 
     try {
@@ -111,7 +113,6 @@ export default function EditCoffeePage({ initial }: { initial: CoffeeProduct }) 
       });
 
       if (!res.ok) throw new Error(await res.text());
-
       window.location.href = "/admin/products";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -250,10 +251,27 @@ export default function EditCoffeePage({ initial }: { initial: CoffeeProduct }) 
             onChange={(e) =>
               setForm({
                 ...form,
-                metadata: { ...form.metadata, tasting_notes: e.target.value },
+                metadata: {
+                  ...form.metadata,
+                  tasting_notes: e.target.value,
+                },
               })
             }
           />
+        </div>
+
+        {/* CURRENT INVENTORY (NO DIRECT EDIT) */}
+        <div className="border rounded p-4 bg-gray-50">
+          <p className="font-semibold mb-1">Current Inventory</p>
+          <p className="text-xl font-bold">{form.inventory_count}</p>
+
+          <button
+            type="button"
+            onClick={() => setShowStockModal(true)}
+            className="mt-3 px-4 py-2 bg-accent text-white rounded-lg font-semibold"
+          >
+            Adjust Stock
+          </button>
         </div>
 
         {/* IMAGE */}
@@ -280,8 +298,19 @@ export default function EditCoffeePage({ initial }: { initial: CoffeeProduct }) 
             {saving ? "Saving…" : "Save Coffee"}
           </Button>
         </div>
-
       </div>
+
+      {/* STOCK MODAL */}
+      {showStockModal && (
+        <StockAdjustModal
+          productId={initial.id}
+          currentStock={form.inventory_count}
+          onClose={() => {
+            setShowStockModal(false);
+            window.location.reload();
+          }}
+        />
+      )}
     </main>
   );
 }

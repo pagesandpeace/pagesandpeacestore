@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 
 /* ------------------------------------------------------
-   METADATA TYPES (no any)
+   METADATA TYPES
 ------------------------------------------------------ */
 export interface BlindDateMetadata {
   theme?: string;
@@ -14,11 +15,10 @@ export interface BlindDateMetadata {
 }
 
 export type GeneralMetadata = Record<string, string | number | boolean | null>;
-
 export type ProductMetadata = BlindDateMetadata | GeneralMetadata | null;
 
 /* ------------------------------------------------------
-   PRODUCT TYPE
+   PRODUCT TYPE — now includes inventory_count
 ------------------------------------------------------ */
 export type Product = {
   id: string;
@@ -28,15 +28,14 @@ export type Product = {
   image_url?: string | null;
   product_type?: string;
   metadata?: ProductMetadata;
+  inventory_count?: number;
 };
 
-/* ------------------------------------------------------
-   COMPONENT
------------------------------------------------------- */
 export default function ProductCard({ product }: { product: Product }) {
   const isBlindDate = product.product_type === "blind-date";
+  const stock = product.inventory_count ?? 0;
+  const outOfStock = stock <= 0;
 
-  // Narrow metadata safely
   const meta = (product.metadata ?? {}) as BlindDateMetadata;
 
   const theme = meta.theme ?? null;
@@ -53,24 +52,34 @@ export default function ProductCard({ product }: { product: Product }) {
         bg-white border border-(--accent)/10 rounded-2xl 
         shadow-sm hover:shadow-md transition-all duration-200 
         overflow-hidden flex flex-col w-full max-w-sm mx-auto
+        relative
       "
     >
       {/* IMAGE */}
-      <Link href={href} className="relative w-full h-64 block">
-        <Image
-          src={product.image_url || "/coming_soon.svg"}
-          alt={product.name}
-          fill
-          className="object-cover"
-        />
+      <div className="relative w-full h-64">
+        <Link href={href} className="block w-full h-full">
+          <Image
+            src={product.image_url || "/coming_soon.svg"}
+            alt={product.name}
+            fill
+            className={`object-cover ${outOfStock ? "opacity-60" : ""}`}
+          />
+        </Link>
 
         {/* BLIND-DATE BADGE */}
         {isBlindDate && (
-          <div className="absolute top-2 left-2 bg-(--accent)/80 backdrop-blur text-white px-3 py-1 rounded-md text-xs font-semibold">
-            Blind Date Book
+          <div className="absolute top-2 left-2">
+            <Badge color="purple">Blind Date Book</Badge>
           </div>
         )}
-      </Link>
+
+        {/* ⭐️ OUT OF STOCK BADGE */}
+        {outOfStock && (
+          <div className="absolute top-2 right-2">
+            <Badge color="red">Out of Stock</Badge>
+          </div>
+        )}
+      </div>
 
       {/* CONTENT */}
       <div className="p-6 flex flex-col grow text-center gap-3">
@@ -78,6 +87,7 @@ export default function ProductCard({ product }: { product: Product }) {
           {product.name}
         </h3>
 
+        {/* BLIND DATE DETAILS */}
         {isBlindDate && (
           <div className="text-sm text-foreground/70 space-y-1">
             {theme && <p><strong>Theme:</strong> {theme}</p>}
@@ -95,13 +105,27 @@ export default function ProductCard({ product }: { product: Product }) {
           </div>
         )}
 
-        <p className="text-accent font-semibold text-lg">
+        {/* PRICE */}
+        <p
+          className={`text-lg font-semibold ${
+            outOfStock
+              ? "text-red-700 line-through opacity-70"
+              : "text-accent"
+          }`}
+        >
           £{Number(product.price).toFixed(2)}
         </p>
 
         {/* CTA */}
-        <Button variant="outline" size="md" className="w-full mt-4">
-          <Link href={href}>View Details →</Link>
+        <Button
+          variant={outOfStock ? "outline" : "primary"}
+          size="md"
+          className="w-full mt-4"
+          disabled={outOfStock}
+        >
+          <Link href={href} className="w-full block">
+            {outOfStock ? "Out of Stock" : "View Details →"}
+          </Link>
         </Button>
       </div>
     </div>

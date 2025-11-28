@@ -75,7 +75,7 @@ function normalise(raw: RawProduct): RawProduct {
 }
 
 /* -------------------------------------------------------
-   TYPE GUARDS (ZERO ANY)
+   TYPE GUARDS
 ------------------------------------------------------- */
 function isBlindDateMetadata(m: unknown): m is BlindDateMetadata {
   return typeof m === "object" && m !== null;

@@ -13,13 +13,15 @@ export default function BuyNowButton({
     name: string;
     price: number;
     imageUrl: string;
+    inventory_count?: number; // 🔥 STOCK INCLUDED
   };
 }) {
   const [showAuth, setShowAuth] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Re-check login status when auth updates,
-  // but we don't store the value — Buy Now always checks fresh.
+  const stock = product.inventory_count ?? 0;
+
+  // Re-check login when auth state changes
   useEffect(() => {
     function recheck() {
       fetch("/api/me", { cache: "no-store" }).catch(() => {});
@@ -30,9 +32,14 @@ export default function BuyNowButton({
   }, []);
 
   async function handleBuyNow() {
+    if (stock <= 0) {
+      alert("Sorry — this item is currently out of stock.");
+      return;
+    }
+
     setLoading(true);
 
-    // Always verify login at click time
+    // Verify login
     const res = await fetch("/api/me", { cache: "no-store" });
     const me = await res.json();
 
@@ -42,7 +49,7 @@ export default function BuyNowButton({
       return;
     }
 
-    // Logged in → begin checkout
+    // Logged in → create checkout session for ONLY 1 item
     const checkoutRes = await fetch("/api/checkout", {
       method: "POST",
       credentials: "include",
@@ -78,9 +85,9 @@ export default function BuyNowButton({
         size="lg"
         className="w-full"
         onClick={handleBuyNow}
-        disabled={loading}
+        disabled={loading || stock <= 0}
       >
-        {loading ? "Processing…" : "Buy Now"}
+        {stock <= 0 ? "Out of Stock" : loading ? "Processing…" : "Buy Now"}
       </Button>
 
       <AuthPromptModal

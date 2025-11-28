@@ -9,15 +9,20 @@ import {
   users,
   feedback,
   newsletterSubscribers,
+  products,
 } from "@/lib/db/schema";
 
 import { getCurrentUserServer } from "@/lib/auth/actions";
 import { redirect } from "next/navigation";
 
 import DashboardKpiCards from "@/components/admin/dashboard/DashboardKpiCards";
+import LowStockWidget from "@/components/admin/dashboard/LowStockWidget";
+import CollapsibleSection from "@/components/admin/dashboard/CollapsibleSection";
+import ChartWrapper from "@/components/admin/dashboard/ChartWrapper";
 import RevenueChart from "@/components/admin/dashboard/RevenueChart";
 import BookingsChart from "@/components/admin/dashboard/BookingsChart";
 import UserSignupChart from "@/components/admin/dashboard/UserSignupChart";
+
 
 import { eq, sql } from "drizzle-orm";
 
@@ -93,7 +98,7 @@ export default async function AdminDashboardPage() {
     .orderBy(sql`MIN(${eventBookings.createdAt})`);
 
   /* ------------------------------------------------------
-     6. MONTHLY USER SIGNUPS
+     6. MONTHLY SIGNUPS
   ------------------------------------------------------ */
   const monthlySignups = await db
     .select({
@@ -110,7 +115,7 @@ export default async function AdminDashboardPage() {
   const totalSignups = (await db.select().from(users)).length;
 
   /* ------------------------------------------------------
-     8. FEEDBACK (COUNT & AVERAGE RATING)
+     8. FEEDBACK
   ------------------------------------------------------ */
   const feedbackRows = await db.select().from(feedback);
 
@@ -125,11 +130,29 @@ export default async function AdminDashboardPage() {
   const totalFeedback = feedbackRows.length;
 
   /* ------------------------------------------------------
-     9. EMAIL SUBSCRIBERS (Beehiiv via our table)
+     9. EMAIL SUBSCRIBERS
   ------------------------------------------------------ */
   const totalEmailSubscribers = (
     await db.select().from(newsletterSubscribers)
   ).length;
+
+  /* ------------------------------------------------------
+     10. LOW STOCK PRODUCTS
+  ------------------------------------------------------ */
+  const LOW_STOCK_THRESHOLD = 5;
+
+  const lowStockProducts = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      product_type: products.product_type,
+      inventory_count: products.inventory_count,
+      image_url: products.image_url,
+      slug: products.slug,
+    })
+    .from(products)
+    .where(sql`${products.inventory_count} <= ${LOW_STOCK_THRESHOLD}`)
+    .orderBy(products.inventory_count);
 
   /* ------------------------------------------------------
      RENDER PAGE
@@ -138,6 +161,7 @@ export default async function AdminDashboardPage() {
     <div className="space-y-10 max-w-6xl mx-auto py-10">
       <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
 
+      {/* KPI CARDS */}
       <DashboardKpiCards
         totalRevenue={totalRevenue}
         totalEvents={totalEvents}
@@ -149,11 +173,28 @@ export default async function AdminDashboardPage() {
         totalEmailSubscribers={totalEmailSubscribers}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <RevenueChart data={monthlyRevenue} />
-        <BookingsChart data={monthlyBookings} />
-        <UserSignupChart data={monthlySignups} />
-      </div>
+      {/* LOW STOCK */}
+      <LowStockWidget items={lowStockProducts} />
+
+      {/* COLLAPSIBLE CHARTS */}
+      <CollapsibleSection title="Revenue">
+  <ChartWrapper>
+    <RevenueChart data={monthlyRevenue} />
+  </ChartWrapper>
+</CollapsibleSection>
+
+<CollapsibleSection title="Bookings">
+  <ChartWrapper>
+    <BookingsChart data={monthlyBookings} />
+  </ChartWrapper>
+</CollapsibleSection>
+
+<CollapsibleSection title="User Signups">
+  <ChartWrapper>
+    <UserSignupChart data={monthlySignups} />
+  </ChartWrapper>
+</CollapsibleSection>
+
     </div>
   );
 }

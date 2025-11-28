@@ -8,17 +8,22 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 export default defineConfig({
   dialect: "postgresql",
 
-  // required in your drizzle version
   schema: "./src/lib/db/schema/index.ts",
+
+  dbCredentials: {
+    url: process.env.DIRECT_URL ?? process.env.DATABASE_URL!,
+  },
+
+  out: "./drizzle",
+
+  strict: false,
 
   introspect: {
     casing: "preserve",
   },
 
-  dbCredentials: {
-    url: process.env.DATABASE_URL!,
+  migrations: {
+    table: "drizzle_migrations",
+    prefix: "timestamp",
   },
-
-  out: "./drizzle",
-  strict: true,
 });

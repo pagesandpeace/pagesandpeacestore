@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
+import StockAdjustModal from "@/components/admin/StockAdjustModal";
 
 /* -------------------------------------------------------
    TYPES
@@ -33,6 +34,8 @@ export default function EditGeneralPage({ initial }: { initial: GeneralProduct }
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [showStockModal, setShowStockModal] = useState(false);
 
   const [form, setForm] = useState({
     name: initial.name,
@@ -166,17 +169,18 @@ export default function EditGeneralPage({ initial }: { initial: GeneralProduct }
           />
         </div>
 
-        {/* INVENTORY */}
-        <div>
-          <label className="font-semibold mb-2 block">Inventory</label>
-          <input
-            type="number"
-            className="w-full p-2 border rounded"
-            value={form.inventory_count}
-            onChange={(e) =>
-              setForm({ ...form, inventory_count: Number(e.target.value) })
-            }
-          />
+        {/* INVENTORY (DISPLAY ONLY) */}
+        <div className="border rounded p-4 bg-gray-50">
+          <p className="font-semibold mb-1">Current Inventory</p>
+          <p className="text-xl font-bold">{form.inventory_count}</p>
+
+          <button
+            type="button"
+            onClick={() => setShowStockModal(true)}
+            className="mt-3 px-4 py-2 bg-accent text-white rounded-lg font-semibold"
+          >
+            Adjust Stock
+          </button>
         </div>
 
         {/* IMAGE */}
@@ -205,6 +209,18 @@ export default function EditGeneralPage({ initial }: { initial: GeneralProduct }
           {saving ? "Saving…" : "Save Product"}
         </Button>
       </div>
+
+      {/* STOCK MODAL */}
+      {showStockModal && (
+        <StockAdjustModal
+          productId={initial.id}
+          currentStock={form.inventory_count}
+          onClose={() => {
+            setShowStockModal(false);
+            window.location.reload();
+          }}
+        />
+      )}
     </main>
   );
 }

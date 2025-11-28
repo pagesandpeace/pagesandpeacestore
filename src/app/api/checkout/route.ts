@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { products } from "@/lib/db/schema";
+import { inArray } from "drizzle-orm";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
@@ -9,7 +12,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
 type CheckoutItem = {
   productId: string;
   name: string;
-  price: number;
+  price: number;      // price in POUNDS
   quantity: number;
   imageUrl?: string;
 };
@@ -22,10 +25,11 @@ export async function POST(req: Request) {
   try {
     let body: CheckoutBody | null = null;
 
-    // Handle JSON or multipart form
+    // Try JSON
     try {
       body = (await req.json()) as CheckoutBody;
     } catch {
+      // Fallback for multipart
       const form = await req.formData();
       const raw = form.get("items");
       if (typeof raw === "string") {
@@ -37,7 +41,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No items provided." }, { status: 400 });
     }
 
-    // AUTH CHECK
+    /* ============================================================
+       AUTH
+    ============================================================ */
     const reqHeaders = Object.fromEntries(req.headers.entries());
     const session = await auth.api.getSession({ headers: reqHeaders });
     const user = session?.user ?? null;
@@ -52,7 +58,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // BASE URL
+    /* ============================================================
+       BASE URL
+    ============================================================ */
     let baseUrl =
       process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
       process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
@@ -62,7 +70,58 @@ export async function POST(req: Request) {
       baseUrl = `https://${baseUrl}`;
     }
 
-    // STRIPE LINE ITEMS
+    /* ============================================================
+       1. STOCK VALIDATION (SERVER TRUTH)
+       Prevents overselling & race conditions
+    ============================================================ */
+
+    const productIds = body.items.map((i) => i.productId);
+
+    const stockRows = await db
+      .select({
+        id: products.id,
+        inventory: products.inventory_count,
+        name: products.name,
+      })
+      .from(products)
+      .where(inArray(products.id, productIds));
+
+    const stockMap: Record<string, { inventory: number; name: string }> = {};
+    for (const row of stockRows) {
+      stockMap[row.id] = { inventory: row.inventory, name: row.name };
+    }
+
+    for (const item of body.items) {
+      const stock = stockMap[item.productId]?.inventory ?? 0;
+      const name = stockMap[item.productId]?.name ?? item.name;
+
+      if (stock <= 0) {
+        return NextResponse.json(
+          {
+            error: `Sorry, "${name}" is now out of stock.`,
+            code: "OUT_OF_STOCK",
+            productId: item.productId,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (item.quantity > stock) {
+        return NextResponse.json(
+          {
+            error: `Only ${stock} left for "${name}". Please reduce quantity.`,
+            code: "INSUFFICIENT_STOCK",
+            productId: item.productId,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    /* ============================================================
+       2. STRIPE LINE ITEMS
+    ============================================================ */
+
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
       body.items.map((item) => {
         const safeImage =
@@ -83,7 +142,21 @@ export async function POST(req: Request) {
         };
       });
 
-    // CREATE STRIPE CHECKOUT SESSION (INLINE PRICE DATA)
+    /* ============================================================
+       3. STRIPE-SAFE METADATA
+    ============================================================ */
+
+    const metadataString = body.items
+      .map((i) => {
+        const pricePence = Math.round(i.price * 100);
+        return `${i.productId}|${i.name}|${i.quantity}|${pricePence}`;
+      })
+      .join(",");
+
+    /* ============================================================
+       4. CREATE CHECKOUT SESSION
+    ============================================================ */
+
     const stripeSession = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -94,24 +167,18 @@ export async function POST(req: Request) {
       cancel_url: `${baseUrl}/cart`,
 
       metadata: {
-        kind: "product", // REQUIRED FOR WEBHOOK MATCH
+        kind: "product",
         userId: user.id,
-        items: JSON.stringify(
-          body.items.map((i) => ({
-            productId: i.productId,
-            quantity: i.quantity,
-            price: i.price,
-          }))
-        ),
+        items: metadataString,
       },
     });
 
     return NextResponse.json({ url: stripeSession.url });
-  } catch (_err) {
-  console.error("❌ Checkout error:", _err);
-  return NextResponse.json(
-    { error: "Server error", detail: String(_err) },
-    { status: 500 }
+  } catch (err) {
+    console.error("❌ Checkout error:", err);
+    return NextResponse.json(
+      { error: "Server error", detail: String(err) },
+      { status: 500 }
     );
   }
 }

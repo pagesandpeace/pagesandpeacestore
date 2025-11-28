@@ -1,6 +1,7 @@
 /* ===========================================================
    FINAL MERGED STRIPE WEBHOOK
-   VOUCHERS + EVENTS + PRODUCT ORDERS (INLINE PRICE_DATA)
+   VOUCHERS + EVENTS + PRODUCT ORDERS
+   WITH FULL INVENTORY REDUCTION (SAFE)
 =========================================================== */
 
 import { NextResponse } from "next/server";
@@ -13,31 +14,27 @@ import {
   events,
   eventBookings,
   stores,
+  products,
 } from "@/lib/db/schema";
 import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { sendVoucherEmails } from "@/lib/email/vouchers";
-import { Resend } from "resend";
+import { sendOrderConfirmationEmail } from "@/lib/email/sendOrderConfirmationEmail";
+import { sendEventConfirmationEmail } from "@/lib/email/sendEventConfirmationEmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
 });
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.NODE_ENV === "production"
-    ? "https://pagesandpeace.co.uk"
-    : "http://localhost:3000");
-
 /* -------------------------------------------------------
-   RAW BODY READER (required by Stripe)
+   RAW BODY READER (Stripe-required)
 ------------------------------------------------------- */
 async function readRawBody(stream: ReadableStream | null): Promise<Buffer> {
   if (!stream) return Buffer.alloc(0);
+
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
 
@@ -46,6 +43,7 @@ async function readRawBody(stream: ReadableStream | null): Promise<Buffer> {
     if (done) break;
     if (value) chunks.push(value);
   }
+
   return Buffer.concat(chunks);
 }
 
@@ -75,7 +73,7 @@ function asDelivery(x: string | null | undefined): Delivery {
 }
 
 /* -------------------------------------------------------
-   MAIN WEBHOOK HANDLER
+   WEBHOOK HANDLER
 ------------------------------------------------------- */
 export async function POST(req: Request) {
   const signature = req.headers.get("stripe-signature");
@@ -100,14 +98,14 @@ export async function POST(req: Request) {
     );
   }
 
-  // Process only completed checkout sessions
   if (stripeEvent.type !== "checkout.session.completed") {
     return NextResponse.json({ received: true });
   }
 
   const session = stripeEvent.data.object as Stripe.Checkout.Session;
   const md = session.metadata ?? {};
-  const amountPaid = (session.amount_total ?? 0) / 100;
+  const amountPaidPence = session.amount_total ?? 0;
+  const amountPaid = amountPaidPence / 100;
 
   /* ============================================================
      FLOW 1 — VOUCHERS
@@ -132,8 +130,8 @@ export async function POST(req: Request) {
 
         await db.insert(vouchers).values({
           code,
-          amountInitialPence: session.amount_total ?? 0,
-          amountRemainingPence: session.amount_total ?? 0,
+          amountInitialPence: amountPaidPence,
+          amountRemainingPence: amountPaidPence,
           currency: session.currency ?? "gbp",
           status: "active",
           buyerEmail,
@@ -155,9 +153,9 @@ export async function POST(req: Request) {
           fromName: md.fromName || null,
           message: md.message || null,
           code,
-          amountPence: session.amount_total ?? 0,
+          amountPence: amountPaidPence,
           currency: session.currency ?? "gbp",
-          voucherUrl: `${SITE_URL}/vouchers/${code}`,
+          voucherUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/vouchers/${code}`,
           sendDateISO: md.sendDate || null,
         });
       }
@@ -170,21 +168,19 @@ export async function POST(req: Request) {
   }
 
   /* ============================================================
-     FLOW 2 — EVENTS 
+     FLOW 2 — EVENTS
   ============================================================ */
   if (md.kind === "event") {
     try {
       const { eventId, userId, bookingId } = md;
-      if (!eventId || !userId || !bookingId) {
+      if (!eventId || !userId || !bookingId)
         return NextResponse.json({ received: true });
-      }
 
       const paymentIntentId =
         typeof session.payment_intent === "string"
           ? session.payment_intent
           : null;
 
-      // Insert booking
       const [booking] = await db
         .insert(eventBookings)
         .values({
@@ -194,7 +190,9 @@ export async function POST(req: Request) {
           paid: true,
           cancelled: false,
           email:
-            session.customer_details?.email || session.customer_email || null,
+            session.customer_details?.email ||
+            session.customer_email ||
+            null,
           name: session.customer_details?.name || null,
           stripeCheckoutSessionId: session.id,
           stripePaymentIntentId: paymentIntentId,
@@ -206,7 +204,6 @@ export async function POST(req: Request) {
         .from(events)
         .where(eq(events.id, eventId))
         .limit(1);
-
       if (!ev) return NextResponse.json({ received: true });
 
       const [store] = await db
@@ -215,13 +212,10 @@ export async function POST(req: Request) {
         .where(eq(stores.id, ev.storeId))
         .limit(1);
 
-      const storeAddress = store?.address ?? "Pages & Peace Bookshop";
-
-      // Stripe receipt
       let receiptUrl: string | null = null;
       let cardBrand: string | null = null;
       let last4: string | null = null;
-      let paidAt: string | null = null;
+      let paidAtISO: string | null = null;
 
       if (paymentIntentId) {
         const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
@@ -232,12 +226,11 @@ export async function POST(req: Request) {
         receiptUrl = charge?.receipt_url ?? null;
         cardBrand = charge?.payment_method_details?.card?.brand ?? null;
         last4 = charge?.payment_method_details?.card?.last4 ?? null;
-        paidAt = charge?.created
+        paidAtISO = charge?.created
           ? new Date(charge.created * 1000).toISOString()
           : null;
       }
 
-      // Create ORDER
       const orderId = uuidv4();
 
       await db.insert(orders).values({
@@ -250,10 +243,10 @@ export async function POST(req: Request) {
         stripeReceiptUrl: receiptUrl,
         stripeCardBrand: cardBrand,
         stripeLast4: last4,
-        paidAt,
+        paidAt: paidAtISO,
+        createdAt: new Date().toISOString(),
       });
 
-      // Order item
       await db.insert(orderItems).values({
         id: uuidv4(),
         orderId,
@@ -262,32 +255,30 @@ export async function POST(req: Request) {
         price: String(amountPaid),
       });
 
-      // Confirmation email
-      const eventDate = new Date(ev.date).toLocaleString("en-GB", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      await resend.emails.send({
-        from: "Pages & Peace <noreply@pagesandpeace.co.uk>",
-        to:
-          booking.email ||
-          session.customer_details?.email ||
-          "",
-        subject: `Your Booking: ${ev.title}`,
-        html: `
-          <div style="font-family: Arial; line-height: 1.6;">
-            <h2>Your Pages & Peace Event Booking is Confirmed 📚</h2>
-            <h3>${ev.title}</h3>
-            <p><strong>Date & Time:</strong> ${eventDate}</p>
-            <p><strong>Location:</strong> ${storeAddress}</p>
-            <p><strong>Booking ID:</strong> ${booking.id}</p>
-          </div>
-        `,
+      await sendEventConfirmationEmail({
+        to: booking.email!,
+        event: {
+          id: ev.id,
+          title: ev.title,
+          date: ev.date,
+          storeName: store?.name ?? "Pages & Peace",
+          storeAddress: store?.address ?? "Address unavailable",
+          storeChapter: store?.chapter ?? null,
+          imageUrl: ev.imageUrl,
+        },
+        booking: {
+          id: booking.id,
+          name: booking.name,
+          email: booking.email,
+        },
+        order: {
+          id: orderId,
+          paidAt: paidAtISO,
+          amount: String(amountPaid),
+          receiptUrl,
+          cardBrand,
+          last4,
+        },
       });
 
       return NextResponse.json({ received: true });
@@ -298,43 +289,65 @@ export async function POST(req: Request) {
   }
 
   /* ============================================================
-     FLOW 3 — PHYSICAL PRODUCTS
-     Using INLINE price_data (NO Stripe Products)
-  ============================================================ */
-  if (md.kind === "product") {
+   FLOW 3 — PRODUCT ORDERS (WITH INVENTORY UPDATE)
+   FIX: ensure product flow triggers even if Stripe strips 'kind'
+============================================================ */
+if (
+  md.kind === "product" ||
+  (typeof md.items === "string" && md.items.includes("|"))
+) {
+
     try {
-      console.log("🛒 Processing PRODUCT ORDER");
-
       const userId = md.userId;
-      const items = JSON.parse(md.items || "[]");
+      const raw = md.items;
 
-      if (!userId || !Array.isArray(items)) {
-        console.warn("❌ Invalid metadata");
+      if (!userId || !raw || typeof raw !== "string") {
         return NextResponse.json({ received: true });
       }
+
+      /* -------------------------------------------------------
+         PARSE SAFE METADATA FORMAT:
+         "p123|Book Name|1|999,e456|Tote Bag|2|1000"
+      ------------------------------------------------------- */
+      const items = raw
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => {
+          const [productId, name, qtyStr, priceStr] = entry.split("|");
+          return {
+            productId,
+            name,
+            quantity: Number(qtyStr),
+            pricePence: Number(priceStr),
+          };
+        });
 
       const paymentIntentId =
         typeof session.payment_intent === "string"
           ? session.payment_intent
           : null;
 
-      // Stripe receipt
-      const pi = paymentIntentId
-        ? await stripe.paymentIntents.retrieve(paymentIntentId, {
-            expand: ["latest_charge"],
-          })
-        : null;
+      let pi: Stripe.PaymentIntent | null = null;
+
+      if (paymentIntentId) {
+        pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+          expand: ["latest_charge"],
+        });
+      }
 
       const charge = pi?.latest_charge as Stripe.Charge | null;
 
       const receiptUrl = charge?.receipt_url ?? null;
       const cardBrand = charge?.payment_method_details?.card?.brand ?? null;
       const last4 = charge?.payment_method_details?.card?.last4 ?? null;
-      const paidAt = charge?.created
+      const paidAtISO = charge?.created
         ? new Date(charge.created * 1000).toISOString()
         : null;
 
-      // Prevent duplicate
+      /* -------------------------------------------------------
+         IDEMPOTENCY — DO NOT CREATE ORDER TWICE
+      ------------------------------------------------------- */
       const existing = await db
         .select({ id: orders.id })
         .from(orders)
@@ -342,13 +355,15 @@ export async function POST(req: Request) {
         .limit(1);
 
       if (existing.length) {
-        console.log("⏭ Order already exists");
         return NextResponse.json({ received: true });
       }
 
-      // FIX: Create proper UUID order ID
       const orderId = uuidv4();
+      const createdAtISO = new Date().toISOString();
 
+      /* -------------------------------------------------------
+         CREATE ORDER
+      ------------------------------------------------------- */
       await db.insert(orders).values({
         id: orderId,
         userId,
@@ -359,20 +374,63 @@ export async function POST(req: Request) {
         stripeReceiptUrl: receiptUrl,
         stripeCardBrand: cardBrand,
         stripeLast4: last4,
-        paidAt,
+        paidAt: paidAtISO,
+        createdAt: createdAtISO,
       });
 
+      const formattedEmailItems = [];
+
+      /* -------------------------------------------------------
+         INSERT ORDER ITEMS + REDUCE INVENTORY
+      ------------------------------------------------------- */
       for (const item of items) {
         await db.insert(orderItems).values({
           id: uuidv4(),
           orderId,
           productId: item.productId,
           quantity: item.quantity,
-          price: String(item.price),
+          price: (item.pricePence / 100).toString(),
+        });
+
+        /* ----- NEW: Reduce Inventory ----- */
+        const [product] = await db
+          .select()
+          .from(products)
+          .where(eq(products.id, item.productId))
+          .limit(1);
+
+        if (product) {
+          const newStock = Math.max(
+            0,
+            Number(product.inventory_count) - Number(item.quantity)
+          );
+
+          await db
+            .update(products)
+            .set({
+              inventory_count: newStock,
+            })
+            .where(eq(products.id, item.productId));
+        }
+
+        formattedEmailItems.push({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.pricePence,
         });
       }
 
-      console.log("✅ Product order complete:", orderId);
+      /* -------------------------------------------------------
+         SEND ORDER CONFIRMATION EMAIL
+      ------------------------------------------------------- */
+      await sendOrderConfirmationEmail({
+        email: session.customer_details?.email || "",
+        orderId,
+        total: amountPaidPence,
+        lineItems: formattedEmailItems,
+        createdAt: createdAtISO,
+      });
+
       return NextResponse.json({ received: true });
     } catch (err) {
       console.error("❌ Product Order Error:", err);
@@ -380,9 +438,5 @@ export async function POST(req: Request) {
     }
   }
 
-  /* -----------------------------------------------------------
-     Unknown type
-  ----------------------------------------------------------- */
-  console.warn("⚠ Unknown metadata kind:", md.kind);
   return NextResponse.json({ received: true });
 }

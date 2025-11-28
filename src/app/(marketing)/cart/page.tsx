@@ -2,14 +2,55 @@
 
 import Image from "next/image";
 import { useCart } from "@/context/CartContext";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 
 export default function CartPage() {
   const { cart, removeFromCart, updateQuantity, clearCart, total } = useCart();
 
+  const [stockMap, setStockMap] = useState<Record<string, number>>({});
+  const [loadingStock, setLoadingStock] = useState(true);
+
+  // 🔥 Fetch latest live inventory from DB
+  useEffect(() => {
+    async function fetchStock() {
+      try {
+        const ids = cart.map((i) => i.id);
+        if (ids.length === 0) {
+          setStockMap({});
+          setLoadingStock(false);
+          return;
+        }
+
+        const res = await fetch("/api/products/stock-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids }),
+        });
+
+        const data = await res.json();
+        setStockMap(data); // { productId: stock }
+      } catch (err) {
+        console.error("Stock fetch failed", err);
+      } finally {
+        setLoadingStock(false);
+      }
+    }
+
+    fetchStock();
+  }, [cart]);
+
+  // 🔥 Block checkout if any item exceeds stock
+  const cartHasStockIssues = cart.some((item) => {
+    const stock = stockMap[item.id];
+    return stock !== undefined && item.quantity > stock;
+  });
+
   const handleCheckout = async () => {
     if (cart.length === 0) return alert("Your cart is empty.");
+    if (cartHasStockIssues)
+      return alert("Some items exceed available stock. Please adjust quantities.");
 
     try {
       const items = cart.map((item) => ({
@@ -46,7 +87,6 @@ export default function CartPage() {
         Your Basket
       </h1>
 
-      {/* EMPTY CART */}
       {cart.length === 0 ? (
         <div className="max-w-xl mx-auto flex flex-col items-center gap-6">
           <Alert type="info" message="Your cart is currently empty." />
@@ -61,72 +101,100 @@ export default function CartPage() {
           </Button>
         </div>
       ) : (
-        /* CART HAS ITEMS */
         <div className="max-w-4xl mx-auto space-y-10">
-
           {/* CART ITEMS */}
           <ul className="space-y-6">
-            {cart.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center justify-between border-b border-[#e8e2d9] pb-4"
-              >
-                <div className="flex items-center gap-4">
-                  <Image
-                    src={item.imageUrl || "/coming_soon.svg"}
-                    alt={item.name}
-                    width={70}
-                    height={70}
-                    className="rounded-md shadow-sm"
-                  />
+            {cart.map((item) => {
+              const stock = stockMap[item.id];
 
-                  <div>
-                    <p className="font-medium text-[var(--foreground)]">
-                      {item.name}
-                    </p>
-                    <p className="text-sm text-[var(--foreground)]/60">
-                      £{item.price.toFixed(2)}
-                    </p>
+              return (
+                <li
+                  key={item.id}
+                  className="flex items-center justify-between border-b border-[#e8e2d9] pb-4"
+                >
+                  <div className="flex items-center gap-4">
+                    <Image
+                      src={item.imageUrl || "/coming_soon.svg"}
+                      alt={item.name}
+                      width={70}
+                      height={70}
+                      className="rounded-md shadow-sm"
+                    />
 
-                    {/* QUANTITY CONTROLS */}
-                    <div className="flex items-center gap-3 mt-2">
-                      <button
-                        onClick={() =>
-                          updateQuantity(item.id, item.quantity - 1)
-                        }
-                        className="px-3 py-1 rounded-full border border-[var(--accent)]/40 hover:bg-[var(--accent)]/10"
-                      >
-                        –
-                      </button>
+                    <div>
+                      <p className="font-medium text-[var(--foreground)]">
+                        {item.name}
+                      </p>
+                      <p className="text-sm text-[var(--foreground)]/60">
+                        £{item.price.toFixed(2)}
+                      </p>
 
-                      <span className="text-lg font-medium w-8 text-center">
-                        {item.quantity}
-                      </span>
+                      {/* STOCK STATUS */}
+                      {!loadingStock && stock !== undefined && (
+                        <p
+                          className={`text-xs mt-1 ${
+                            stock === 0
+                              ? "text-red-600"
+                              : item.quantity > stock
+                              ? "text-red-600"
+                              : stock <= 3
+                              ? "text-amber-600"
+                              : "text-neutral-500"
+                          }`}
+                        >
+                          {stock === 0
+                            ? "Out of stock"
+                            : item.quantity > stock
+                            ? `Only ${stock} left — please reduce quantity`
+                            : stock <= 3
+                            ? `Only ${stock} left`
+                            : `${stock} in stock`}
+                        </p>
+                      )}
 
-                      <button
-                        onClick={() =>
-                          updateQuantity(item.id, item.quantity + 1)
-                        }
-                        className="px-3 py-1 rounded-full border border-[var(--accent)]/40 hover:bg-[var(--accent)]/10"
-                      >
-                        +
-                      </button>
+                      {/* QUANTITY CONTROLS */}
+                      <div className="flex items-center gap-3 mt-2">
+                        <button
+                          onClick={() =>
+                            updateQuantity(item.id, item.quantity - 1)
+                          }
+                          className="px-3 py-1 rounded-full border border-[var(--accent)]/40 hover:bg-[var(--accent)]/10"
+                        >
+                          –
+                        </button>
 
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="text-sm text-red-600 underline ml-4"
-                      >
-                        Remove
-                      </button>
+                        <span className="text-lg font-medium w-8 text-center">
+                          {item.quantity}
+                        </span>
+
+                        <button
+                          onClick={() => {
+                            if (stock !== undefined && item.quantity >= stock)
+                              return;
+                            updateQuantity(item.id, item.quantity + 1);
+                          }}
+                          className="px-3 py-1 rounded-full border border-[var(--accent)]/40 hover:bg-[var(--accent)]/10"
+                          disabled={stock !== undefined && item.quantity >= stock}
+                        >
+                          +
+                        </button>
+
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="text-sm text-red-600 underline ml-4"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <p className="text-[var(--accent)] font-semibold">
-                  £{(item.price * item.quantity).toFixed(2)}
-                </p>
-              </li>
-            ))}
+                  <p className="text-[var(--accent)] font-semibold">
+                    £{(item.price * item.quantity).toFixed(2)}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
 
           {/* DELIVERY METHOD */}
@@ -165,8 +233,9 @@ export default function CartPage() {
               size="lg"
               className="flex-1"
               onClick={handleCheckout}
+              disabled={cartHasStockIssues}
             >
-              Checkout
+              {cartHasStockIssues ? "Fix Stock Issues" : "Checkout"}
             </Button>
 
             <Button

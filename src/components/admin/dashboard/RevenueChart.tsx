@@ -8,6 +8,7 @@ import {
   YAxis,
   Tooltip,
 } from "recharts";
+
 import { Card } from "@/components/ui/Card";
 
 type RevenuePoint = {

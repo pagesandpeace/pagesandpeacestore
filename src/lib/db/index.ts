@@ -4,62 +4,57 @@ import * as schema from "./schema";
 import { eq } from "drizzle-orm";
 
 /* -------------------------------------------------------
-   DEBUG: PRINT THE ACTUAL ENVIRONMENT VALUES
+   UNIVERSAL DB URL RESOLUTION
+   (Allows seed scripts to override DATABASE_URL)
 -------------------------------------------------------- */
-console.log("👉 USING DATABASE_URL =", process.env.DATABASE_URL);
-console.log("👉 USING DIRECT_URL   =", process.env.DIRECT_URL);
+const runtimeDbUrl =
+  process.env.SEED_DATABASE_URL || process.env.DATABASE_URL;
+
+console.log("👉 DB URL LOADED =", runtimeDbUrl);
 
 /* -------------------------------------------------------
    VALIDATION
 -------------------------------------------------------- */
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error("❌ DATABASE_URL is not defined. Check your .env.local file.");
+if (!runtimeDbUrl) {
+  throw new Error(
+    "❌ No DATABASE_URL or SEED_DATABASE_URL provided. Cannot connect to DB."
+  );
 }
 
-console.log("📡 Connecting to Supabase DB...");
+/* -------------------------------------------------------
+   CLEAN CONNECTION URL (remove pgbouncer)
+-------------------------------------------------------- */
+const cleanUrl = runtimeDbUrl
+  .replace("?pgbouncer=true&sslmode=require", "")
+  .replace("&pgbouncer=true", "")
+  .replace("?sslmode=require", "");
+
+console.log("🔗 CLEANED URL =", cleanUrl);
 
 /* -------------------------------------------------------
-   GLOBAL CACHED POOL
+   GLOBAL CACHE
 -------------------------------------------------------- */
 const globalForDb = global as unknown as {
   pgPool?: Pool;
   db?: ReturnType<typeof drizzle>;
 };
 
-/* -------------------------------------------------------
-   CLEAN THE URL (for pgbouncer / ssl issues)
--------------------------------------------------------- */
 if (!globalForDb.pgPool) {
-  const cleanUrl = connectionString
-    .replace("?pgbouncer=true&sslmode=require", "")
-    .replace("&pgbouncer=true", "")
-    .replace("?sslmode=require", "");
-
-  console.log("🔗 Final DB Connection URL =", cleanUrl);
-
   globalForDb.pgPool = new Pool({
     connectionString: cleanUrl,
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    ssl: { rejectUnauthorized: false },
   });
 }
 
-/* -------------------------------------------------------
-   CREATE DRIZZLE INSTANCE
--------------------------------------------------------- */
 if (!globalForDb.db) {
   globalForDb.db = drizzle(globalForDb.pgPool, { schema });
 }
 
-export const db = globalForDb.db!;
+export const db = globalForDb.db;
 
 /* -------------------------------------------------------
    HELPERS
 -------------------------------------------------------- */
-
 export async function getUserById(userId: string) {
   const [user] = await db
     .select()

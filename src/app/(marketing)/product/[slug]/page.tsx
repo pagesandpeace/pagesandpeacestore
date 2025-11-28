@@ -60,7 +60,6 @@ export default async function ProductDetailPage({
 
         {/* RIGHT SIDE */}
         <div className="space-y-6">
-          {/* ProductBadge expects { genre }, not { productType } */}
           <ProductBadge genre={product.genre_id ?? null} />
 
           <h1 className="text-4xl font-bold text-foreground">
@@ -75,7 +74,7 @@ export default async function ProductDetailPage({
 
           <PriceDisplay price={price} />
 
-          {/* StockStatus expects only { count } */}
+          {/* SEND stock to the UI */}
           <StockStatus count={product.inventory_count} />
 
           {product.description && (
@@ -86,6 +85,8 @@ export default async function ProductDetailPage({
 
           {/* CTA BUTTONS */}
           <div className="pt-4 space-y-4">
+
+            {/* FIXED — inventory_count INCLUDED */}
             <AddToCartButton
               product={{
                 id: product.id,
@@ -93,6 +94,7 @@ export default async function ProductDetailPage({
                 name: product.name,
                 price,
                 imageUrl: image,
+                inventory_count: product.inventory_count,   // ✅ FIX
               }}
             />
 
@@ -103,6 +105,7 @@ export default async function ProductDetailPage({
                 name: product.name,
                 price,
                 imageUrl: image,
+                inventory_count: product.inventory_count,   // ✅ FIX
               }}
             />
           </div>

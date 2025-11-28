@@ -5,44 +5,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
+
+import ProductSearchBar from "@/components/admin/products/ProductSearchBar";
+import ProductTypeFilter from "@/components/admin/products/ProductTypeFilter";
+import PaginationControls from "@/components/admin/products/PaginationControls";
 
 /* ---------------------------------------
-   PRODUCT TYPE DEFINITIONS
+   TYPES
 ----------------------------------------- */
-
-type BookMetadata = {
-  isbn?: string | null;
-  author?: string | null;
-};
-
-type CoffeeMetadata = {
-  roast?: string | null;
-  weight?: string | null;
-};
-
-type BlindDateMetadata = {
-  theme?: string | null;
-  colour?: string | null;
-  vibe?: string | null;
-};
-
-type MerchMetadata = {
-  size?: string | null;
-  material?: string | null;
-  colour?: string | null;
-};
-
-type GenericMetadata =
-  | BookMetadata
-  | CoffeeMetadata
-  | BlindDateMetadata
-  | MerchMetadata
-  | Record<string, unknown>
-  | null;
-
-/* ---------------------------------------
-   PRODUCT RECORD
------------------------------------------ */
+type GenericMetadata = Record<string, unknown> | null;
 
 type Product = {
   id: string;
@@ -51,43 +23,58 @@ type Product = {
   price: number;
   image_url: string | null;
   genre_name: string | null;
-  product_type: "book" | "coffee" | "blind-date" | "merch" | "physical";
+  product_type: string;
   inventory_count: number;
   metadata: GenericMetadata;
 };
 
 export default function AdminProductsPage() {
+  const PAGE_SIZE = 20;
+
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Filters
+  const [search, setSearch] = useState("");
+  const [type, setType] = useState("all");
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   /* --------------------------------------
      LOAD PRODUCTS
   ----------------------------------------- */
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
-        const res = await fetch("/api/admin/products");
-        if (!res.ok) throw new Error("Failed to load products");
+        const res = await fetch(
+          `/api/admin/products?search=${search}&type=${type}&page=${page}&pageSize=${PAGE_SIZE}`
+        );
 
         const data = await res.json();
-        setProducts(data.products);
+
+        // Accept new or old format
+        if (data.items) {
+          setProducts(data.items);
+          setTotal(data.total);
+        } else if (data.products) {
+          setProducts(data.products);
+          setTotal(data.products.length);
+        }
       } catch {
         setError("Failed to load products.");
       } finally {
         setLoading(false);
       }
     }
-    load();
-  }, []);
 
-  if (loading) {
-    return (
-      <main className="p-10">
-        <p>Loading products…</p>
-      </main>
-    );
-  }
+    load();
+  }, [search, type, page]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   if (error) {
     return (
@@ -98,67 +85,11 @@ export default function AdminProductsPage() {
   }
 
   /* --------------------------------------
-     METADATA RENDERING (NO ANY)
-  ----------------------------------------- */
-  function renderMetadata(p: Product): string {
-    const meta = p.metadata;
-
-    if (!meta || typeof meta !== "object") return "—";
-
-    switch (p.product_type) {
-      case "book": {
-        const m = meta as BookMetadata;
-        return [
-          m.isbn && `ISBN ${m.isbn}`,
-          m.author && `Author: ${m.author}`,
-        ]
-          .filter(Boolean)
-          .join(" • ");
-      }
-
-      case "coffee": {
-        const m = meta as CoffeeMetadata;
-        return [
-          m.roast && `Roast: ${m.roast}`,
-          m.weight && `Weight: ${m.weight}`,
-        ]
-          .filter(Boolean)
-          .join(" • ");
-      }
-
-      case "blind-date": {
-        const m = meta as BlindDateMetadata;
-        return [
-          m.theme && `Theme: ${m.theme}`,
-          m.colour && `Colour: ${m.colour}`,
-          m.vibe && `Vibe: ${m.vibe}`,
-        ]
-          .filter(Boolean)
-          .join(" • ");
-      }
-
-      case "merch": {
-        const m = meta as MerchMetadata;
-        return [
-          m.size && `Size: ${m.size}`,
-          m.material && `Material: ${m.material}`,
-          m.colour && `Colour: ${m.colour}`,
-        ]
-          .filter(Boolean)
-          .join(" • ");
-      }
-
-      default:
-        return JSON.stringify(meta);
-    }
-  }
-
-  /* --------------------------------------
-     PAGE UI
+     UI
   ----------------------------------------- */
   return (
-    <main className="p-10 font-[Montserrat]">
-      <div className="flex justify-between items-center mb-8">
+    <main className="p-10 font-[Montserrat] space-y-8">
+      <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Products</h1>
 
         <Link href="/admin/products/new">
@@ -166,59 +97,100 @@ export default function AdminProductsPage() {
         </Link>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-6">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="border-b">
-              <th className="py-3">Image</th>
-              <th>Name</th>
-              <th>Price</th>
-              <th>Genre</th>
-              <th>Type</th>
-              <th>Stock</th>
-              <th>Metadata</th>
-              <th></th>
-            </tr>
-          </thead>
+      {/* FILTER BAR */}
+      <div className="flex gap-4 items-center">
+        <ProductSearchBar value={search} onChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }} />
 
-          <tbody>
-            {products.map((p) => (
-              <tr key={p.id} className="border-b">
-                <td className="py-3">
-                  {p.image_url && (
-                    <Image
-                      src={p.image_url}
-                      alt={`${p.name} image`}
-                      width={56}
-                      height={56}
-                      className="rounded object-cover"
-                    />
-                  )}
-                </td>
-
-                <td>{p.name}</td>
-                <td>£{Number(p.price).toFixed(2)}</td>
-                <td>{p.genre_name ?? "—"}</td>
-                <td>{p.product_type}</td>
-                <td>{p.inventory_count}</td>
-
-                <td className="text-sm text-neutral-700">
-                  {renderMetadata(p)}
-                </td>
-
-                <td className="text-right">
-                  <Link
-                    href={`/admin/products/${p.id}/edit`}
-                    className="text-accent font-medium"
-                  >
-                    Edit →
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ProductTypeFilter value={type} onChange={(v) => {
+          setType(v);
+          setPage(1);
+        }} />
       </div>
+
+      {/* PRODUCT TABLE */}
+<div className="bg-white rounded-xl shadow p-6 overflow-x-auto">
+  <table className="w-full text-left text-sm">
+    <thead className="text-neutral-600 text-xs uppercase tracking-wide">
+      <tr className="border-b">
+        <th className="py-3">Image</th>
+        <th>Name</th>
+        <th>Price</th>
+        <th>Genre</th>
+        <th>Type</th>
+        <th>Stock</th>
+        <th className="w-16"></th>
+      </tr>
+    </thead>
+
+    <tbody className="text-[15px]">
+      {products.map((p) => (
+        <tr
+          key={p.id}
+          className="border-b hover:bg-neutral-50 transition-colors"
+        >
+          {/* IMAGE */}
+          <td className="py-3">
+            <Image
+              src={p.image_url || "/coming_soon.svg"}
+              alt={p.name}
+              width={56}
+              height={56}
+              className="rounded-lg object-cover border"
+            />
+          </td>
+
+          {/* NAME */}
+          <td className="font-medium">{p.name}</td>
+
+          {/* PRICE */}
+          <td>£{Number(p.price).toFixed(2)}</td>
+
+          {/* GENRE */}
+          <td>{p.genre_name ?? "—"}</td>
+
+          {/* TYPE */}
+          <td>
+            <span className="px-2 py-1 rounded-full text-xs bg-neutral-200">
+              {p.product_type}
+            </span>
+          </td>
+
+          {/* STOCK */}
+          <td>
+            {p.inventory_count <= 0 ? (
+              <Badge color="red">Out</Badge>
+            ) : p.inventory_count <= 5 ? (
+              <Badge color="yellow">Low</Badge>
+            ) : (
+              <Badge color="green">{p.inventory_count}</Badge>
+            )}
+          </td>
+
+          {/* EDIT BUTTON */}
+          <td className="text-right">
+            <Link
+              href={`/admin/products/${p.id}/edit`}
+              className="text-accent font-medium hover:underline"
+            >
+              Edit →
+            </Link>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+
+      {/* PAGINATION */}
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        onChange={(p) => setPage(p)}
+      />
     </main>
   );
 }

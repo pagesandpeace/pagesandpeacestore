@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
+import StockAdjustModal from "@/components/admin/StockAdjustModal";
 
 /* ---------------------------------------------
    TYPES
@@ -32,67 +33,33 @@ interface BlindDateProduct {
    CONSTANTS
 --------------------------------------------- */
 const THEMES = [
-  "Cosy Winter",
-  "Autumn Warmth",
-  "Spring Blossom",
-  "Summer Escape",
-  "BookTok Pick",
-  "Mystery Surprise",
-  "Feel-Good Pick",
-  "Late-Night Read",
-  "Weekend Getaway",
-  "Staff Favourite",
-  "Dark Academia",
-  "Light Academia",
-  "Coffeehouse Reads",
-  "Valentine’s Edition",
-  "Christmas Special",
+  "Cosy Winter", "Autumn Warmth", "Spring Blossom", "Summer Escape",
+  "BookTok Pick", "Mystery Surprise", "Feel-Good Pick", "Late-Night Read",
+  "Weekend Getaway", "Staff Favourite", "Dark Academia", "Light Academia",
+  "Coffeehouse Reads", "Valentine’s Edition", "Christmas Special",
   "Limited Edition",
 ];
 
 const COLOURS = [
-  "Brown Kraft",
-  "Cream",
-  "White",
-  "Pink",
-  "Red",
-  "Navy",
-  "Forest Green",
-  "Pastel Blue",
-  "Pastel Yellow",
-  "Burgundy",
-  "Black",
+  "Brown Kraft", "Cream", "White", "Pink", "Red", "Navy",
+  "Forest Green", "Pastel Blue", "Pastel Yellow", "Burgundy", "Black",
 ];
 
 const VIBES = [
-  "Wholesome",
-  "Heartwarming",
-  "Emotional",
-  "Spicy",
-  "Chilling",
-  "Atmospheric",
-  "Dark",
-  "Cute",
-  "Funny",
-  "Thought-Provoking",
-  "Fast-Paced",
-  "Slow Burn",
-  "Romantic",
-  "Adventure",
-  "Uplifting",
+  "Wholesome", "Heartwarming", "Emotional", "Spicy", "Chilling",
+  "Atmospheric", "Dark", "Cute", "Funny", "Thought-Provoking",
+  "Fast-Paced", "Slow Burn", "Romantic", "Adventure", "Uplifting",
 ];
 
 /* ---------------------------------------------
    COMPONENT
 --------------------------------------------- */
-export default function EditBlindDatePage({
-  initial,
-}: {
-  initial: BlindDateProduct;
-}) {
+export default function EditBlindDatePage({ initial }: { initial: BlindDateProduct }) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [showStockModal, setShowStockModal] = useState(false);
 
   const [form, setForm] = useState({
     name: initial.name,
@@ -114,9 +81,6 @@ export default function EditBlindDatePage({
 
   const [newItem, setNewItem] = useState("");
 
-  /* ---------------------------------------------
-     SLUG
-  --------------------------------------------- */
   function generateSlug(name: string) {
     return name
       .toLowerCase()
@@ -125,9 +89,6 @@ export default function EditBlindDatePage({
       .replace(/^-+|-+$/g, "");
   }
 
-  /* ---------------------------------------------
-     IMAGE UPLOAD
-  --------------------------------------------- */
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -147,9 +108,6 @@ export default function EditBlindDatePage({
     setUploading(false);
   }
 
-  /* ---------------------------------------------
-     ADD ITEM TO METADATA
-  --------------------------------------------- */
   function handleAddItem() {
     if (!newItem.trim()) return;
 
@@ -174,9 +132,6 @@ export default function EditBlindDatePage({
     }));
   }
 
-  /* ---------------------------------------------
-     SAVE PRODUCT
-  --------------------------------------------- */
   async function handleSave() {
     setSaving(true);
     setError(null);
@@ -197,22 +152,14 @@ export default function EditBlindDatePage({
     }
   }
 
-  /* ---------------------------------------------
-     DELETE PRODUCT
-  --------------------------------------------- */
   async function handleDelete() {
     if (!confirm("Delete this product?")) return;
 
-    await fetch(`/api/admin/products/${initial.id}`, {
-      method: "DELETE",
-    });
+    await fetch(`/api/admin/products/${initial.id}`, { method: "DELETE" });
 
     window.location.href = "/admin/products";
   }
 
-  /* ---------------------------------------------
-     RENDER
-  --------------------------------------------- */
   return (
     <main className="max-w-3xl mx-auto py-10 space-y-8 font-[Montserrat]">
       <h1 className="text-3xl font-bold">Edit Blind-Date Book</h1>
@@ -220,6 +167,7 @@ export default function EditBlindDatePage({
       {error && <Alert type="error" message={error} />}
 
       <div className="bg-white rounded-xl shadow p-6 space-y-6">
+
         {/* NAME */}
         <div>
           <label className="font-semibold mb-2 block">Name</label>
@@ -259,20 +207,17 @@ export default function EditBlindDatePage({
           />
         </div>
 
-        {/* INVENTORY */}
-        <div>
-          <label className="font-semibold mb-2 block">Inventory Count</label>
-          <input
-            type="number"
-            className="w-full p-2 border rounded"
-            value={form.inventory_count}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                inventory_count: Number(e.target.value),
-              })
-            }
-          />
+        {/* STOCK */}
+        <div className="border rounded p-4 bg-gray-50">
+          <p className="font-semibold mb-1">Current Inventory</p>
+          <p className="text-xl font-bold">{form.inventory_count}</p>
+
+          <button
+            onClick={() => setShowStockModal(true)}
+            className="mt-3 px-4 py-2 bg-accent text-white rounded-lg font-semibold"
+          >
+            Adjust Stock
+          </button>
         </div>
 
         {/* DESCRIPTION */}
@@ -353,7 +298,7 @@ export default function EditBlindDatePage({
           </select>
         </div>
 
-        {/* INCLUDED ITEMS */}
+        {/* ITEMS */}
         <div>
           <label className="font-semibold mb-2 block">Included Items</label>
 
@@ -369,7 +314,7 @@ export default function EditBlindDatePage({
 
           {form.metadata.items.length > 0 && (
             <ul className="mt-3 space-y-1">
-              {form.metadata.items.map((item: string, idx: number) => (
+              {form.metadata.items.map((item, idx) => (
                 <li
                   key={idx}
                   className="flex justify-between bg-gray-50 p-2 rounded"
@@ -413,6 +358,18 @@ export default function EditBlindDatePage({
           </button>
         </div>
       </div>
+
+      {/* STOCK MODAL */}
+      {showStockModal && (
+        <StockAdjustModal
+          productId={initial.id}
+          currentStock={form.inventory_count}
+          onClose={() => {
+            setShowStockModal(false);
+            window.location.reload();
+          }}
+        />
+      )}
     </main>
   );
 }
