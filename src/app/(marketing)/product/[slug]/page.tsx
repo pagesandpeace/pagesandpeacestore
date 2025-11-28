@@ -1,5 +1,10 @@
+// ============================================================================
+// PRODUCT DETAIL PAGE (SERVER COMPONENT)
+// ============================================================================
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
@@ -7,19 +12,14 @@ import { eq } from "drizzle-orm";
 import Image from "next/image";
 import Link from "next/link";
 
-import AddToCartButton from "@/components/product/AddToCartButton";
-import BuyNowButton from "@/components/product/BuyNowButton";
-import StockStatus from "@/components/product/StockStatus";
-import FulfilmentInfo from "@/components/product/FulfilmentInfo";
-import PriceDisplay from "@/components/product/PriceDisplay";
-import ProductBadge from "@/components/product/ProductBadge";
+import ClientProductActions from "./ClientProductActions"; // ← NEW clean import
 
 export default async function ProductDetailPage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: { slug: string };
 }) {
-  const { slug } = await params;
+  const { slug } = params;
 
   const [product] = await db
     .select()
@@ -52,66 +52,15 @@ export default async function ProductDetailPage({
         / <span className="text-neutral-500">{product.name}</span>
       </div>
 
+      {/* GRID */}
       <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
         {/* IMAGE */}
         <div className="relative w-full h-[500px] rounded-2xl overflow-hidden shadow">
           <Image src={image} alt={product.name} fill className="object-cover" />
         </div>
 
-        {/* RIGHT SIDE */}
-        <div className="space-y-6">
-          <ProductBadge genre={product.genre_id ?? null} />
-
-          <h1 className="text-4xl font-bold text-foreground">
-            {product.name}
-          </h1>
-
-          {product.author && (
-            <p className="text-lg text-foreground/70">
-              by {product.author}
-            </p>
-          )}
-
-          <PriceDisplay price={price} />
-
-          {/* SEND stock to the UI */}
-          <StockStatus count={product.inventory_count} />
-
-          {product.description && (
-            <p className="leading-relaxed text-foreground/80 whitespace-pre-line">
-              {product.description}
-            </p>
-          )}
-
-          {/* CTA BUTTONS */}
-          <div className="pt-4 space-y-4">
-
-            {/* FIXED — inventory_count INCLUDED */}
-            <AddToCartButton
-              product={{
-                id: product.id,
-                slug: product.slug,
-                name: product.name,
-                price,
-                imageUrl: image,
-                inventory_count: product.inventory_count,   // ✅ FIX
-              }}
-            />
-
-            <BuyNowButton
-              product={{
-                id: product.id,
-                slug: product.slug,
-                name: product.name,
-                price,
-                imageUrl: image,
-                inventory_count: product.inventory_count,   // ✅ FIX
-              }}
-            />
-          </div>
-
-          <FulfilmentInfo />
-        </div>
+        {/* CLIENT ACTIONS */}
+        <ClientProductActions product={product} image={image} price={price} />
       </div>
     </main>
   );

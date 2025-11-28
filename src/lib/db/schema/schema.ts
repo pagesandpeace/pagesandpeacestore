@@ -194,7 +194,7 @@ export const orders = pgTable("orders", {
 });
 
 export const orderItems = pgTable("order_items", {
-  id: text().primaryKey(),
+  id: uuid().defaultRandom().primaryKey(),
   orderId: text("order_id").notNull(),
   productId: text("product_id").notNull(),
   quantity: integer().notNull(),

@@ -4,10 +4,10 @@ import { useCart } from "@/context/CartContext";
 import { useEffect, useState } from "react";
 import AuthPromptModal from "@/components/ui/AuthPromptModal";
 import { Button } from "@/components/ui/Button";
-import QuantitySelector from "./QuantitySelector";
 
 export default function AddToCartButton({
   product,
+  qty,
 }: {
   product: {
     id: string;
@@ -15,27 +15,21 @@ export default function AddToCartButton({
     name: string;
     price: number;
     imageUrl: string;
-    inventory_count?: number; // IMPORTANT: include stock!
+    inventory_count?: number;
   };
+  qty: number;
 }) {
   const { addToCart } = useCart();
-  const [qty, setQty] = useState(1);
   const [showAuth, setShowAuth] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
 
   const stock = product.inventory_count ?? 0;
 
   useEffect(() => {
-    async function check() {
-      try {
-        const res = await fetch("/api/me", { cache: "no-store" });
-        const me = await res.json();
-        setLoggedIn(Boolean(me?.id));
-      } catch {
-        setLoggedIn(false);
-      }
-    }
-    check();
+    fetch("/api/me", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((me) => setLoggedIn(Boolean(me?.id)))
+      .catch(() => setLoggedIn(false));
   }, []);
 
   function handleAdd() {
@@ -45,7 +39,7 @@ export default function AddToCartButton({
     }
 
     if (qty > stock) {
-      alert(`Only ${stock} left — please reduce quantity.`);
+      alert(`Only ${stock} left.`);
       return;
     }
 
@@ -66,14 +60,6 @@ export default function AddToCartButton({
 
   return (
     <>
-      <QuantitySelector
-        qty={qty}
-        setQty={(val) => {
-          if (val <= stock) setQty(val);
-        }}
-        max={stock}
-      />
-
       <Button
         variant="primary"
         size="lg"

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 
 export default function BuyNowButton({
   product,
+  qty,
 }: {
   product: {
     id: string;
@@ -13,20 +14,19 @@ export default function BuyNowButton({
     name: string;
     price: number;
     imageUrl: string;
-    inventory_count?: number; // 🔥 STOCK INCLUDED
+    inventory_count?: number;
   };
+  qty: number;
 }) {
   const [showAuth, setShowAuth] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const stock = product.inventory_count ?? 0;
 
-  // Re-check login when auth state changes
   useEffect(() => {
     function recheck() {
       fetch("/api/me", { cache: "no-store" }).catch(() => {});
     }
-
     window.addEventListener("pp:auth-updated", recheck);
     return () => window.removeEventListener("pp:auth-updated", recheck);
   }, []);
@@ -37,9 +37,13 @@ export default function BuyNowButton({
       return;
     }
 
+    if (qty > stock) {
+      alert(`Only ${stock} available.`);
+      return;
+    }
+
     setLoading(true);
 
-    // Verify login
     const res = await fetch("/api/me", { cache: "no-store" });
     const me = await res.json();
 
@@ -49,7 +53,6 @@ export default function BuyNowButton({
       return;
     }
 
-    // Logged in → create checkout session for ONLY 1 item
     const checkoutRes = await fetch("/api/checkout", {
       method: "POST",
       credentials: "include",
@@ -60,7 +63,7 @@ export default function BuyNowButton({
             productId: product.id,
             name: product.name,
             price: product.price,
-            quantity: 1,
+            quantity: qty,
             imageUrl: product.imageUrl,
           },
         ],
@@ -69,11 +72,8 @@ export default function BuyNowButton({
 
     const data = await checkoutRes.json();
 
-    if (data.url) {
-      window.location.href = data.url;
-    } else {
-      alert("Checkout failed.");
-    }
+    if (data.url) window.location.href = data.url;
+    else alert("Checkout failed.");
 
     setLoading(false);
   }

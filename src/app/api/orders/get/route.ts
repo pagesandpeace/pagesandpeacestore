@@ -6,7 +6,7 @@ import {
   products,
   events,
 } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 export async function GET(req: Request) {
   try {
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
       const eventRows = await db
         .select()
         .from(events)
-        .where(inArray(events.id, missing));
+        .where(inArray(sql`${events.id}::text`, missing));
 
       const lookup = Object.fromEntries(
         eventRows.map((ev) => [ev.id, ev.title])

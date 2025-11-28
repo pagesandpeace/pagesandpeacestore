@@ -111,17 +111,19 @@ export default async function BlindDateCategoryPage({
           {list.length > 0 &&
   list.map((product) => (
     <ProductCard
-      key={product.id}
-      product={{
-        id: product.id,
-        name: product.name,
-        slug: product.slug,
-        price: product.price,
-        image_url: product.image_url,
-        product_type: product.product_type,
-        metadata: product.metadata as ProductMetadata,   // ⭐ FIX
-      }}
-    />
+  key={product.id}
+  product={{
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    price: product.price,
+    image_url: product.image_url,
+    inventory_count: product.inventory_count,   // ⭐ REQUIRED ⭐
+    product_type: product.product_type,
+    metadata: product.metadata as ProductMetadata,
+  }}
+/>
+
   ))}
 
 

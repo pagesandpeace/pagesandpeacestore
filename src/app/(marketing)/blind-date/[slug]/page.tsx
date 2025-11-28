@@ -35,11 +35,10 @@ function getColour(name: string) {
 export default async function BlindDateDetailPage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: { slug: string };   // ✅ FIXED
 }) {
-  const { slug } = await params;
+  const { slug } = params;    // ✅ FIXED
 
-  // Fetch product
   const [product] = await db
     .select()
     .from(products)
@@ -158,24 +157,27 @@ export default async function BlindDateDetailPage({
           {/* CTA BUTTONS */}
           <div className="space-y-4 pt-6">
             <AddToCartButton
-              product={{
-                id: product.id,
-                slug: product.slug,
-                name: product.name,
-                price,
-                imageUrl: image,
-              }}
-            />
+  product={{
+    id: product.id,
+    slug: product.slug,
+    name: product.name,
+    price,
+    imageUrl: image,
+    inventory_count: product.inventory_count,   // ✅ FIX
+  }}
+/>
 
-            <BuyNowButton
-              product={{
-                id: product.id,
-                slug: product.slug,
-                name: product.name,
-                price,
-                imageUrl: image,
-              }}
-            />
+<BuyNowButton
+  product={{
+    id: product.id,
+    slug: product.slug,
+    name: product.name,
+    price,
+    imageUrl: image,
+    inventory_count: product.inventory_count,   // ✅ FIX
+  }}
+/>
+
           </div>
 
           <FulfilmentInfo />

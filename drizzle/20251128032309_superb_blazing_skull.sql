@@ -21,16 +21,6 @@ CREATE TABLE "drizzle_migrations" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "earning_rules" (
-	"id" text PRIMARY KEY NOT NULL,
-	"name" text NOT NULL,
-	"active" boolean DEFAULT true NOT NULL,
-	"definition" jsonb NOT NULL,
-	"starts_at" timestamp with time zone,
-	"ends_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "email_blasts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"subject" text NOT NULL,
@@ -144,7 +134,7 @@ CREATE TABLE "guests" (
 --> statement-breakpoint
 CREATE TABLE "idempotency_keys" (
 	"key" text PRIMARY KEY NOT NULL,
-	"scope" text DEFAULT 'loyalty_optin' NOT NULL,
+	"scope" text DEFAULT 'general' NOT NULL,
 	"response" jsonb DEFAULT '{}'::jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -192,7 +182,7 @@ CREATE TABLE "newsletter_subscribers" (
 );
 --> statement-breakpoint
 CREATE TABLE "order_items" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_id" text NOT NULL,
 	"product_id" text NOT NULL,
 	"quantity" integer NOT NULL,
@@ -263,6 +253,8 @@ CREATE TABLE "stores" (
 	"image_url" text,
 	"chapter" integer NOT NULL,
 	"published" boolean DEFAULT true NOT NULL,
+	"phone" text,
+	"email" text,
 	"opening_hours" jsonb DEFAULT '{}'::jsonb,
 	"collection_instructions" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -277,9 +269,9 @@ CREATE TABLE "users" (
 	"image" text,
 	"loyaltyprogram" boolean DEFAULT false NOT NULL,
 	"loyaltypoints" integer DEFAULT 0 NOT NULL,
+	"role" text DEFAULT 'customer' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"role" text DEFAULT 'customer' NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "verifications" (
@@ -316,5 +308,3 @@ CREATE TABLE "vouchers" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
---> statement-breakpoint
-ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE no action ON UPDATE no action;

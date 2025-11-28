@@ -16,9 +16,11 @@ type SearchParamsType = {
 export default async function ShopPage({
   searchParams,
 }: {
-  searchParams: SearchParamsType;
+  searchParams: Promise<SearchParamsType>;
 }) {
-  const activeType = searchParams?.type ?? "all";
+  // 🔥 FIX — MUST await searchParams
+  const params = await searchParams;
+  const activeType = params.type ?? "all";
 
   // Available categories
   const CATEGORIES = [
@@ -53,7 +55,6 @@ export default async function ShopPage({
 
   return (
     <main className="bg-background min-h-screen pb-20">
-
       {/* HERO */}
       {hero?.visible && (
         <section className="w-full relative h-[420px] mb-16">
@@ -99,10 +100,6 @@ export default async function ShopPage({
             scrollbar-hide
             -mx-1 px-1
           "
-          style={{
-            WebkitOverflowScrolling: "touch",
-            scrollBehavior: "smooth",
-          }}
         >
           {CATEGORIES.map((cat) => {
             const active = activeType === cat.key;
