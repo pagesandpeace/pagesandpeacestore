@@ -16,12 +16,13 @@ export default function BuyNowButton({
     imageUrl: string;
     inventory_count?: number;
   };
-  qty: number;
+  qty?: number; // ✅ made optional
 }) {
   const [showAuth, setShowAuth] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const stock = product.inventory_count ?? 0;
+  const quantity = qty ?? 1; // ✅ fallback to 1
 
   useEffect(() => {
     function recheck() {
@@ -37,7 +38,7 @@ export default function BuyNowButton({
       return;
     }
 
-    if (qty > stock) {
+    if (quantity > stock) {
       alert(`Only ${stock} available.`);
       return;
     }
@@ -63,7 +64,7 @@ export default function BuyNowButton({
             productId: product.id,
             name: product.name,
             price: product.price,
-            quantity: qty,
+            quantity,          // ✅ uses fallback
             imageUrl: product.imageUrl,
           },
         ],

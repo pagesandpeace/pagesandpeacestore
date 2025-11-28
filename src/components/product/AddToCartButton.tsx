@@ -17,13 +17,14 @@ export default function AddToCartButton({
     imageUrl: string;
     inventory_count?: number;
   };
-  qty: number;
+  qty?: number; // ✅ made optional
 }) {
   const { addToCart } = useCart();
   const [showAuth, setShowAuth] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
 
   const stock = product.inventory_count ?? 0;
+  const quantity = qty ?? 1; // ✅ fallback to 1
 
   useEffect(() => {
     fetch("/api/me", { cache: "no-store" })
@@ -38,7 +39,7 @@ export default function AddToCartButton({
       return;
     }
 
-    if (qty > stock) {
+    if (quantity > stock) {
       alert(`Only ${stock} left.`);
       return;
     }
@@ -53,7 +54,7 @@ export default function AddToCartButton({
       name: product.name,
       price: product.price,
       imageUrl: product.imageUrl,
-      quantity: qty,
+      quantity,
       inventory_count: stock,
     });
   }
