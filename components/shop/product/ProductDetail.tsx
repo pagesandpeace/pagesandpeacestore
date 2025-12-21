@@ -22,6 +22,7 @@ type ProductDetailProps = {
     slug: string;
     price: number | string;
     image_url: string | null;
+    description?: string | null;
     product_type: string;
     inventory_count?: number;
 
@@ -54,7 +55,9 @@ export default function ProductDetail({ product }: ProductDetailProps) {
   const themeName = product.theme?.name ?? null;
   const genreName = product.genre?.name ?? null;
 
-  // 🔑 NORMALISE PRODUCT FOR CART / BUY-NOW
+  /* ------------------------------------------
+     NORMALISE PRODUCT FOR CART / BUY-NOW
+  ------------------------------------------ */
   const cartProduct = {
     id: product.id,
     slug: product.slug,
@@ -63,27 +66,30 @@ export default function ProductDetail({ product }: ProductDetailProps) {
       typeof product.price === "string"
         ? Number(product.price)
         : product.price,
-    imageUrl: product.image_url ?? "", // required by buttons
+    imageUrl: product.image_url ?? "",
     inventory_count: product.inventory_count,
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
       {/* IMAGE */}
-      <div className="w-full mb-6">
+      <div className="w-full mb-6 flex justify-center">
         {product.image_url && (
-          <Image
-            src={product.image_url}
-            alt={product.name}
-            width={900}
-            height={900}
-            className="rounded-xl object-cover w-full"
-          />
+          <div className="w-full max-w-xs sm:max-w-sm md:max-w-md">
+            <Image
+              src={product.image_url}
+              alt={product.name}
+              width={400}
+              height={400}
+              className="rounded-xl object-contain w-full h-auto"
+              priority
+            />
+          </div>
         )}
       </div>
 
       {/* TITLE */}
-      <h1 className="text-3xl font-semibold mb-2">
+      <h1 className="text-2xl sm:text-3xl font-semibold mb-2">
         {product.name}
       </h1>
 
@@ -92,10 +98,11 @@ export default function ProductDetail({ product }: ProductDetailProps) {
         <ProductBadge genre={genreName} />
       )}
 
-      {/* BOOK / BLIND-DATE META */}
+      {/* META */}
       {isBookLike && (
         <div className="mt-4 space-y-2 text-foreground/80 text-sm">
-          {product.author && (
+          {/* AUTHOR — hidden for blind-date */}
+          {!isBlindDate && product.author && (
             <p>
               <strong>Author:</strong> {product.author}
             </p>
@@ -128,6 +135,19 @@ export default function ProductDetail({ product }: ProductDetailProps) {
               />
             </div>
           )}
+
+          {isBlindDate && (
+            <p className="italic text-sm text-muted-foreground mt-2">
+              A blind date with a book — details revealed after purchase.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* DESCRIPTION */}
+      {!isBlindDate && product.description && (
+        <div className="mt-6 prose prose-sm sm:prose max-w-none">
+          <p>{product.description}</p>
         </div>
       )}
 
