@@ -1,0 +1,83 @@
+"use client";
+
+import Image from "next/image";
+import BackLink from "@/components/Backlink";
+
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <main
+      className="
+        relative flex flex-col lg:flex-row
+        min-h-screen w-full
+        bg-[var(--background)] text-[var(--foreground)]
+      "
+    >
+      {/* LEFT SECTION — Desktop branding */}
+      <section
+        className="
+          hidden lg:flex
+          flex-col justify-between
+          bg-[#111111] text-[#FAF6F1]
+          p-12
+          w-1/2
+        "
+      >
+        {/* Logo */}
+        <div className="flex justify-start">
+          <Image
+            src="/p&p_logo_cream_transparent.svg"
+            alt="Pages & Peace logo cream"
+            width={140}
+            height={140}
+            priority
+            className="object-contain"
+          />
+        </div>
+
+        {/* Brand Message */}
+        <div className="space-y-6">
+          <h2 className="text-3xl font-semibold tracking-wide leading-snug">
+            Every community needs a chapter 📚
+          </h2>
+          <p className="text-[#eae6e1] text-base leading-relaxed max-w-md">
+            Sign in or create your account to continue your story ☕
+          </p>
+        </div>
+
+        {/* Footer */}
+        <p className="text-sm text-[#d8d3cd]">
+          © {new Date().getFullYear()} Pages & Peace. All rights reserved.
+        </p>
+      </section>
+
+      {/* RIGHT SECTION — Form */}
+      <section
+        className="
+          relative flex flex-1 items-center justify-center
+          bg-[#FAF6F1] text-[#111111]
+          px-6 sm:px-10 md:px-12
+          py-12 sm:py-20
+          overflow-y-auto
+        "
+      >
+        {/* Back Button */}
+        <div className="absolute left-4 top-4 z-10">
+          <BackLink href="/" label="Back" />
+        </div>
+
+        <div
+          className="
+            w-full max-w-md
+            bg-white/40 backdrop-blur-sm
+            rounded-xl
+            shadow-[0_4px_20px_rgba(0,0,0,0.05)]
+            p-8 sm:p-10
+            border border-[#e8e2da]
+          "
+        >
+          {children}
+        </div>
+      </section>
+    </main>
+  );
+}

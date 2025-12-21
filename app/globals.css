@@ -1,0 +1,176 @@
+@import "tailwindcss";
+
+/* --------------------------------------------
+   🌿 BRAND THEME
+--------------------------------------------- */
+:root {
+  --background: #FAF6F1; /* Cream */
+  --foreground: #111111; /* Black */
+  --accent: #189458;     /* Green */
+  --secondary: #C7A54B;  /* Gold */
+  --muted: #dcd6cf;      /* Soft border gray */
+}
+
+/* --------------------------------------------
+   🧩 Tailwind Theme Mapping
+--------------------------------------------- */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+
+  --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New";
+}
+
+/* --------------------------------------------
+   🪶 Global Reset + Base
+--------------------------------------------- */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-montserrat), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden; /* Keep for preventing horizontal scroll */
+  margin: 0;
+}
+
+/* --------------------------------------------
+   🔗 Link Styling
+--------------------------------------------- */
+.link,
+.text-accent {
+  color: var(--accent);
+  transition: color 0.2s ease-in-out, opacity 0.2s ease-in-out;
+}
+
+.link:hover,
+.text-accent:hover {
+  color: var(--secondary);
+  opacity: 0.9;
+}
+
+/* --------------------------------------------
+   🟢 Button System (Scoped to .btn)
+--------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  
+  font-weight: 600;
+  font-size: 1rem;
+  border-radius: 9999px;
+  padding: 0.75rem 2rem;
+  line-height: 1.25rem;
+
+  border: 2px solid var(--secondary);
+  background-color: var(--accent);
+  color: var(--background);
+
+  transition: all 0.25s ease-in-out;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+}
+
+.btn:hover {
+  background-color: var(--secondary);
+  color: var(--background);
+  transform: translateY(-1px);
+}
+
+/* --------------------------------------------
+   🌙 Accessibility Tweaks
+--------------------------------------------- */
+button:disabled,
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* --------------------------------------------
+   Custom Light Green Background for Dropdown
+--------------------------------------------- */
+.bg-light-green {
+  background-color: rgba(24, 148, 88, 0.1); /* Light green background */
+}
+
+/* --------------------------------------------
+   Layout Tweaks for Mobile and Desktop
+--------------------------------------------- */
+.main-container {
+  min-height: 100vh; /* Ensure the content takes full height */
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden; /* Prevent horizontal scroll */
+  overflow-y: auto; /* Allow vertical scroll if content overflows */
+}
+
+/* Prevent horizontal scrolling on mobile */
+@media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
+}
+
+/* Add custom padding for the main content to prevent overlap */
+.landing-page {
+  height: 100vh; /* Take up the entire viewport height */
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Center the content */
+  overflow-y: auto; /* Allow vertical scrolling */
+}
+
+/* Pulse in when value changes */
+.pulse-in { animation: pulse-in 180ms ease-out; }
+@keyframes pulse-in {
+  0% { transform: scale(0.98); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* --------------------------------------------
+   🌐 Safe Area Helpers (iOS Safari Fix)
+--------------------------------------------- */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@supports (padding: max(0px)) {
+  .safe-top {
+    padding-top: max(env(safe-area-inset-top), 0px);
+  }
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+}
+/* HIDE SCROLLBARS (mobile + desktop) */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome / Safari */
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn .25s ease-out;
+}
+
+
