@@ -24,7 +24,7 @@ export default function CookiePolicyPage() {
           At <strong>Pages & Peace</strong>, we use cookies and similar
           technologies to make our website work properly, improve your
           experience, and understand how our visitors use it. This Cookie Policy
-          explains what cookies are, how we use them, and how you can control
+          explains what cookies are, how they are used, and how you can control
           your preferences.
         </p>
 
