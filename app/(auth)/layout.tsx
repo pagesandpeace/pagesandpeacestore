@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import BackLink from "@/components/Backlink";
+import BackLink from "@/components/BackLink";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (

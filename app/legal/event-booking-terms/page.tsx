@@ -1,6 +1,6 @@
 "use client";
 
-import BackLink from "@/components/Backlink";
+import BackLink from "@/components/BackLink";
 
 export default function EventBookingTermsPage() {
   return (

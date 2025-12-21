@@ -1,4 +1,4 @@
-import BackLink from "@/components/Backlink";
+import BackLink from "@/components/BackLink";
 
 export const metadata = {
   title: "Privacy Policy | Pages & Peace",
