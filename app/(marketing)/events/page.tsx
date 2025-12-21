@@ -10,7 +10,6 @@ export default async function EventsPage() {
 
   /* -----------------------------
      FETCH EVENTS
-     (we filter client-side to keep logic explicit)
   ----------------------------- */
   const { data: events, error: eventErr } = await supabase
     .from("events")
@@ -22,7 +21,7 @@ export default async function EventsPage() {
   }
 
   /* -----------------------------
-     FETCH BOOKINGS (FOR CAPACITY)
+     FETCH BOOKINGS
   ----------------------------- */
   const { data: bookings } = await supabase
     .from("event_bookings")
@@ -33,7 +32,6 @@ export default async function EventsPage() {
 
   /* -----------------------------
      UPCOMING EVENTS ONLY
-     (expired events removed from public view)
   ----------------------------- */
   const upcomingEvents = allEvents.filter(
     (evt) => new Date(evt.date) >= now
@@ -47,18 +45,12 @@ export default async function EventsPage() {
       (b) => b.event_id === evt.id && !b.cancelled
     ).length;
 
-    const remaining = evt.capacity - active;
-
     return {
       ...evt,
-      remaining,
-      soldOut: remaining <= 0,
+      remaining: evt.capacity - active,
     };
   });
 
-  /* -----------------------------
-     UI
-  ----------------------------- */
   return (
     <div className="bg-background min-h-screen">
       {/* HERO */}
@@ -71,17 +63,12 @@ export default async function EventsPage() {
         </p>
       </div>
 
-      {/* EVENTS GRID */}
+      {/* GRID */}
       <div className="max-w-7xl mx-auto px-6 py-12">
         {eventRows.length === 0 ? (
-          <div className="text-center py-20 text-neutral-600">
-            <p className="text-lg">
-              No upcoming events right now.
-            </p>
-            <p className="mt-2 text-sm">
-              Check back soon — new events are announced regularly.
-            </p>
-          </div>
+          <p className="text-neutral-600 text-center">
+            No upcoming events scheduled.
+          </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
             {eventRows.map((evt) => {
@@ -95,13 +82,7 @@ export default async function EventsPage() {
                 remaining: evt.remaining,
               };
 
-              return (
-                <EventCard
-                  key={evt.id}
-                  event={cardEvent}
-                  soldOut={evt.soldOut}
-                />
-              );
+              return <EventCard key={evt.id} event={cardEvent} />;
             })}
           </div>
         )}
