@@ -25,12 +25,20 @@ export default function Navbar() {
   const toggleMenu = () => setOpen(!open);
   const closeMenu = () => setOpen(false);
 
+  // ✅ ROLE-AWARE ACCOUNT DESTINATION
+  const accountHref =
+    user?.role === "admin" ? "/admin" : "/dashboard";
+
   return (
     <header className="sticky top-0 z-50 bg-white shadow-sm">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* MOBILE ICON */}
         <button onClick={toggleMenu} className="p-2 md:hidden">
-          {open ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
+          {open ? (
+            <XMarkIcon className="w-6 h-6" />
+          ) : (
+            <Bars3Icon className="w-6 h-6" />
+          )}
         </button>
 
         {/* LOGO */}
@@ -57,10 +65,10 @@ export default function Navbar() {
             )}
           </Link>
 
-          {/* ACCOUNT */}
+          {/* ACCOUNT (DESKTOP) */}
           {!loading && (
             user ? (
-              <Link href="/dashboard" className="hidden md:inline-block">
+              <Link href={accountHref} className="hidden md:inline-block">
                 My Account
               </Link>
             ) : (
@@ -84,54 +92,54 @@ export default function Navbar() {
       </nav>
 
       {/* MOBILE MENU */}
-{open && (
-  <>
-    {/* BACKDROP */}
-    <button
-      className="fixed inset-0 bg-black/30 z-40 md:hidden"
-      onClick={closeMenu}
-      aria-label="Close menu"
-    />
+      {open && (
+        <>
+          {/* BACKDROP */}
+          <button
+            className="fixed inset-0 bg-black/30 z-40 md:hidden"
+            onClick={closeMenu}
+            aria-label="Close menu"
+          />
 
-    {/* MENU PANEL */}
-    <div className="relative z-50 bg-[var(--accent)] rounded-b-xl shadow-lg md:hidden p-4">
-      <ul className="space-y-1">
-        {NAV_LINKS.map((l) => (
-          <li key={l.href}>
-            <Link
-              href={l.href}
-              onClick={closeMenu}
-              className="block px-3 py-2"
-            >
-              {l.label}
-            </Link>
-          </li>
-        ))}
+          {/* MENU PANEL */}
+          <div className="relative z-50 bg-[var(--accent)] rounded-b-xl shadow-lg md:hidden p-4">
+            <ul className="space-y-1">
+              {NAV_LINKS.map((l) => (
+                <li key={l.href}>
+                  <Link
+                    href={l.href}
+                    onClick={closeMenu}
+                    className="block px-3 py-2"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
 
-        {!loading && (
-          user ? (
-            <Link
-              href="/dashboard"
-              onClick={closeMenu}
-              className="block px-3 py-2"
-            >
-              My Account
-            </Link>
-          ) : (
-            <Link
-              href="/sign-in"
-              onClick={closeMenu}
-              className="block px-3 py-2"
-            >
-              Sign In
-            </Link>
-          )
-        )}
-      </ul>
-    </div>
-  </>
-)}
-
+              {/* ACCOUNT (MOBILE) */}
+              {!loading && (
+                user ? (
+                  <Link
+                    href={accountHref}
+                    onClick={closeMenu}
+                    className="block px-3 py-2"
+                  >
+                    My Account
+                  </Link>
+                ) : (
+                  <Link
+                    href="/sign-in"
+                    onClick={closeMenu}
+                    className="block px-3 py-2"
+                  >
+                    Sign In
+                  </Link>
+                )
+              )}
+            </ul>
+          </div>
+        </>
+      )}
     </header>
   );
 }
