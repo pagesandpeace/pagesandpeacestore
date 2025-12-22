@@ -25,11 +25,14 @@ export default async function AdminLayout({
     error: authErr,
   } = await supabase.auth.getUser();
 
+  console.log("🟥 [ADMIN] auth user:", user?.id, user?.email);
+
   if (authErr) {
     console.error("❌ [admin layout] getUser error:", authErr);
   }
 
   if (!user) {
+    console.log("🟥 [ADMIN] no auth user → redirect /sign-in");
     redirect("/sign-in?callbackURL=/admin");
   }
 
@@ -42,21 +45,29 @@ export default async function AdminLayout({
     .eq("auth_user_id", user.id)
     .single();
 
+  console.log("🟥 [ADMIN] profile lookup:", profile);
+
   if (profileErr || !profile) {
     console.error("❌ [admin layout] profile error:", profileErr);
+    console.log("🟥 [ADMIN] profile missing → redirect /dashboard");
     redirect("/dashboard");
   }
 
   /* --------------------------------------------------
      3) Enforce admin role
   -------------------------------------------------- */
+  console.log("🟥 [ADMIN] profile.role =", profile.role);
+
   if (profile.role !== "admin") {
+    console.log("🟥 [ADMIN] NOT admin → redirect /dashboard");
     redirect("/dashboard");
   }
 
   /* --------------------------------------------------
      4) Render admin UI
   -------------------------------------------------- */
+  console.log("🟥 [ADMIN] ✅ admin access granted");
+
   return (
     <div className="min-h-dvh flex bg-[#FAF6F1]">
       <AdminSidebar user={user} profile={profile} />
