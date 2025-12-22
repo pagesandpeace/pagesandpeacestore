@@ -18,7 +18,7 @@ export async function GET() {
     const allCookies = cookieStore.getAll();
     console.log(
       "🍪 Cookies received:",
-      allCookies.map(c => ({
+      allCookies.map((c) => ({
         name: c.name,
         hasValue: Boolean(c.value),
       }))
