@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/auth-server";
 
 export async function GET() {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

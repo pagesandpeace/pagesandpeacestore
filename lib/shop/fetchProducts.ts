@@ -1,5 +1,5 @@
 // lib/shop/fetchProducts.ts
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/auth-server";
 
 export const PAGE_SIZE = 12;
 

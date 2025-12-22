@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/auth-server";
 
 /* ------------------------------------------------------
    GET — returns the hero block (creates if missing)

@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/auth-server";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { redirect } from "next/navigation";

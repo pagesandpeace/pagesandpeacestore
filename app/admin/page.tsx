@@ -2,7 +2,7 @@
 import { redirect } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
 
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/auth-server";
 
 import DashboardKpiCards from "@/components/admin/dashboard/DashboardKpiCards";
 import LowStockWidget from "@/components/admin/dashboard/LowStockWidget";

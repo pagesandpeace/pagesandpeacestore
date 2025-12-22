@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/auth-server";
 import EventAttendeesTable from "@/components/admin/events/EventAttendeesTable";
 
 type PageProps = {

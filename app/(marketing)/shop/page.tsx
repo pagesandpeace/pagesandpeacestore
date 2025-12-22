@@ -5,9 +5,7 @@ import FilterBar from "@/components/shop/FilterBar";
 import Pagination from "@/components/shop/Pagination";
 import ProductGrid from "@/components/shop/ProductGrid";
 import CategoryTabs from "@/components/shop/CategoryTabs";
-import { supabaseServer } from "@/lib/supabase/server";
-console.log("SUPABASE URL", process.env.NEXT_PUBLIC_SUPABASE_URL);
-console.log("HAS SERVICE ROLE", Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY));
+import { supabaseService } from "@/lib/supabase/service";
 
 export type SearchParams = {
   page?: string;
@@ -26,21 +24,22 @@ export default async function ShopPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const supabase = await supabaseServer();
+
+  // ✅ SERVICE ROLE CLIENT (NO AUTH, NO COOKIES)
+  const supabase = supabaseService();
 
   /* ----------------------------------------------------
      1. LOAD HERO BLOCK
   ---------------------------------------------------- */
-  console.log("🟣 Loading hero block…");
-
   const { data: heroBlock, error: heroError } = await supabase
     .from("marketing_blocks")
     .select("*")
     .eq("key", "shop_hero")
     .maybeSingle();
 
-  console.log("🔵 heroBlock:", heroBlock);
-  console.log("🔴 heroError:", heroError);
+  if (heroError) {
+    console.error("❌ hero block error:", heroError);
+  }
 
   let heroActive = false;
 
@@ -53,10 +52,6 @@ export default async function ShopPage({
       heroBlock.visible &&
       (!starts || starts <= now) &&
       (!ends || now <= ends);
-
-    console.log("🟢 heroActive:", heroActive);
-    console.log("🟡 Starts:", starts);
-    console.log("🟡 Ends:", ends);
   }
 
   /* -----------------------------
@@ -76,7 +71,7 @@ export default async function ShopPage({
     .from("products")
     .select("author")
     .neq("author", null)
-    .neq("product_type", "event"); // 🔒 HARD EXCLUDE EVENTS
+    .neq("product_type", "event");
 
   const authors = [
     ...new Set((authorRows ?? []).map((a) => a.author)),
@@ -103,12 +98,13 @@ export default async function ShopPage({
   const themes = themesData ?? [];
 
   /* -----------------------------
-     PRODUCTS (EVENTS EXCLUDED IN fetchProducts)
+     PRODUCTS
   ------------------------------ */
-  const { products, total, page, pageSize } = await fetchProducts(params);
+  const { products, total, page, pageSize } =
+    await fetchProducts(params);
 
   /* -----------------------------
-     CATEGORY TABS (NO EVENTS)
+     CATEGORY TABS
   ------------------------------ */
   const CATEGORIES = [
     { key: "all", label: "All" },
@@ -121,9 +117,6 @@ export default async function ShopPage({
 
   return (
     <main className="min-h-screen bg-[#FAF6F1] px-6 py-12">
-      {/* -------------------------------------------------
-          SHOP HERO
-      -------------------------------------------------- */}
       {heroActive && (
         <div className="relative w-full h-[260px] md:h-[340px] rounded-xl overflow-hidden shadow-lg mb-10 max-w-5xl mx-auto">
           {heroBlock?.image_url && (
@@ -135,7 +128,7 @@ export default async function ShopPage({
           )}
 
           <div className="absolute inset-0 bg-black/40 flex flex-col justify-center px-8 py-6">
-            <h2 className="text-white text-3xl md:text-5xl font-bold drop-shadow mb-2">
+            <h2 className="text-white text-3xl md:text-5xl font-bold mb-2">
               {heroBlock?.title}
             </h2>
 
@@ -146,7 +139,7 @@ export default async function ShopPage({
             {heroBlock?.cta_text && (
               <a
                 href={heroBlock.cta_link}
-                className="inline-block bg-white text-black px-6 py-2 rounded-full font-semibold hover:bg-neutral-200 transition shadow"
+                className="inline-block bg-white text-black px-6 py-2 rounded-full font-semibold hover:bg-neutral-200 transition"
               >
                 {heroBlock.cta_text}
               </a>

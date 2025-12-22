@@ -1,7 +1,7 @@
 // app/(marketing)/shop/[slug]/page.tsx
 export const dynamic = "force-dynamic";
 
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/auth-server";
 import ProductDetail from "@/components/shop/product/ProductDetail";
 
 type PageParams = {

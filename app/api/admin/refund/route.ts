@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAuthServer } from "@/lib/supabase/auth-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/* --------------------------------------------------
+   STRIPE
+-------------------------------------------------- */
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 /* --------------------------------------------------
@@ -32,7 +35,7 @@ export async function POST(req: Request) {
   console.log("🔴 REFUND ROUTE HIT");
 
   /* ---------------- AUTH ---------------- */
-  const supabase = await supabaseServer();
+  const supabase = await supabaseAuthServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -67,7 +70,10 @@ export async function POST(req: Request) {
       .single();
 
     if (!order || !["completed", "partially_refunded"].includes(order.status)) {
-      return NextResponse.json({ error: "Order not refundable" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Order not refundable" },
+        { status: 400 }
+      );
     }
 
     const { data: items } = await supabaseAdmin
@@ -76,7 +82,10 @@ export async function POST(req: Request) {
       .eq("order_id", order.id);
 
     if (!items || items.length === 0) {
-      return NextResponse.json({ error: "No refundable items" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No refundable items" },
+        { status: 400 }
+      );
     }
 
     const refundableAmount = items.reduce((sum, item) => {
@@ -85,7 +94,10 @@ export async function POST(req: Request) {
     }, 0);
 
     if (refundableAmount <= 0) {
-      return NextResponse.json({ error: "Nothing left to refund" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Nothing left to refund" },
+        { status: 400 }
+      );
     }
 
     const refund = await stripe.refunds.create({
@@ -124,7 +136,7 @@ export async function POST(req: Request) {
   }
 
   /* ==================================================
-     🟡 SINGLE SEAT REFUND (FIXED)
+     🟡 SINGLE SEAT REFUND
   ================================================== */
   if ("bookingId" in body) {
     const { bookingId } = body;
@@ -137,18 +149,24 @@ export async function POST(req: Request) {
       .single();
 
     if (!booking || booking.refunded) {
-      return NextResponse.json({ error: "Booking not refundable" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Booking not refundable" },
+        { status: 400 }
+      );
     }
 
-    /* 🔑 FIX: derive order_item safely */
     let itemQuery = supabaseAdmin
       .from("order_items")
-      .select("id, kind, order_id, price, quantity, refunded_quantity, refunded_amount");
+      .select(
+        "id, kind, order_id, price, quantity, refunded_quantity, refunded_amount"
+      );
 
     if (booking.order_item_id) {
       itemQuery = itemQuery.eq("id", booking.order_item_id);
     } else {
-      itemQuery = itemQuery.eq("event_id", booking.event_id).eq("kind", "event");
+      itemQuery = itemQuery
+        .eq("event_id", booking.event_id)
+        .eq("kind", "event");
     }
 
     const { data: item } = await itemQuery.single();
@@ -175,7 +193,10 @@ export async function POST(req: Request) {
       .single();
 
     if (!order || !["completed", "partially_refunded"].includes(order.status)) {
-      return NextResponse.json({ error: "Order not refundable" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Order not refundable" },
+        { status: 400 }
+      );
     }
 
     const refund = await stripe.refunds.create({
@@ -213,5 +234,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, stripe_refund_id: refund.id });
   }
 
-  return NextResponse.json({ error: "Invalid refund request" }, { status: 400 });
+  return NextResponse.json(
+    { error: "Invalid refund request" },
+    { status: 400 }
+  );
 }
