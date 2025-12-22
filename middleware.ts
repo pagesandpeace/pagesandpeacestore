@@ -3,6 +3,9 @@ import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 
 export async function middleware(req: NextRequest) {
+  // 🔎 DEBUG LOG — THIS IS WHAT WE WANT TO SEE IN PROD
+  console.log("🟨 [MIDDLEWARE] running for:", req.nextUrl.pathname);
+
   const res = NextResponse.next({
     request: { headers: req.headers },
   });
@@ -30,7 +33,7 @@ export async function middleware(req: NextRequest) {
 
   const pathname = req.nextUrl.pathname;
 
-  // Only protect authentication, NOT roles
+  // 🔐 AUTH ONLY (NO ROLE LOGIC)
   if (
     (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) &&
     !user
