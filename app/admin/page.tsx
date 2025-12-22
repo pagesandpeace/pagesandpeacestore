@@ -40,7 +40,7 @@ export default async function AdminDashboardPage() {
   const supabase = await supabaseServer();
 
   /* ------------------------------------------------------------------
-     AUTH
+     AUTH (SERVER SOURCE OF TRUTH)
   ------------------------------------------------------------------ */
   const {
     data: { user },
@@ -50,10 +50,13 @@ export default async function AdminDashboardPage() {
     redirect("/sign-in?callbackURL=/admin");
   }
 
+  /* ------------------------------------------------------------------
+     ✅ CORRECT PROFILE LOOKUP (auth_user_id)
+  ------------------------------------------------------------------ */
   const { data: profile } = await supabase
     .from("users")
     .select("role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (profile?.role !== "admin") {
