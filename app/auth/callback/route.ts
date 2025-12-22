@@ -14,12 +14,14 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const callbackURL = url.searchParams.get("callbackURL") || "/dashboard";
 
-  // detect loyalty intent
+  // Optional intent flags (safe to keep)
   const joinLoyalty = url.searchParams.get("join") === "loyalty";
 
-  if (!code) return NextResponse.redirect(new URL("/", url));
+  if (!code) {
+    return NextResponse.redirect(new URL("/sign-in", url));
+  }
 
-  const cookieStore = await cookies();
+    const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,46 +30,44 @@ export async function GET(request: Request) {
       cookies: {
         getAll: () => cookieStore.getAll(),
         setAll: (cookies) => {
-          for (const cookie of cookies) {
-            cookieStore.set(cookie.name, cookie.value, cookie.options);
-          }
+          cookies.forEach((cookie) =>
+            cookieStore.set(cookie.name, cookie.value, cookie.options)
+          );
         },
       },
     }
   );
 
-  // --------------------------------------------------
-  // Exchange OAuth code → session
-  // --------------------------------------------------
+
+  /* --------------------------------------------------
+     Exchange OAuth code → session
+  -------------------------------------------------- */
   const { error: exchangeError } =
     await supabase.auth.exchangeCodeForSession(code);
 
   if (exchangeError) {
-    console.error("❌ OAuth session exchange failed:", exchangeError);
+    console.error("❌ OAuth exchange failed:", exchangeError);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
-  // small delay for cookie propagation
-  await new Promise((r) => setTimeout(r, 120));
-
-  // --------------------------------------------------
-  // Load authenticated user
-  // --------------------------------------------------
+  /* --------------------------------------------------
+     Load authenticated user
+  -------------------------------------------------- */
   const {
     data: { user },
+    error: userErr,
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    console.error("❌ No user after OAuth exchange");
+  if (userErr || !user) {
+    console.error("❌ getUser failed after OAuth:", userErr);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
   console.log("👤 OAuth user:", user.id);
-  console.log("🎯 join loyalty intent:", joinLoyalty);
 
-  // --------------------------------------------------
-  // Extract Google metadata
-  // --------------------------------------------------
+  /* --------------------------------------------------
+     Extract Google metadata (safe, non-blocking)
+  -------------------------------------------------- */
   const meta = (user.user_metadata as GoogleMetadata) || {};
 
   const displayName =
@@ -76,41 +76,37 @@ export async function GET(request: Request) {
   const avatar =
     meta.avatar_url || meta.picture || null;
 
- // --------------------------------------------------
-// Ensure public.users row exists (JOIN VIA auth_user_id)
-// --------------------------------------------------
-const { data: existing } = await supabase
-  .from("users")
-  .select("id, role")
-  .eq("auth_user_id", user.id)
-  .maybeSingle();
+  /* --------------------------------------------------
+     Ensure public.users row exists (idempotent)
+     JOIN VIA auth_user_id (IMPORTANT)
+  -------------------------------------------------- */
+  const { data: existing } = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
 
-const role = existing?.role ?? "customer";
+  if (!existing) {
+    const { error: insertErr } = await supabase.from("users").insert({
+      auth_user_id: user.id,
+      email: user.email,
+      name: displayName,
+      image: avatar,
+      role: "customer",
+    });
 
-if (!existing) {
-  const { error: insertErr } = await supabase.from("users").insert({
-    auth_user_id: user.id,
-    email: user.email,
-    name: displayName,
-    image: avatar,
-    role: "customer",
-  });
-
-  if (insertErr) {
-    console.error("❌ Profile insert error:", insertErr);
-  } else {
-    console.log("✅ Created public.users profile");
+    if (insertErr) {
+      console.error("❌ users insert failed:", insertErr);
+    } else {
+      console.log("✅ Created public.users profile");
+    }
   }
-}
 
-
-  // --------------------------------------------------
-  // Auto-opt-in to loyalty (idempotent)
-  // --------------------------------------------------
+  /* --------------------------------------------------
+     Optional: loyalty auto-opt-in (idempotent)
+  -------------------------------------------------- */
   if (joinLoyalty) {
-    console.log("🌿 Attempting loyalty auto-opt-in");
-
-    const { error: loyaltyError } = await supabase
+    const { error: loyaltyErr } = await supabase
       .from("loyalty_members")
       .insert({
         user_id: user.id,
@@ -120,19 +116,13 @@ if (!existing) {
         terms_version: "v1.0",
       });
 
-    if (loyaltyError && loyaltyError.code !== "23505") {
-      console.error("❌ Loyalty auto-opt-in failed:", loyaltyError);
-    } else {
-      console.log("✅ Loyalty member ensured");
+    if (loyaltyErr && loyaltyErr.code !== "23505") {
+      console.error("❌ Loyalty opt-in failed:", loyaltyErr);
     }
   }
 
-  // --------------------------------------------------
-  // Redirect by role
-  // --------------------------------------------------
-  if (role === "admin") {
-    return NextResponse.redirect(new URL("/admin", url));
-  }
-
+  /* --------------------------------------------------
+     FINAL redirect — NO role logic here
+  -------------------------------------------------- */
   return NextResponse.redirect(new URL(callbackURL, url));
 }
