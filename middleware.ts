@@ -3,9 +3,6 @@ import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 
 export async function middleware(req: NextRequest) {
-  // 🔎 DEBUG LOG — THIS IS WHAT WE WANT TO SEE IN PROD
-  console.log("🟨 [MIDDLEWARE] running for:", req.nextUrl.pathname);
-
   const res = NextResponse.next({
     request: { headers: req.headers },
   });
@@ -33,12 +30,28 @@ export async function middleware(req: NextRequest) {
 
   const pathname = req.nextUrl.pathname;
 
-  // 🔐 AUTH ONLY (NO ROLE LOGIC)
-  if (
-    (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) &&
-    !user
-  ) {
+  /* --------------------------------------------------
+     AUTH ONLY
+  -------------------------------------------------- */
+
+  if (!user && (pathname.startsWith("/admin") || pathname.startsWith("/dashboard"))) {
     return NextResponse.redirect(new URL("/sign-in", req.url));
+  }
+
+  /* --------------------------------------------------
+     🚫 HARD BLOCK ADMINS FROM /dashboard
+  -------------------------------------------------- */
+
+  if (pathname.startsWith("/dashboard") && user) {
+    const { data: profile } = await supabase
+      .from("users")
+      .select("role")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if (profile?.role === "admin") {
+      return NextResponse.redirect(new URL("/admin", req.url));
+    }
   }
 
   return res;
