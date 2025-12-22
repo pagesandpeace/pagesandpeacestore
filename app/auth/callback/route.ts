@@ -1,4 +1,3 @@
-// app/auth/callback/route.ts
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -15,7 +14,7 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const callbackURL = url.searchParams.get("callbackURL") || "/dashboard";
 
-  // 🔑 NEW: detect loyalty intent
+  // detect loyalty intent
   const joinLoyalty = url.searchParams.get("join") === "loyalty";
 
   if (!code) return NextResponse.redirect(new URL("/", url));
@@ -48,6 +47,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
+  // small delay for cookie propagation
   await new Promise((r) => setTimeout(r, 120));
 
   // --------------------------------------------------
@@ -70,56 +70,42 @@ export async function GET(request: Request) {
   // --------------------------------------------------
   const meta = (user.user_metadata as GoogleMetadata) || {};
 
-  const googleName =
+  const displayName =
     meta.full_name || meta.name || user.email || "";
 
-  const googleAvatar =
+  const avatar =
     meta.avatar_url || meta.picture || null;
 
-  // --------------------------------------------------
-  // Ensure public.users row exists
-  // --------------------------------------------------
-  const { data: existing } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
+ // --------------------------------------------------
+// Ensure public.users row exists (JOIN VIA auth_user_id)
+// --------------------------------------------------
+const { data: existing } = await supabase
+  .from("users")
+  .select("id, role")
+  .eq("auth_user_id", user.id)
+  .maybeSingle();
 
-  let role = existing?.role ?? "customer";
+const role = existing?.role ?? "customer";
 
-  if (!existing) {
-    const { error: insertErr } = await supabase.from("users").insert({
-      id: user.id,
-      email: user.email,
-      name: googleName,
-      image: googleAvatar,
-      role: "customer",
-      auth_provider: "google",
-    });
+if (!existing) {
+  const { error: insertErr } = await supabase.from("users").insert({
+    auth_user_id: user.id,
+    email: user.email,
+    name: displayName,
+    image: avatar,
+    role: "customer",
+  });
 
-    if (insertErr) {
-      console.error("❌ Profile insert error:", insertErr);
-    } else {
-      console.log("✅ Created public.users profile");
-    }
+  if (insertErr) {
+    console.error("❌ Profile insert error:", insertErr);
   } else {
-    const newProvider =
-      existing.auth_provider === "credentials"
-        ? "both"
-        : existing.auth_provider;
-
-    if (newProvider !== existing.auth_provider) {
-      await supabase
-        .from("users")
-        .update({ auth_provider: newProvider })
-        .eq("id", user.id);
-    }
-
-    role = existing.role;
+    console.log("✅ Created public.users profile");
   }
+}
+
 
   // --------------------------------------------------
-  // 🔑 NEW: AUTO OPT-IN TO LOYALTY (IDEMPOTENT)
+  // Auto-opt-in to loyalty (idempotent)
   // --------------------------------------------------
   if (joinLoyalty) {
     console.log("🌿 Attempting loyalty auto-opt-in");
@@ -132,9 +118,7 @@ export async function GET(request: Request) {
         tier: "starter",
         marketing_consent: false,
         terms_version: "v1.0",
-      })
-      .select()
-      .maybeSingle();
+      });
 
     if (loyaltyError && loyaltyError.code !== "23505") {
       console.error("❌ Loyalty auto-opt-in failed:", loyaltyError);
@@ -144,7 +128,7 @@ export async function GET(request: Request) {
   }
 
   // --------------------------------------------------
-  // Redirect
+  // Redirect by role
   // --------------------------------------------------
   if (role === "admin") {
     return NextResponse.redirect(new URL("/admin", url));
