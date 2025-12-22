@@ -17,7 +17,9 @@ export default async function AdminLayout({
 
   const supabase = await supabaseServer();
 
-  // 1) Get auth user
+  /* --------------------------------------------------
+     1) Get auth user (server source of truth)
+  -------------------------------------------------- */
   const {
     data: { user },
     error: authErr,
@@ -31,29 +33,33 @@ export default async function AdminLayout({
     redirect("/sign-in?callbackURL=/admin");
   }
 
-  // 2) ✅ CORRECT JOIN VIA auth_user_id
+  /* --------------------------------------------------
+     2) Load public.users profile (JOIN VIA auth_user_id)
+  -------------------------------------------------- */
   const { data: profile, error: profileErr } = await supabase
     .from("users")
-    .select("role")
+    .select("*")
     .eq("auth_user_id", user.id)
     .single();
 
-  if (profileErr) {
+  if (profileErr || !profile) {
     console.error("❌ [admin layout] profile error:", profileErr);
-  }
-
-  const role = profile?.role ?? "customer";
-  console.log("[admin layout] user", user.email, "role:", role);
-
-  // 3) Only allow admins
-  if (role !== "admin") {
     redirect("/dashboard");
   }
 
-  // 4) Admin view
+  /* --------------------------------------------------
+     3) Enforce admin role
+  -------------------------------------------------- */
+  if (profile.role !== "admin") {
+    redirect("/dashboard");
+  }
+
+  /* --------------------------------------------------
+     4) Render admin UI
+  -------------------------------------------------- */
   return (
     <div className="min-h-dvh flex bg-[#FAF6F1]">
-      <AdminSidebar />
+      <AdminSidebar user={user} profile={profile} />
       <main className="flex-1 ml-64 p-10">{children}</main>
     </div>
   );

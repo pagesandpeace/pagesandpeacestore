@@ -4,24 +4,47 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
-import { useUser } from "@/hooks/useUser";
+import type { User } from "@supabase/supabase-js";
+
+/* -------------------------------------------------------
+   TYPES
+------------------------------------------------------- */
+
+export type UserProfile = {
+  id: string;
+  auth_user_id: string;
+  email: string | null;
+  name: string | null;
+  image: string | null;
+  role: "admin" | "customer";
+};
 
 type LoyaltyState = {
   member: boolean;
   tier?: string;
 };
 
+type SidebarProps = {
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+  handleNav: (href: string) => void;
+  user: User;
+  profile: UserProfile | null;
+};
+
+/* -------------------------------------------------------
+   COMPONENT
+------------------------------------------------------- */
+
 export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
   handleNav,
-}: {
-  sidebarOpen: boolean;
-  setSidebarOpen: (open: boolean) => void;
-  handleNav: (href: string) => void;
-}) {
+  user,
+  profile,
+}: SidebarProps) {
   const router = useRouter();
-  const { user, refresh } = useUser();
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [loyalty, setLoyalty] = useState<LoyaltyState | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
@@ -31,7 +54,10 @@ export default function Sidebar({
   ------------------------------------------------------- */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+      if (
+        accountRef.current &&
+        !accountRef.current.contains(e.target as Node)
+      ) {
         setMenuOpen(false);
       }
     };
@@ -41,27 +67,11 @@ export default function Sidebar({
   }, []);
 
   /* -------------------------------------------------------
-     Refresh sidebar on profile updates
-  ------------------------------------------------------- */
-  useEffect(() => {
-    const update = () => refresh();
-
-    window.addEventListener("pp:user-should-refresh", update);
-    window.addEventListener("avatar-updated", update);
-    window.addEventListener("pp:profile-updated", update);
-
-    return () => {
-      window.removeEventListener("pp:user-should-refresh", update);
-      window.removeEventListener("avatar-updated", update);
-      window.removeEventListener("pp:profile-updated", update);
-    };
-  }, [refresh]);
-
-  /* -------------------------------------------------------
      Fetch loyalty status (external system)
+     (unchanged logic)
   ------------------------------------------------------- */
   useEffect(() => {
-    if (!user) return; // 👈 no state sync, no cascade
+    if (!user) return;
 
     let mounted = true;
 
@@ -71,10 +81,7 @@ export default function Sidebar({
         if (!res.ok) return;
 
         const data = await res.json();
-
-        if (mounted) {
-          setLoyalty(data);
-        }
+        if (mounted) setLoyalty(data);
       } catch (err) {
         console.error("❌ Failed to load loyalty status", err);
       }
@@ -86,7 +93,7 @@ export default function Sidebar({
   }, [user]);
 
   /* -------------------------------------------------------
-     Sign out
+     Sign out (unchanged)
   ------------------------------------------------------- */
   const handleSignOut = async () => {
     await fetch("/auth/signout", { method: "POST" });
@@ -94,6 +101,9 @@ export default function Sidebar({
     router.push("/sign-in");
   };
 
+  /* -------------------------------------------------------
+     RENDER
+  ------------------------------------------------------- */
   return (
     <>
       {/* BACKDROP (mobile) */}
@@ -183,71 +193,62 @@ export default function Sidebar({
           ref={accountRef}
           className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1]"
         >
-          {user ? (
-            <>
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="flex items-center gap-3 w-full text-left rounded-md px-2 py-2 hover:bg-[#f1ede7]"
-              >
-                <Image
-                  src={user.image ?? "/user_avatar_placeholder.svg"}
-                  alt="avatar"
-                  width={36}
-                  height={36}
-                  className="rounded-full border object-cover"
-                />
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="flex items-center gap-3 w-full text-left rounded-md px-2 py-2 hover:bg-[#f1ede7]"
+          >
+            <Image
+              src={profile?.image ?? "/user_avatar_placeholder.svg"}
+              alt="avatar"
+              width={36}
+              height={36}
+              className="rounded-full border object-cover"
+            />
 
-                <div className="flex flex-col leading-tight overflow-hidden">
-                  <span className="font-medium text-xs truncate">
-                    {user.name || "User"}
-                  </span>
+            <div className="flex flex-col leading-tight overflow-hidden">
+              <span className="font-medium text-xs truncate">
+                {profile?.name || user.email || "User"}
+              </span>
 
-                  {loyalty?.member && (
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-[#2f6b3a]">
-                      Chapters Club
-                      {loyalty.tier && (
-                        <span className="opacity-70">
-                          • {loyalty.tier.charAt(0).toUpperCase() + loyalty.tier.slice(1)}
-                        </span>
-                      )}
-                      ✨
+              {loyalty?.member && (
+                <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-[#2f6b3a]">
+                  Chapters Club
+                  {loyalty.tier && (
+                    <span className="opacity-70">
+                      •{" "}
+                      {loyalty.tier.charAt(0).toUpperCase() +
+                        loyalty.tier.slice(1)}
                     </span>
                   )}
-                </div>
+                  ✨
+                </span>
+              )}
+            </div>
+          </button>
+
+          {menuOpen && (
+            <div className="absolute bottom-[110px] left-6 bg-white border rounded-md shadow p-1 w-44 z-50">
+              <button
+                onClick={() => handleNav("/dashboard/account")}
+                className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
+              >
+                My Account
               </button>
 
-              {menuOpen && (
-                <div className="absolute bottom-[110px] left-6 bg-white border rounded-md shadow p-1 w-44 z-50">
-                  <button
-                    onClick={() => handleNav("/dashboard/account")}
-                    className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
-                  >
-                    My Account
-                  </button>
+              <button
+                onClick={() => handleNav("/dashboard/settings")}
+                className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
+              >
+                Settings
+              </button>
 
-                  <button
-                    onClick={() => handleNav("/dashboard/settings")}
-                    className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
-                  >
-                    Settings
-                  </button>
-
-                  <button
-                    onClick={handleSignOut}
-                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-[#FAF6F1]"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <button
-              onClick={() => handleNav("/sign-in")}
-              className="block w-full text-center px-4 py-2 border rounded-md text-[#5DA865] border-[#5DA865] hover:bg-[#5DA865] hover:text-white"
-            >
-              Sign in
-            </button>
+              <button
+                onClick={handleSignOut}
+                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-[#FAF6F1]"
+              >
+                Sign out
+              </button>
+            </div>
           )}
         </div>
       </aside>

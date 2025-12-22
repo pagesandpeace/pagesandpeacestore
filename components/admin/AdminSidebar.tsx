@@ -3,37 +3,71 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useUser } from "@/hooks/useUser";
+import type { User } from "@supabase/supabase-js";
 
-export default function AdminSidebar() {
+/* -------------------------------------------------------
+   TYPES
+------------------------------------------------------- */
+
+export type UserProfile = {
+  id: string;
+  auth_user_id: string;
+  email: string | null;
+  name: string | null;
+  image: string | null;
+  role: "admin" | "customer";
+};
+
+type AdminSidebarProps = {
+  user: User;
+  profile: UserProfile;
+};
+
+/* -------------------------------------------------------
+   COMPONENT
+------------------------------------------------------- */
+
+export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
   const router = useRouter();
-  const { user, loading } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement | null>(null);
 
-  // Close dropdown when clicking outside
+  /* -------------------------------------------------------
+     Close dropdown when clicking outside
+  ------------------------------------------------------- */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+      if (
+        accountRef.current &&
+        !accountRef.current.contains(e.target as Node)
+      ) {
         setMenuOpen(false);
       }
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  /* -------------------------------------------------------
+     Navigation
+  ------------------------------------------------------- */
   const handleNav = (href: string) => {
     router.push(href);
   };
 
+  /* -------------------------------------------------------
+     Sign out (unchanged)
+  ------------------------------------------------------- */
   const handleSignOut = async () => {
     await fetch("/auth/signout", { method: "POST" });
     window.dispatchEvent(new Event("pp:auth-updated"));
     router.push("/sign-in");
   };
 
-  if (loading) return null;
-
+  /* -------------------------------------------------------
+     RENDER
+  ------------------------------------------------------- */
   return (
     <aside
       className="
@@ -60,27 +94,45 @@ export default function AdminSidebar() {
 
         {/* NAVIGATION */}
         <nav className="mt-6 text-sm flex flex-col gap-y-5 max-h-[60vh] overflow-y-auto pr-2 pb-4">
-
-          <button onClick={() => handleNav("/admin")} className="text-left hover:text-[#5DA865]">
+          <button
+            onClick={() => handleNav("/admin")}
+            className="text-left hover:text-[#5DA865]"
+          >
             Dashboard
           </button>
 
-          <button onClick={() => handleNav("/admin/events")} className="text-left hover:text-[#5DA865]">
+          <button
+            onClick={() => handleNav("/admin/events")}
+            className="text-left hover:text-[#5DA865]"
+          >
             Events
           </button>
 
-          <button onClick={() => handleNav("/admin/events/new")} className="text-left hover:text-[#5DA865]">
+          <button
+            onClick={() => handleNav("/admin/events/new")}
+            className="text-left hover:text-[#5DA865]"
+          >
             Create Event
           </button>
 
-          <button onClick={() => handleNav("/admin/products")} className="text-left hover:text-[#5DA865]">
+          <button
+            onClick={() => handleNav("/admin/products")}
+            className="text-left hover:text-[#5DA865]"
+          >
             Products
           </button>
 
-          <button onClick={() => handleNav("/admin/products/new")} className="text-left hover:text-[#5DA865]">
+          <button
+            onClick={() => handleNav("/admin/products/new")}
+            className="text-left hover:text-[#5DA865]"
+          >
             Add Product
           </button>
-          <button onClick={() => handleNav("/admin/orders")} className="text-left hover:text-[#5DA865]">
+
+          <button
+            onClick={() => handleNav("/admin/orders")}
+            className="text-left hover:text-[#5DA865]"
+          >
             View orders
           </button>
 
@@ -116,66 +168,56 @@ export default function AdminSidebar() {
       </div>
 
       {/* BOTTOM ACCOUNT SECTION */}
-      <div ref={accountRef} className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1] relative">
-        {user ? (
-          <>
-            {/* User Profile Button */}
+      <div
+        ref={accountRef}
+        className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1] relative"
+      >
+        <button
+          onClick={() => setMenuOpen(!menuOpen)}
+          className="flex items-center gap-3 w-full text-left rounded-md px-2 py-2 hover:bg-[#f1ede7]"
+        >
+          <Image
+            src={profile.image ?? "/user_avatar_placeholder.svg"}
+            alt="User avatar"
+            width={36}
+            height={36}
+            className="rounded-full border object-cover"
+          />
+
+          <div className="flex flex-col leading-tight">
+            <span className="font-medium text-sm truncate">
+              {profile.name || user.email || "Admin"}
+            </span>
+
+            <span className="mt-1 inline-block bg-red-200 text-red-700 text-xs px-2 py-0.5 rounded-full border border-red-300">
+              Admin
+            </span>
+          </div>
+        </button>
+
+        {menuOpen && (
+          <div className="absolute bottom-[110px] left-6 bg-white border rounded-md shadow w-44 z-50">
             <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="flex items-center gap-3 w-full text-left rounded-md px-2 py-2 hover:bg-[#f1ede7]"
+              onClick={() => handleNav("/admin/account")}
+              className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
             >
-              <Image
-                src={user.image || "/user_avatar_placeholder.svg"}
-                alt="User avatar"
-                width={36}
-                height={36}
-                className="rounded-full border object-cover"
-              />
-
-              <div className="flex flex-col leading-tight">
-                <span className="font-medium text-sm truncate">
-                  {user.name || "Admin"}
-                </span>
-
-                <span className="mt-1 inline-block bg-red-200 text-red-700 text-xs px-2 py-0.5 rounded-full border border-red-300">
-                  Admin
-                </span>
-              </div>
+              My Account
             </button>
 
-            {/* Dropdown Menu */}
-            {menuOpen && (
-              <div className="absolute bottom-[110px] left-6 bg-white border rounded-md shadow w-44 z-50">
-                <button
-                  onClick={() => handleNav("/admin/account")}
-                  className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
-                >
-                  My Account
-                </button>
+            <button
+              onClick={() => handleNav("/admin/settings")}
+              className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
+            >
+              Settings
+            </button>
 
-                <button
-                  onClick={() => handleNav("/admin/settings")}
-                  className="block w-full text-left px-4 py-2 text-sm hover:bg-[#FAF6F1]"
-                >
-                  Settings
-                </button>
-
-                <button
-                  onClick={handleSignOut}
-                  className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-[#FAF6F1]"
-                >
-                  Sign out
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <button
-            onClick={() => handleNav("/sign-in")}
-            className="block w-full text-center px-4 py-2 border rounded-md text-[#5DA865] border-[#5DA865] hover:bg-[#5DA865] hover:text-white"
-          >
-            Sign in
-          </button>
+            <button
+              onClick={handleSignOut}
+              className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-[#FAF6F1]"
+            >
+              Sign out
+            </button>
+          </div>
         )}
       </div>
     </aside>

@@ -4,12 +4,28 @@ import { useState, useEffect, startTransition, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { Bars3Icon } from "@heroicons/react/24/outline";
+import type { User } from "@supabase/supabase-js";
 
-export default function DashboardLayout({
-  children,
-}: {
+type UserProfile = {
+  id: string;
+  auth_user_id: string;
+  email: string | null;
+  name: string | null;
+  image: string | null;
+  role: "admin" | "customer";
+};
+
+type DashboardUILayoutProps = {
   children: React.ReactNode;
-}) {
+  user: User;
+  profile: UserProfile | null;
+};
+
+export default function DashboardUILayout({
+  children,
+  user,
+  profile,
+}: DashboardUILayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
 
@@ -40,6 +56,8 @@ export default function DashboardLayout({
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         handleNav={handleNav}
+        user={user}
+        profile={profile}
       />
 
       {/* MAIN CONTENT */}

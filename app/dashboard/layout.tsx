@@ -16,19 +16,41 @@ export default async function DashboardLayout({
 
   const supabase = await supabaseServer();
 
+  // --------------------------------------------------
+  // 1) Get authenticated user (SERVER AUTH SOURCE OF TRUTH)
+  // --------------------------------------------------
   const {
     data: { user },
-    error,
+    error: authError,
   } = await supabase.auth.getUser();
 
-  if (error) {
-    console.error("❌ [dashboard layout] auth error:", error);
+  if (authError) {
+    console.error("❌ [dashboard layout] auth error:", authError);
   }
 
   if (!user) {
     redirect("/sign-in?callbackURL=/dashboard");
   }
 
-  // ✅ Authenticated → render UI layout
-  return <DashboardUILayout>{children}</DashboardUILayout>;
+  // --------------------------------------------------
+  // 2) Load public.users profile via auth_user_id
+  // --------------------------------------------------
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("auth_user_id", user.id)
+    .single();
+
+  if (profileError) {
+    console.error("❌ [dashboard layout] profile error:", profileError);
+  }
+
+  // --------------------------------------------------
+  // 3) Pass BOTH user + profile to client UI layout
+  // --------------------------------------------------
+  return (
+    <DashboardUILayout user={user} profile={profile}>
+      {children}
+    </DashboardUILayout>
+  );
 }
