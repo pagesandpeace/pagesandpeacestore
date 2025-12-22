@@ -47,7 +47,14 @@ export default async function DashboardLayout({
   }
 
   // --------------------------------------------------
-  // 3) Render CLIENT UI (NOT another layout)
+  // 3) 🚫 ADMINS NEVER SEE /dashboard
+  // --------------------------------------------------
+  if (profile?.role === "admin") {
+    redirect("/admin");
+  }
+
+  // --------------------------------------------------
+  // 4) Render CLIENT UI
   // --------------------------------------------------
   return (
     <DashboardUI user={user} profile={profile}>
