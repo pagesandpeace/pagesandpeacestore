@@ -1,16 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
 export default function UpdatePasswordPage() {
   const supabase = supabaseBrowser();
+
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [ready, setReady] = useState(false);
+
+  // 🔑 CRITICAL STEP: exchange recovery token for session
+  useEffect(() => {
+    async function exchange() {
+      const { error } = await supabase.auth.exchangeCodeForSession(
+        window.location.href
+      );
+
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        setReady(true);
+      }
+    }
+
+    exchange();
+  }, [supabase]);
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
@@ -21,6 +40,7 @@ export default function UpdatePasswordPage() {
     }
 
     setLoading(true);
+
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
@@ -30,6 +50,10 @@ export default function UpdatePasswordPage() {
     }
 
     setLoading(false);
+  }
+
+  if (!ready) {
+    return <p className="text-sm">Verifying reset link…</p>;
   }
 
   return (
