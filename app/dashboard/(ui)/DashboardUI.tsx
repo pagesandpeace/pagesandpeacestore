@@ -15,23 +15,20 @@ type UserProfile = {
   role: "admin" | "customer";
 };
 
-type DashboardUILayoutProps = {
+type DashboardUIProps = {
   children: React.ReactNode;
   user: User;
   profile: UserProfile | null;
 };
 
-export default function DashboardUILayout({
+export default function DashboardUI({
   children,
   user,
   profile,
-}: DashboardUILayoutProps) {
+}: DashboardUIProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
 
-  /* -------------------------------------------------------
-     PREFETCH KEY DASHBOARD ROUTES
-  ------------------------------------------------------- */
   useEffect(() => {
     if (!sidebarOpen) return;
 
@@ -51,7 +48,6 @@ export default function DashboardUILayout({
 
   return (
     <div className="flex bg-background min-h-dvh safe-bottom text-foreground">
-      {/* SIDEBAR */}
       <Sidebar
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
@@ -60,9 +56,17 @@ export default function DashboardUILayout({
         profile={profile}
       />
 
-      {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col md:ml-64 transition-all duration-300">
-        <MobileTopBar openSidebar={() => setSidebarOpen(true)} />
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-white px-4 md:hidden safe-top">
+          <button
+            type="button"
+            aria-label="Open menu"
+            className="inline-flex items-center justify-center rounded p-2"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Bars3Icon className="h-6 w-6 text-gray-800" />
+          </button>
+        </header>
 
         <main className="flex-1 p-4 md:p-8">
           <Suspense fallback={<div className="opacity-60 text-sm">Loading…</div>}>
@@ -71,23 +75,5 @@ export default function DashboardUILayout({
         </main>
       </div>
     </div>
-  );
-}
-
-/* -------------------------------------------------------
-   MOBILE TOP BAR
-------------------------------------------------------- */
-function MobileTopBar({ openSidebar }: { openSidebar: () => void }) {
-  return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-white px-4 md:hidden safe-top">
-      <button
-        type="button"
-        aria-label="Open menu"
-        className="inline-flex items-center justify-center rounded p-2"
-        onClick={openSidebar}
-      >
-        <Bars3Icon className="h-6 w-6 text-gray-800" />
-      </button>
-    </header>
   );
 }

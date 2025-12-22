@@ -1,7 +1,8 @@
+import "@/app/globals.css";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { unstable_noStore as noStore } from "next/cache";
-import DashboardUILayout from "./(ui)/layout";
+import DashboardUI from "./(ui)/DashboardUI";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export default async function DashboardLayout({
   const supabase = await supabaseServer();
 
   // --------------------------------------------------
-  // 1) Get authenticated user (SERVER AUTH SOURCE OF TRUTH)
+  // 1) Get authenticated user (SERVER SOURCE OF TRUTH)
   // --------------------------------------------------
   const {
     data: { user },
@@ -46,11 +47,11 @@ export default async function DashboardLayout({
   }
 
   // --------------------------------------------------
-  // 3) Pass BOTH user + profile to client UI layout
+  // 3) Render CLIENT UI (NOT another layout)
   // --------------------------------------------------
   return (
-    <DashboardUILayout user={user} profile={profile}>
+    <DashboardUI user={user} profile={profile}>
       {children}
-    </DashboardUILayout>
+    </DashboardUI>
   );
 }
