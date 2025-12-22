@@ -21,7 +21,7 @@ export default async function AdminEventsPage() {
   const { data: profile } = await supabase
     .from("users")
     .select("role")
-    .eq("id", auth.user.id)
+    .eq("auth_user_id", auth.user.id)
     .single();
 
   if (profile?.role !== "admin") redirect("/dashboard");

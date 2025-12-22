@@ -83,7 +83,8 @@ export async function PATCH(req: Request) {
       name: newName,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", auth.user.id);
+    .eq("auth_user_id", auth.user.id)
+
 
   if (updateErr) {
     console.error("Update profile error:", updateErr);

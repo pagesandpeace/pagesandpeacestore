@@ -68,7 +68,7 @@ export async function PATCH(req: Request) {
         image: uploadResult.secure_url,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", auth.user.id);
+      .eq("auth_user_id", auth.user.id)
 
     if (updateError) {
       console.error("💥 [API] Supabase update error:", updateError);
