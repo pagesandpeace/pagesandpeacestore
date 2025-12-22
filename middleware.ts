@@ -30,40 +30,17 @@ export async function middleware(req: NextRequest) {
 
   const pathname = req.nextUrl.pathname;
 
-  // -------------------------
-  // ADMIN PROTECTION
-  // -------------------------
-  if (pathname.startsWith("/admin")) {
-    if (!user) {
-      return NextResponse.redirect(new URL("/sign-in", req.url));
-    }
-
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
-  }
-
-  // -------------------------
-  // USER DASHBOARD PROTECTION
-  // -------------------------
-  if (pathname.startsWith("/dashboard")) {
-    if (!user) {
-      return NextResponse.redirect(new URL("/sign-in", req.url));
-    }
+  // Only protect authentication, NOT roles
+  if (
+    (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) &&
+    !user
+  ) {
+    return NextResponse.redirect(new URL("/sign-in", req.url));
   }
 
   return res;
 }
 
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/dashboard/:path*"
-  ],
+  matcher: ["/admin/:path*", "/dashboard/:path*"],
 };
