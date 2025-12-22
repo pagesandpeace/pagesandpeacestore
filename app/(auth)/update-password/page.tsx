@@ -10,21 +10,31 @@ export default function UpdatePasswordPage() {
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    // This listener fires when Supabase processes the recovery token
-    const { data } = supabase.auth.onAuthStateChange(
-      (event) => {
-        if (event === "PASSWORD_RECOVERY") {
-          setLoading(false);
-        }
+    let mounted = true;
+
+    async function checkSession() {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+
+      if (error || !data.session) {
+        setErrorMsg("This password reset link is invalid or has expired.");
+        setCheckingSession(false);
+        return;
       }
-    );
+
+      // Session exists → user is authenticated → allow password change
+      setCheckingSession(false);
+    }
+
+    checkSession();
 
     return () => {
-      data.subscription.unsubscribe();
+      mounted = false;
     };
   }, [supabase]);
 
@@ -36,20 +46,32 @@ export default function UpdatePasswordPage() {
       return;
     }
 
-    setLoading(true);
+    setErrorMsg("");
 
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
       setErrorMsg(error.message);
-      setLoading(false);
-    } else {
-      window.location.href = "/dashboard";
+      return;
     }
+
+    // Password updated successfully
+    window.location.href = "/dashboard";
   }
 
-  if (loading) {
+  if (checkingSession) {
     return <p className="text-center">Verifying reset link…</p>;
+  }
+
+  if (errorMsg && !password) {
+    return (
+      <div className="text-center space-y-4">
+        <p className="text-red-600">{errorMsg}</p>
+        <a href="/auth/reset-password" className="underline">
+          Request a new reset link
+        </a>
+      </div>
+    );
   }
 
   return (
@@ -75,7 +97,7 @@ export default function UpdatePasswordPage() {
 
         {errorMsg && <p className="text-red-600 text-sm">{errorMsg}</p>}
 
-        <Button type="submit" disabled={loading} className="w-full">
+        <Button type="submit" className="w-full">
           Save New Password
         </Button>
       </form>
