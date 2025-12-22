@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { unstable_noStore as noStore } from "next/cache";
+import DashboardUILayout from "./(ui)/layout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,5 +29,6 @@ export default async function DashboardLayout({
     redirect("/sign-in?callbackURL=/dashboard");
   }
 
-  return <>{children}</>;
+  // ✅ Authenticated → render UI layout
+  return <DashboardUILayout>{children}</DashboardUILayout>;
 }
