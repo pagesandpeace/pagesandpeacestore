@@ -1,4 +1,3 @@
-// app/admin/layout.tsx
 import "@/app/globals.css";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import { redirect } from "next/navigation";
@@ -14,12 +13,13 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // 🔴 CRITICAL: breaks App Router caching for auth + RPCs
   noStore();
 
   const supabase = await supabaseServer();
 
-  // 1) Get auth user
+  /* ----------------------------------------
+     1) AUTH USER
+  ---------------------------------------- */
   const {
     data: { user },
     error: authErr,
@@ -30,29 +30,36 @@ export default async function AdminLayout({
   }
 
   if (!user) {
-    redirect("/sign-in?callbackURL=/admin");
+    redirect("/auth/sign-in?callbackURL=/admin");
   }
 
-  // 2) Get role from users table
+  /* ----------------------------------------
+     2) ROLE LOOKUP (FIXED)
+  ---------------------------------------- */
   const { data: profile, error: profileErr } = await supabase
     .from("users")
     .select("role")
-    .eq("id", user.id)
-    .single();
+    .eq("auth_user_id", user.id) // ✅ FIX
+    .maybeSingle();
 
   if (profileErr) {
     console.error("❌ [admin layout] profile error:", profileErr);
   }
 
-  const role = profile?.role ?? "customer";
-  console.log("[admin layout] user", user.email, "role:", role);
+  const role = profile?.role;
 
-  // 3) Only allow admins
+  console.log("[admin layout] user:", user.email, "role:", role);
+
+  /* ----------------------------------------
+     3) GUARD
+  ---------------------------------------- */
   if (role !== "admin") {
     redirect("/dashboard");
   }
 
-  // 4) Admin view
+  /* ----------------------------------------
+     4) ADMIN VIEW
+  ---------------------------------------- */
   return (
     <div className="min-h-dvh flex bg-[#FAF6F1]">
       <AdminSidebar />
