@@ -17,7 +17,7 @@ export default function DashboardPage() {
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center">
-        <p className="text-lg">Please sign in to view your dashboard.</p>
+        <p className="text-lg">Please sign in to view your dashboard!</p>
         <Link
           href="/sign-in"
           className="mt-4 px-6 py-2 rounded-full border-2 border-accent text-accent"
