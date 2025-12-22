@@ -1,14 +1,8 @@
-export const runtime = "nodejs";
-
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-export function supabaseServer() {
-  // ⛳ Type assertion fixes Next 15 typing mismatch
-  const cookieStore = cookies() as unknown as {
-    get: (name: string) => { value: string } | undefined;
-    set: (options: { name: string; value: string } & CookieOptions) => void;
-  };
+export async function supabaseServer() {
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,10 +12,10 @@ export function supabaseServer() {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options?: CookieOptions) {
+        set(name: string, value: string, options) {
           cookieStore.set({ name, value, ...options });
         },
-        remove(name: string, options?: CookieOptions) {
+        remove(name: string, options) {
           cookieStore.set({ name, value: "", ...options });
         },
       },
