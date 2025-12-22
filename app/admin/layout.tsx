@@ -2,7 +2,7 @@
 import "@/app/globals.css";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/auth-server";
+import { supabaseServer } from "@/lib/supabase/server";
 import { unstable_noStore as noStore } from "next/cache";
 
 export const runtime = "nodejs";

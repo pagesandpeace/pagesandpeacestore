@@ -1,5 +1,5 @@
 // lib/shop/fetchProducts.ts
-import { supabaseServer } from "@/lib/supabase/auth-server";
+import { supabaseService } from "@/lib/supabase/service";
 
 export const PAGE_SIZE = 12;
 
@@ -16,7 +16,8 @@ export type ProductQueryParams = {
 };
 
 export async function fetchProducts(params: ProductQueryParams) {
-  const supabase = await supabaseServer();
+  // ✅ PUBLIC, NO AUTH, NO COOKIES
+  const supabase = supabaseService();
 
   const safe = { ...params };
 
@@ -31,7 +32,7 @@ export async function fetchProducts(params: ProductQueryParams) {
   const vibeParam = safe.vibe?.toLowerCase() ?? "";
   const themeParam = safe.theme?.toLowerCase() ?? "";
 
-  // ❌ REMOVED "event"
+  // ❌ HARD EXCLUDE EVENTS
   const TYPES = ["blind-date", "book", "coffee", "merch", "physical"];
 
   /* --------------------------------------------------------
@@ -44,9 +45,9 @@ export async function fetchProducts(params: ProductQueryParams) {
     } else {
       const { data: vibeRow } = await supabase
         .from("vibes")
-        .select("id, name")
+        .select("id")
         .ilike("name", vibeParam)
-        .single();
+        .maybeSingle();
 
       if (vibeRow) vibeId = vibeRow.id;
     }
@@ -62,9 +63,9 @@ export async function fetchProducts(params: ProductQueryParams) {
     } else {
       const { data: themeRow } = await supabase
         .from("themes")
-        .select("id, name")
+        .select("id")
         .ilike("name", themeParam)
-        .single();
+        .maybeSingle();
 
       if (themeRow) themeId = themeRow.id;
     }
@@ -83,10 +84,9 @@ export async function fetchProducts(params: ProductQueryParams) {
       `,
       { count: "exact" }
     )
-    // 🔒 HARD GUARANTEE: events NEVER appear in shop
     .neq("product_type", "event");
 
-  // Filter by type
+  // Type filter
   if (type !== "all") {
     query = query.eq("product_type", type);
   } else {
@@ -103,13 +103,13 @@ export async function fetchProducts(params: ProductQueryParams) {
     query = query.gt("inventory_count", 0);
   }
 
-  // BOOK FILTERS
+  // Book filters
   if (type === "book") {
     if (genre) query = query.eq("genre_id", genre);
     if (author) query = query.ilike("author", `%${author}%`);
   }
 
-  // BLIND-DATE FILTERS
+  // Blind-date filters
   if (type === "blind-date") {
     if (genre) query = query.eq("genre_id", genre);
     if (vibeId) query = query.eq("vibe_id", vibeId);

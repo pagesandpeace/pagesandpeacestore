@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/auth-server";
+import { supabaseServer } from "@/lib/supabase/server";
 import RefundOrderButton from "@/components/admin/orders/RefundOrderButton";
 
 export const dynamic = "force-dynamic";

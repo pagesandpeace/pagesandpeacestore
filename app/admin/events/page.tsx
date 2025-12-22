@@ -1,5 +1,5 @@
 // app/admin/events/page.tsx
-import { supabaseServer } from "@/lib/supabase/auth-server";
+import { supabaseServer } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/auth-server";
+import { supabaseServer } from "@/lib/supabase/server";
 import cloudinary from "cloudinary";
 
 cloudinary.v2.config({

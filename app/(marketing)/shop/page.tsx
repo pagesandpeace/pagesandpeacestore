@@ -5,7 +5,7 @@ import FilterBar from "@/components/shop/FilterBar";
 import Pagination from "@/components/shop/Pagination";
 import ProductGrid from "@/components/shop/ProductGrid";
 import CategoryTabs from "@/components/shop/CategoryTabs";
-import { supabaseService } from "@/lib/supabase/service";
+import { supabaseServer } from "@/lib/supabase/server";
 
 export type SearchParams = {
   page?: string;
@@ -24,22 +24,21 @@ export default async function ShopPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-
-  // ✅ SERVICE ROLE CLIENT (NO AUTH, NO COOKIES)
-  const supabase = supabaseService();
+  const supabase = await supabaseServer();
 
   /* ----------------------------------------------------
      1. LOAD HERO BLOCK
   ---------------------------------------------------- */
+  console.log("🟣 Loading hero block…");
+
   const { data: heroBlock, error: heroError } = await supabase
     .from("marketing_blocks")
     .select("*")
     .eq("key", "shop_hero")
     .maybeSingle();
 
-  if (heroError) {
-    console.error("❌ hero block error:", heroError);
-  }
+  console.log("🔵 heroBlock:", heroBlock);
+  console.log("🔴 heroError:", heroError);
 
   let heroActive = false;
 
@@ -52,6 +51,10 @@ export default async function ShopPage({
       heroBlock.visible &&
       (!starts || starts <= now) &&
       (!ends || now <= ends);
+
+    console.log("🟢 heroActive:", heroActive);
+    console.log("🟡 Starts:", starts);
+    console.log("🟡 Ends:", ends);
   }
 
   /* -----------------------------
@@ -71,7 +74,7 @@ export default async function ShopPage({
     .from("products")
     .select("author")
     .neq("author", null)
-    .neq("product_type", "event");
+    .neq("product_type", "event"); // 🔒 HARD EXCLUDE EVENTS
 
   const authors = [
     ...new Set((authorRows ?? []).map((a) => a.author)),
@@ -98,13 +101,12 @@ export default async function ShopPage({
   const themes = themesData ?? [];
 
   /* -----------------------------
-     PRODUCTS
+     PRODUCTS (EVENTS EXCLUDED IN fetchProducts)
   ------------------------------ */
-  const { products, total, page, pageSize } =
-    await fetchProducts(params);
+  const { products, total, page, pageSize } = await fetchProducts(params);
 
   /* -----------------------------
-     CATEGORY TABS
+     CATEGORY TABS (NO EVENTS)
   ------------------------------ */
   const CATEGORIES = [
     { key: "all", label: "All" },
@@ -117,6 +119,9 @@ export default async function ShopPage({
 
   return (
     <main className="min-h-screen bg-[#FAF6F1] px-6 py-12">
+      {/* -------------------------------------------------
+          SHOP HERO
+      -------------------------------------------------- */}
       {heroActive && (
         <div className="relative w-full h-[260px] md:h-[340px] rounded-xl overflow-hidden shadow-lg mb-10 max-w-5xl mx-auto">
           {heroBlock?.image_url && (
@@ -128,7 +133,7 @@ export default async function ShopPage({
           )}
 
           <div className="absolute inset-0 bg-black/40 flex flex-col justify-center px-8 py-6">
-            <h2 className="text-white text-3xl md:text-5xl font-bold mb-2">
+            <h2 className="text-white text-3xl md:text-5xl font-bold drop-shadow mb-2">
               {heroBlock?.title}
             </h2>
 
@@ -139,7 +144,7 @@ export default async function ShopPage({
             {heroBlock?.cta_text && (
               <a
                 href={heroBlock.cta_link}
-                className="inline-block bg-white text-black px-6 py-2 rounded-full font-semibold hover:bg-neutral-200 transition"
+                className="inline-block bg-white text-black px-6 py-2 rounded-full font-semibold hover:bg-neutral-200 transition shadow"
               >
                 {heroBlock.cta_text}
               </a>

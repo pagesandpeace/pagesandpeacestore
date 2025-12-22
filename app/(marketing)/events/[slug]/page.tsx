@@ -3,7 +3,7 @@ export const revalidate = 0;
 
 import Image from "next/image";
 import Link from "next/link";
-import { supabaseServer } from "@/lib/supabase/auth-server";
+import { supabaseServer } from "@/lib/supabase/server";
 import BookNowButton from "@/components/events/BookNowButton";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";

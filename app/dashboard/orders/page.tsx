@@ -1,4 +1,4 @@
-import { supabaseServer } from "@/lib/supabase/auth-server";
+import { supabaseServer } from "@/lib/supabase/server";
 import Link from "next/link";
 
 type OrderRow = {
