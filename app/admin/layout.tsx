@@ -13,12 +13,13 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // 🔴 CRITICAL: breaks App Router caching for auth + role checks
   noStore();
 
   const supabase = await supabaseServer();
 
   /* ----------------------------------------
-     1) AUTH USER
+     1️⃣ AUTH USER (Supabase Auth)
   ---------------------------------------- */
   const {
     data: { user },
@@ -30,35 +31,41 @@ export default async function AdminLayout({
   }
 
   if (!user) {
-    redirect("/auth/sign-in?callbackURL=/admin");
+    redirect("/sign-in?callbackURL=/admin");
   }
 
   /* ----------------------------------------
-     2) ROLE LOOKUP (FIXED)
+     2️⃣ BUSINESS ROLE (public.users)
+     ✅ JOIN VIA auth_user_id (FIX)
   ---------------------------------------- */
   const { data: profile, error: profileErr } = await supabase
     .from("users")
     .select("role")
-    .eq("auth_user_id", user.id) // ✅ FIX
-    .maybeSingle();
+    .eq("auth_user_id", user.id) // ✅ CORRECT JOIN
+    .single();
 
   if (profileErr) {
-    console.error("❌ [admin layout] profile error:", profileErr);
+    console.error("❌ [admin layout] profile lookup error:", profileErr);
   }
 
-  const role = profile?.role;
+  const role = profile?.role ?? "customer";
 
-  console.log("[admin layout] user:", user.email, "role:", role);
+  console.log(
+    "[admin layout] access check →",
+    user.email,
+    "role:",
+    role
+  );
 
   /* ----------------------------------------
-     3) GUARD
+     3️⃣ ACCESS CONTROL
   ---------------------------------------- */
   if (role !== "admin") {
     redirect("/dashboard");
   }
 
   /* ----------------------------------------
-     4) ADMIN VIEW
+     4️⃣ ADMIN VIEW
   ---------------------------------------- */
   return (
     <div className="min-h-dvh flex bg-[#FAF6F1]">
