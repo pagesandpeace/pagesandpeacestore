@@ -10,25 +10,22 @@ export default function UpdatePasswordPage() {
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
-  const [ready, setReady] = useState(false);
 
-  // 🔑 CRITICAL STEP: exchange recovery token for session
   useEffect(() => {
-    async function exchange() {
-      const { error } = await supabase.auth.exchangeCodeForSession(
-        window.location.href
-      );
-
-      if (error) {
-        setErrorMsg(error.message);
-      } else {
-        setReady(true);
+    // This listener fires when Supabase processes the recovery token
+    const { data } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "PASSWORD_RECOVERY") {
+          setLoading(false);
+        }
       }
-    }
+    );
 
-    exchange();
+    return () => {
+      data.subscription.unsubscribe();
+    };
   }, [supabase]);
 
   async function handleUpdate(e: React.FormEvent) {
@@ -45,15 +42,14 @@ export default function UpdatePasswordPage() {
 
     if (error) {
       setErrorMsg(error.message);
+      setLoading(false);
     } else {
       window.location.href = "/dashboard";
     }
-
-    setLoading(false);
   }
 
-  if (!ready) {
-    return <p className="text-sm">Verifying reset link…</p>;
+  if (loading) {
+    return <p className="text-center">Verifying reset link…</p>;
   }
 
   return (
@@ -66,7 +62,6 @@ export default function UpdatePasswordPage() {
           placeholder="New password"
           required
           value={password}
-          invalid={!!errorMsg}
           onChange={(e) => setPassword(e.target.value)}
         />
 
@@ -75,14 +70,13 @@ export default function UpdatePasswordPage() {
           placeholder="Confirm new password"
           required
           value={confirm}
-          invalid={!!errorMsg}
           onChange={(e) => setConfirm(e.target.value)}
         />
 
         {errorMsg && <p className="text-red-600 text-sm">{errorMsg}</p>}
 
         <Button type="submit" disabled={loading} className="w-full">
-          {loading ? "Saving…" : "Save New Password"}
+          Save New Password
         </Button>
       </form>
     </div>
