@@ -6,6 +6,8 @@ import Pagination from "@/components/shop/Pagination";
 import ProductGrid from "@/components/shop/ProductGrid";
 import CategoryTabs from "@/components/shop/CategoryTabs";
 import { supabaseServer } from "@/lib/supabase/server";
+console.log("SUPABASE URL", process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log("HAS SERVICE ROLE", Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY));
 
 export type SearchParams = {
   page?: string;
