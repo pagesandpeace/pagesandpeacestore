@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import cloudinary from "cloudinary";
@@ -11,39 +13,55 @@ cloudinary.v2.config({
 });
 
 export async function PATCH(req: Request) {
-  console.log("📥 [API] PATCH /api/user/avatar called");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("📥 [API] PATCH /api/user/avatar");
 
   try {
-    // Get authenticated user via Supabase server client
+    /* ----------------------------------------
+       AUTH
+    ---------------------------------------- */
     const supabase = await supabaseServer();
     const { data: auth, error: authErr } = await supabase.auth.getUser();
 
-    console.log("🧠 [API] Supabase auth:", auth?.user?.email || "no user");
+    console.log("👤 Auth:", {
+      id: auth?.user?.id,
+      email: auth?.user?.email,
+      error: authErr,
+    });
 
     if (authErr || !auth?.user) {
-      console.warn("🚫 [API] Not authenticated");
+      console.warn("🚫 Unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Parse uploaded file
+    /* ----------------------------------------
+       FILE PARSE
+    ---------------------------------------- */
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    console.log("📄 [API] file:", file?.name, file?.size);
+
+    console.log("📄 File:", {
+      name: file?.name,
+      size: file?.size,
+      type: file?.type,
+    });
 
     if (!file) {
-      console.error("❌ [API] No file uploaded");
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No file uploaded" },
+        { status: 400 }
+      );
     }
 
-    // Convert file → base64 for Cloudinary
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
-    const dataUri = `data:${file.type};base64,${base64}`;
+    /* ----------------------------------------
+       CLOUDINARY UPLOAD
+    ---------------------------------------- */
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const dataUri = `data:${file.type};base64,${buffer.toString("base64")}`;
 
-    console.log("⚙️ [API] Uploading to Cloudinary...");
+    console.log("☁️ Uploading to Cloudinary…");
 
-    // Upload to Cloudinary (safe in Next.js API routes)
-    const uploadResult = await cloudinary.v2.uploader.upload(dataUri, {
+    const upload = await cloudinary.v2.uploader.upload(dataUri, {
       folder: `pagesandpeace/avatars/${auth.user.id}`,
       public_id: "avatar",
       overwrite: true,
@@ -59,37 +77,43 @@ export async function PATCH(req: Request) {
       ],
     });
 
-    console.log("✅ [API] Cloudinary upload success:", uploadResult.secure_url);
+    console.log("✅ Cloudinary URL:", upload.secure_url);
 
-    // Save avatar URL to Supabase users table
-    const { error: updateError } = await supabase
+    /* ----------------------------------------
+       DATABASE UPDATE (CRITICAL PART)
+    ---------------------------------------- */
+    const { data, error } = await supabase
       .from("users")
       .update({
-        image: uploadResult.secure_url,
+        image: upload.secure_url,
         updated_at: new Date().toISOString(),
       })
       .eq("auth_user_id", auth.user.id)
+      .select("id, image");
 
-    if (updateError) {
-      console.error("💥 [API] Supabase update error:", updateError);
+    console.log("🧪 DB UPDATE RESULT:", { data, error });
+
+    if (error || !data || data.length === 0) {
+      console.error("💥 Avatar update FAILED");
       return NextResponse.json(
-        { error: "Failed updating user" },
+        { error: "Avatar not persisted" },
         { status: 500 }
       );
     }
 
-    console.log(`🎉 [API] Avatar updated for ${auth.user.email}`);
+    console.log("🎉 Avatar persisted for:", auth.user.email);
 
     return NextResponse.json({
       success: true,
-      message: "Avatar updated successfully",
-      imageUrl: uploadResult.secure_url,
+      imageUrl: upload.secure_url,
     });
-  } catch (error: any) {
-    console.error("💥 [API] Avatar upload failed:", error);
+  } catch (err: any) {
+    console.error("🔥 Avatar upload crashed:", err);
     return NextResponse.json(
-      { error: "Avatar upload failed", details: error.message || error },
+      { error: "Avatar upload failed", details: err?.message },
       { status: 500 }
     );
+  } finally {
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   }
 }
