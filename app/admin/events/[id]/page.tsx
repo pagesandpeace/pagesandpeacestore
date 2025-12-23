@@ -20,7 +20,7 @@ export default async function AdminEventOverviewPage({ params }: PageProps) {
   const { data: profile } = await supabase
     .from("users")
     .select("role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id) // ✅ FIX
     .single();
 
   if (profile?.role !== "admin") redirect("/dashboard");
@@ -58,13 +58,13 @@ export default async function AdminEventOverviewPage({ params }: PageProps) {
     .from("event_bookings")
     .select(
       `
-      id,
-      name,
-      email,
-      refunded,
-      cancelled,
-      created_at
-    `
+        id,
+        name,
+        email,
+        refunded,
+        cancelled,
+        created_at
+      `
     )
     .eq("event_id", id)
     .order("created_at", { ascending: true });
@@ -80,7 +80,6 @@ export default async function AdminEventOverviewPage({ params }: PageProps) {
       cancelled: !!b.cancelled,
     })) ?? [];
 
-  /* ✅ FIX: capacity only counts ACTIVE seats */
   const activeAttendees = attendees.filter(
     (a) => !a.refunded && !a.cancelled
   ).length;

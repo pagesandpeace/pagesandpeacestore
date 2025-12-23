@@ -6,7 +6,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 /* --------------------------------------------------
-   SERVICE ROLE CLIENT (BYPASS RLS)
+   SERVICE ROLE CLIENT (BYPASS RLS FOR DATA ONLY)
 -------------------------------------------------- */
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL!,
@@ -23,7 +23,7 @@ type OrderRow = {
 
 export default async function AdminOrdersPage() {
   /* ---------------------------------------------
-     AUTH (ADMIN ONLY)
+     AUTH (ADMIN ONLY – SOURCE OF TRUTH = AUTH)
   --------------------------------------------- */
   const supabase = await supabaseServer();
 
@@ -31,15 +31,16 @@ export default async function AdminOrdersPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/sign-in?callbackURL=/admin/orders");
+  if (!user) {
+    redirect("/sign-in?callbackURL=/admin/orders");
+  }
 
-  const { data: profile } = await supabaseAdmin
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  // ✅ CORRECT: admin role from auth metadata (matches staging)
+  const role = user.app_metadata?.role;
 
-  if (profile?.role !== "admin") redirect("/dashboard");
+  if (role !== "admin") {
+    redirect("/dashboard");
+  }
 
   /* ---------------------------------------------
      FETCH ORDERS (SERVICE ROLE)
@@ -54,11 +55,15 @@ export default async function AdminOrdersPage() {
     `)
     .order("created_at", { ascending: false });
 
-  console.log("[admin/orders] raw orders:", orders);
-  console.log("[admin/orders] error:", error);
+  if (error) {
+    console.error("[admin/orders] fetch error:", error);
+  }
 
   const safeOrders: OrderRow[] = orders ?? [];
 
+  /* ---------------------------------------------
+     RENDER
+  --------------------------------------------- */
   return (
     <div className="max-w-6xl mx-auto py-10 space-y-6">
       <h1 className="text-3xl font-bold">Orders</h1>
