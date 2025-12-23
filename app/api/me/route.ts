@@ -1,7 +1,6 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { cookies, headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -30,25 +29,22 @@ export async function GET() {
     const authUserId = auth.user.id;
 
     /* -------------------------
-       USERS TABLE (PROD SAFE)
+       USERS TABLE (SINGLE SOURCE)
     ------------------------- */
     const { data: profile, error: profileErr } = await supabase
       .from("users")
       .select("id, email, name, image, role")
       .eq("auth_user_id", authUserId)
-      .maybeSingle();
+      .single();
 
     console.log("📦 users lookup:", {
       profile,
       error: profileErr,
     });
 
-    if (!profile) {
-      console.log(
-        "⚠ Auth user exists but no users row for auth_user_id:",
-        authUserId
-      );
-      return NextResponse.json(null, { status: 401 });
+    if (profileErr) {
+      console.error("❌ users lookup failed:", profileErr);
+      return NextResponse.json(null, { status: 500 });
     }
 
     console.log("✅ /api/me SUCCESS");
