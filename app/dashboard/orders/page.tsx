@@ -24,10 +24,14 @@ export default async function OrdersPage() {
     );
   }
 
+  /* --------------------------------------------------------
+     🔑 IMPORTANT FIX
+     User-facing queries MUST use user_id_uuid (auth.uid)
+  --------------------------------------------------------- */
   const { data, error } = await supabase
     .from("orders")
     .select("id, total, status, created_at")
-    .eq("user_id", user.id)
+    .eq("user_id_uuid", user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -55,11 +59,14 @@ export default async function OrdersPage() {
           </p>
         </header>
 
-        {/* EMPTY */}
+        {/* EMPTY STATE */}
         {orders.length === 0 && (
           <div className="text-center py-20 opacity-70">
             <p>No orders yet.</p>
-            <Link href="/shop" className="underline text-accent mt-2 inline-block">
+            <Link
+              href="/shop"
+              className="underline text-accent mt-2 inline-block"
+            >
               Browse the shop →
             </Link>
           </div>
@@ -69,7 +76,8 @@ export default async function OrdersPage() {
         <div className="space-y-4 md:hidden">
           {orders.map((o) => {
             const canRequestRefund =
-              o.status === "completed" || o.status === "partially_refunded";
+              o.status === "completed" ||
+              o.status === "partially_refunded";
 
             return (
               <div
