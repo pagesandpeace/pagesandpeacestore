@@ -6,7 +6,7 @@ import RefundOrderButton from "@/components/admin/orders/RefundOrderButton";
 export const dynamic = "force-dynamic";
 
 /* --------------------------------------------------
-   SERVICE ROLE CLIENT (DATA ONLY – BYPASS RLS)
+   SERVICE ROLE (DATA ONLY – BYPASS RLS)
 -------------------------------------------------- */
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL!,
@@ -22,7 +22,7 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
   const { id } = await params;
 
   /* --------------------------------------------------
-     AUTH (ADMIN ONLY – SOURCE OF TRUTH = users table)
+     AUTH (ADMIN ONLY – SAME AS admin/events)
   -------------------------------------------------- */
   const supabase = await supabaseServer();
 
@@ -45,7 +45,7 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
   }
 
   /* --------------------------------------------------
-     FETCH ORDER (SERVICE ROLE – BYPASS RLS)
+     FETCH ORDER (SERVICE ROLE)
   -------------------------------------------------- */
   const { data: order, error } = await supabaseAdmin
     .from("orders")
@@ -62,10 +62,7 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
         refunded_quantity,
         refunded_amount,
         price,
-        product:products (
-          id,
-          name
-        ),
+        name,
         event:events (
           id,
           title
@@ -75,15 +72,14 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
     .eq("id", id)
     .single();
 
-  if (error) {
-    console.error("[admin/orders/[id]] fetch error:", error);
-  }
+  console.log("[admin/orders/[id]] order:", order);
+  console.log("[admin/orders/[id]] error:", error);
 
   if (!order) {
     return (
       <div className="max-w-4xl mx-auto py-10">
         <h1 className="text-2xl font-bold">Order not found</h1>
-        <p className="text-neutral-600 mt-2 font-mono">{id}</p>
+        <p className="mt-2 text-sm font-mono text-neutral-500">{id}</p>
       </div>
     );
   }
@@ -133,14 +129,12 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
           <p>£{refundedTotal.toFixed(2)}</p>
         </div>
 
-        {order.stripe_payment_intent_id && (
-          <div className="col-span-2">
-            <p className="text-neutral-500">Payment Intent</p>
-            <p className="font-mono text-xs break-all">
-              {order.stripe_payment_intent_id}
-            </p>
-          </div>
-        )}
+        <div className="col-span-2">
+          <p className="text-neutral-500">Payment Intent</p>
+          <p className="text-xs font-mono break-all">
+            {order.stripe_payment_intent_id ?? "—"}
+          </p>
+        </div>
       </div>
 
       {/* ITEMS */}
@@ -149,23 +143,20 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
 
         <div className="space-y-3">
           {order.order_items.map((item) => {
-            const product = Array.isArray(item.product)
-              ? item.product[0]
-              : item.product;
-
-            const event = Array.isArray(item.event)
-              ? item.event[0]
-              : item.event;
+            const event =
+              Array.isArray(item.event)
+                ? item.event[0]
+                : item.event;
 
             const name =
-              item.kind === "product"
-                ? product?.name ?? "Product"
-                : event?.title ?? "Event";
+              item.kind === "event"
+                ? event?.title ?? "Event"
+                : item.name ?? "Product";
 
             return (
               <div
                 key={item.id}
-                className="border rounded-lg p-4 flex justify-between"
+                className="border rounded-lg p-4 flex justify-between items-center"
               >
                 <div>
                   <p className="font-medium">{name}</p>
