@@ -29,8 +29,42 @@ type AdminSidebarProps = {
 
 export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
   const router = useRouter();
+
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // 🔥 local profile state (key fix)
+  const [localProfile, setLocalProfile] =
+    useState<UserProfile>(profile);
+
   const accountRef = useRef<HTMLDivElement | null>(null);
+
+  /* -------------------------------------------------------
+     Keep local profile in sync with prop
+  ------------------------------------------------------- */
+  useEffect(() => {
+    setLocalProfile(profile);
+  }, [profile]);
+
+  /* -------------------------------------------------------
+     Listen for profile updates (avatar/name)
+  ------------------------------------------------------- */
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const res = await fetch("/api/profile/me");
+        if (!res.ok) return;
+
+        const updatedProfile = await res.json();
+        setLocalProfile(updatedProfile);
+      } catch (err) {
+        console.error("❌ Failed to refresh admin profile", err);
+      }
+    };
+
+    window.addEventListener("pp:profile-updated", handler);
+    return () =>
+      window.removeEventListener("pp:profile-updated", handler);
+  }, []);
 
   /* -------------------------------------------------------
      Close dropdown when clicking outside
@@ -57,7 +91,7 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
   };
 
   /* -------------------------------------------------------
-     Sign out (unchanged)
+     Sign out
   ------------------------------------------------------- */
   const handleSignOut = async () => {
     await fetch("/auth/signout", { method: "POST" });
@@ -94,45 +128,27 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
 
         {/* NAVIGATION */}
         <nav className="mt-6 text-sm flex flex-col gap-y-5 max-h-[60vh] overflow-y-auto pr-2 pb-4">
-          <button
-            onClick={() => handleNav("/admin")}
-            className="text-left hover:text-[#5DA865]"
-          >
+          <button onClick={() => handleNav("/admin")} className="text-left hover:text-[#5DA865]">
             Dashboard
           </button>
 
-          <button
-            onClick={() => handleNav("/admin/events")}
-            className="text-left hover:text-[#5DA865]"
-          >
+          <button onClick={() => handleNav("/admin/events")} className="text-left hover:text-[#5DA865]">
             Events
           </button>
 
-          <button
-            onClick={() => handleNav("/admin/events/new")}
-            className="text-left hover:text-[#5DA865]"
-          >
+          <button onClick={() => handleNav("/admin/events/new")} className="text-left hover:text-[#5DA865]">
             Create Event
           </button>
 
-          <button
-            onClick={() => handleNav("/admin/products")}
-            className="text-left hover:text-[#5DA865]"
-          >
+          <button onClick={() => handleNav("/admin/products")} className="text-left hover:text-[#5DA865]">
             Products
           </button>
 
-          <button
-            onClick={() => handleNav("/admin/products/new")}
-            className="text-left hover:text-[#5DA865]"
-          >
+          <button onClick={() => handleNav("/admin/products/new")} className="text-left hover:text-[#5DA865]">
             Add Product
           </button>
 
-          <button
-            onClick={() => handleNav("/admin/orders")}
-            className="text-left hover:text-[#5DA865]"
-          >
+          <button onClick={() => handleNav("/admin/orders")} className="text-left hover:text-[#5DA865]">
             View orders
           </button>
 
@@ -177,7 +193,7 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
           className="flex items-center gap-3 w-full text-left rounded-md px-2 py-2 hover:bg-[#f1ede7]"
         >
           <Image
-            src={profile.image ?? "/user_avatar_placeholder.svg"}
+            src={localProfile.image ?? "/user_avatar_placeholder.svg"}
             alt="User avatar"
             width={36}
             height={36}
@@ -186,7 +202,7 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
 
           <div className="flex flex-col leading-tight">
             <span className="font-medium text-sm truncate">
-              {profile.name || user.email || "Admin"}
+              {localProfile.name || user.email || "Admin"}
             </span>
 
             <span className="mt-1 inline-block bg-red-200 text-red-700 text-xs px-2 py-0.5 rounded-full border border-red-300">

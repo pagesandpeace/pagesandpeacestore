@@ -47,7 +47,39 @@ export default function Sidebar({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [loyalty, setLoyalty] = useState<LoyaltyState | null>(null);
+
+  // 🔥 LOCAL PROFILE STATE (KEY FIX)
+  const [localProfile, setLocalProfile] = useState<UserProfile | null>(profile);
+
   const accountRef = useRef<HTMLDivElement | null>(null);
+
+  /* -------------------------------------------------------
+     Keep local profile in sync with initial prop
+  ------------------------------------------------------- */
+  useEffect(() => {
+    setLocalProfile(profile);
+  }, [profile]);
+
+  /* -------------------------------------------------------
+     Listen for profile updates (avatar/name/etc)
+  ------------------------------------------------------- */
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const res = await fetch("/api/profile/me");
+        if (!res.ok) return;
+
+        const updatedProfile = await res.json();
+        setLocalProfile(updatedProfile);
+      } catch (err) {
+        console.error("❌ Failed to refresh profile", err);
+      }
+    };
+
+    window.addEventListener("pp:profile-updated", handler);
+    return () =>
+      window.removeEventListener("pp:profile-updated", handler);
+  }, []);
 
   /* -------------------------------------------------------
      Close dropdown when clicking outside
@@ -67,8 +99,7 @@ export default function Sidebar({
   }, []);
 
   /* -------------------------------------------------------
-     Fetch loyalty status (external system)
-     (unchanged logic)
+     Fetch loyalty status
   ------------------------------------------------------- */
   useEffect(() => {
     if (!user) return;
@@ -93,7 +124,7 @@ export default function Sidebar({
   }, [user]);
 
   /* -------------------------------------------------------
-     Sign out (unchanged)
+     Sign out
   ------------------------------------------------------- */
   const handleSignOut = async () => {
     await fetch("/auth/signout", { method: "POST" });
@@ -148,37 +179,25 @@ export default function Sidebar({
 
           {/* NAVIGATION */}
           <nav className="mt-6 space-y-4 text-sm text-left">
-            <button
-              onClick={() => handleNav("/dashboard")}
-              className="block text-left hover:text-[#5DA865]"
-            >
+            <button onClick={() => handleNav("/dashboard")} className="block hover:text-[#5DA865]">
               Dashboard
             </button>
 
-            <button
-              onClick={() => handleNav("/dashboard/events")}
-              className="block text-left hover:text-[#5DA865]"
-            >
+            <button onClick={() => handleNav("/dashboard/events")} className="block hover:text-[#5DA865]">
               Events
             </button>
 
-            <button
-              onClick={() => handleNav("/dashboard/orders")}
-              className="block text-left hover:text-[#5DA865]"
-            >
+            <button onClick={() => handleNav("/dashboard/orders")} className="block hover:text-[#5DA865]">
               Orders
             </button>
 
-            <button
-              onClick={() => handleNav("/shop")}
-              className="block text-left hover:text-[#5DA865]"
-            >
+            <button onClick={() => handleNav("/shop")} className="block hover:text-[#5DA865]">
               Shop
             </button>
 
             <button
               onClick={() => handleNav("/dashboard/chapters-club")}
-              className="flex items-center gap-2 text-left hover:text-[#5DA865]"
+              className="flex items-center gap-2 hover:text-[#5DA865]"
             >
               Chapters Club
               <span className="bg-[#E5F7E4] text-[#2f6b3a] rounded-full border px-2 py-1 text-xs font-semibold">
@@ -198,7 +217,7 @@ export default function Sidebar({
             className="flex items-center gap-3 w-full text-left rounded-md px-2 py-2 hover:bg-[#f1ede7]"
           >
             <Image
-              src={profile?.image ?? "/user_avatar_placeholder.svg"}
+              src={localProfile?.image ?? "/user_avatar_placeholder.svg"}
               alt="avatar"
               width={36}
               height={36}
@@ -207,7 +226,7 @@ export default function Sidebar({
 
             <div className="flex flex-col leading-tight overflow-hidden">
               <span className="font-medium text-xs truncate">
-                {profile?.name || user.email || "User"}
+                {localProfile?.name || user.email || "User"}
               </span>
 
               {loyalty?.member && (
@@ -215,9 +234,7 @@ export default function Sidebar({
                   Chapters Club
                   {loyalty.tier && (
                     <span className="opacity-70">
-                      •{" "}
-                      {loyalty.tier.charAt(0).toUpperCase() +
-                        loyalty.tier.slice(1)}
+                      • {loyalty.tier.charAt(0).toUpperCase() + loyalty.tier.slice(1)}
                     </span>
                   )}
                   ✨
