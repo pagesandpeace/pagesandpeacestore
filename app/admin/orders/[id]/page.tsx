@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import RefundOrderButton from "@/components/admin/orders/RefundOrderButton";
@@ -6,7 +5,7 @@ import RefundOrderButton from "@/components/admin/orders/RefundOrderButton";
 export const dynamic = "force-dynamic";
 
 /* --------------------------------------------------
-   SERVICE ROLE (DATA ONLY – BYPASS RLS)
+   SERVICE ROLE (DATA ONLY)
 -------------------------------------------------- */
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL!,
@@ -21,33 +20,62 @@ type PageProps = {
 export default async function AdminOrderDetailPage({ params }: PageProps) {
   const { id } = await params;
 
+  console.log("🧭 [admin/orders/[id]] START", { id });
+
   /* --------------------------------------------------
-     AUTH (ADMIN ONLY – SAME AS admin/events)
+     AUTH
   -------------------------------------------------- */
   const supabase = await supabaseServer();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const userRes = await supabase.auth.getUser();
+  console.log("👤 auth.getUser()", userRes);
+
+  const user = userRes.data.user;
 
   if (!user) {
-    redirect("/sign-in?callbackURL=/admin/orders");
+    console.error("❌ NO USER – SHOULD NOT REDIRECT YET");
+    return (
+      <pre className="p-6 text-sm">
+        NO USER SESSION
+      </pre>
+    );
   }
 
-  const { data: profile } = await supabase
+  /* --------------------------------------------------
+     ROLE CHECK
+  -------------------------------------------------- */
+  const profileRes = await supabase
     .from("users")
-    .select("role")
+    .select("id, role, auth_user_id")
     .eq("auth_user_id", user.id)
     .single();
 
-  if (profile?.role !== "admin") {
-    redirect("/dashboard");
+  console.log("🧑‍💼 profile lookup", profileRes);
+
+  if (!profileRes.data) {
+    console.error("❌ NO PROFILE ROW");
+    return (
+      <pre className="p-6 text-sm">
+        NO PROFILE ROW FOR AUTH USER
+        {JSON.stringify(profileRes, null, 2)}
+      </pre>
+    );
+  }
+
+  if (profileRes.data.role !== "admin") {
+    console.error("❌ NOT ADMIN", profileRes.data);
+    return (
+      <pre className="p-6 text-sm">
+        USER IS NOT ADMIN
+        {JSON.stringify(profileRes.data, null, 2)}
+      </pre>
+    );
   }
 
   /* --------------------------------------------------
      FETCH ORDER (SERVICE ROLE)
   -------------------------------------------------- */
-  const { data: order, error } = await supabaseAdmin
+  const orderRes = await supabaseAdmin
     .from("orders")
     .select(`
       id,
@@ -63,26 +91,25 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
         refunded_amount,
         price,
         name,
-        event:events (
-          id,
-          title
-        )
+        event_id
       )
     `)
     .eq("id", id)
-    .single();
+    .maybeSingle(); // 🔥 IMPORTANT
 
-  console.log("[admin/orders/[id]] order:", order);
-  console.log("[admin/orders/[id]] error:", error);
+  console.log("📦 order fetch", orderRes);
 
-  if (!order) {
+  if (!orderRes.data) {
+    console.error("❌ ORDER NOT FOUND OR BLOCKED");
     return (
-      <div className="max-w-4xl mx-auto py-10">
-        <h1 className="text-2xl font-bold">Order not found</h1>
-        <p className="mt-2 text-sm font-mono text-neutral-500">{id}</p>
-      </div>
+      <pre className="p-6 text-sm">
+        ORDER NOT FOUND OR BLOCKED BY RLS
+        {JSON.stringify(orderRes, null, 2)}
+      </pre>
     );
   }
+
+  const order = orderRes.data;
 
   /* --------------------------------------------------
      CALCULATIONS
@@ -94,100 +121,24 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
 
   const refundable = Number(order.total) - refundedTotal;
 
+  console.log("💰 totals", { refundedTotal, refundable });
+
   /* --------------------------------------------------
      RENDER
   -------------------------------------------------- */
   return (
     <div className="max-w-4xl mx-auto py-10 space-y-8">
-      {/* HEADER */}
-      <div>
-        <h1 className="text-2xl font-bold">Order</h1>
-        <p className="text-xs font-mono text-neutral-500 mt-1">
-          {order.id}
-        </p>
-      </div>
+      <h1 className="text-2xl font-bold">Order</h1>
 
-      {/* META */}
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div>
-          <p className="text-neutral-500">Date</p>
-          <p>{new Date(order.created_at).toLocaleString()}</p>
-        </div>
+      <pre className="text-xs bg-neutral-100 p-4 rounded">
+        {JSON.stringify(order, null, 2)}
+      </pre>
 
-        <div>
-          <p className="text-neutral-500">Status</p>
-          <p className="capitalize">{order.status}</p>
-        </div>
-
-        <div>
-          <p className="text-neutral-500">Total</p>
-          <p>£{Number(order.total).toFixed(2)}</p>
-        </div>
-
-        <div>
-          <p className="text-neutral-500">Refunded</p>
-          <p>£{refundedTotal.toFixed(2)}</p>
-        </div>
-
-        <div className="col-span-2">
-          <p className="text-neutral-500">Payment Intent</p>
-          <p className="text-xs font-mono break-all">
-            {order.stripe_payment_intent_id ?? "—"}
-          </p>
-        </div>
-      </div>
-
-      {/* ITEMS */}
-      <div>
-        <h2 className="font-semibold mb-3">Items</h2>
-
-        <div className="space-y-3">
-          {order.order_items.map((item) => {
-            const event =
-              Array.isArray(item.event)
-                ? item.event[0]
-                : item.event;
-
-            const name =
-              item.kind === "event"
-                ? event?.title ?? "Event"
-                : item.name ?? "Product";
-
-            return (
-              <div
-                key={item.id}
-                className="border rounded-lg p-4 flex justify-between items-center"
-              >
-                <div>
-                  <p className="font-medium">{name}</p>
-                  <p className="text-xs text-neutral-500 capitalize">
-                    {item.kind} · Qty {item.quantity}
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <p>£{Number(item.price).toFixed(2)}</p>
-
-                  {item.refunded_quantity > 0 && (
-                    <p className="text-xs text-red-600">
-                      Refunded {item.refunded_quantity}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* REFUND */}
       {refundable > 0 && (
-        <div className="pt-4 border-t">
-          <RefundOrderButton
-            orderId={order.id}
-            refundable={refundable}
-          />
-        </div>
+        <RefundOrderButton
+          orderId={order.id}
+          refundable={refundable}
+        />
       )}
     </div>
   );
