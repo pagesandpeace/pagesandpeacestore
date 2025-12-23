@@ -6,10 +6,10 @@ import slugify from "slugify";
 
 export async function POST(req: Request) {
   try {
-    console.log("🛍 Incoming: CREATE PRODUCT");
+    console.log("🛍 [CREATE PRODUCT] Incoming request");
 
     const body = await req.json();
-    console.log("📥 Body:", body);
+    console.log("📥 [CREATE PRODUCT] Body:", body);
 
     const {
       name,
@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     } = body;
 
     if (!name || !price) {
+      console.warn("⚠️ Missing name or price");
       return NextResponse.json(
         { error: "Name and price are required." },
         { status: 400 }
@@ -42,22 +43,34 @@ export async function POST(req: Request) {
     /* -------------------------
        AUTH
     ------------------------- */
-    const { data: authUser } = await supabase.auth.getUser();
-    if (!authUser?.user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+
+    console.log("👤 Auth result:", auth, authError);
+
+    if (!auth?.user) {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      );
     }
 
     /* -------------------------
-       ROLE CHECK
+       ROLE CHECK (MATCHES STAGING)
     ------------------------- */
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("users")
-      .select("role")
-      .eq("id", authUser.user.id)
-      .maybeSingle();
+      .select("id, role, auth_user_id")
+      .eq("auth_user_id", auth.user.id)
+      .single();
+
+    console.log("🧑‍💼 Profile lookup:", profile, profileError);
 
     if (!profile || profile.role !== "admin") {
-      return NextResponse.json({ error: "Admins only" }, { status: 403 });
+      console.warn("⛔ Admin check failed");
+      return NextResponse.json(
+        { error: "Admins only" },
+        { status: 403 }
+      );
     }
 
     /* -------------------------
@@ -85,30 +98,33 @@ export async function POST(req: Request) {
 
     /* -------------------------
        BOOK-LIKE PRODUCTS
-       (book + blind-date)
     ------------------------- */
     if (product_type === "book" || product_type === "blind-date") {
       productPayload.author = author || null;
       productPayload.format = format || null;
       productPayload.language = language || null;
-
       productPayload.genre_id = genre_id || null;
       productPayload.vibe_id = vibe_id || null;
       productPayload.theme_id = theme_id || null;
     }
 
-    console.log("📦 Insert payload:", productPayload);
+    console.log("📦 [CREATE PRODUCT] Insert payload:", productPayload);
 
-    const { data: product, error } = await supabase
+    const { data: product, error: insertError } = await supabase
       .from("products")
       .insert(productPayload)
       .select()
       .single();
 
-    if (error) {
-      console.error("❌ Insert error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (insertError) {
+      console.error("❌ Product insert failed:", insertError);
+      return NextResponse.json(
+        { error: insertError.message },
+        { status: 500 }
+      );
     }
+
+    console.log("✅ Product created:", product);
 
     return NextResponse.json({ success: true, product });
   } catch (err) {
