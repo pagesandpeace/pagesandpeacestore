@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase/server";
 import EventAttendeesTable from "@/components/admin/events/EventAttendeesTable";
+import { Button } from "@/components/ui/Button";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -20,7 +22,7 @@ export default async function AdminEventOverviewPage({ params }: PageProps) {
   const { data: profile } = await supabase
     .from("users")
     .select("role")
-    .eq("auth_user_id", user.id) // ✅ FIX
+    .eq("auth_user_id", user.id)
     .single();
 
   if (profile?.role !== "admin") redirect("/dashboard");
@@ -49,9 +51,7 @@ export default async function AdminEventOverviewPage({ params }: PageProps) {
     .limit(1);
 
   const eventOrderItem = eventOrderItems?.[0] ?? null;
-  const seatPrice = Number(
-    eventOrderItem?.price ?? event.price_pence / 100
-  );
+  const seatPrice = Number(eventOrderItem?.price ?? event.price_pence / 100);
 
   /* ---------------- BOOKINGS ---------------- */
   const { data: bookings } = await supabase
@@ -86,15 +86,21 @@ export default async function AdminEventOverviewPage({ params }: PageProps) {
 
   return (
     <div className="max-w-6xl mx-auto py-10 space-y-8">
-      <div className="flex justify-between">
+      {/* ---------- HEADER ---------- */}
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold">{event.title}</h1>
           <p className="text-neutral-600">
             {new Date(event.date).toLocaleString()}
           </p>
         </div>
+
+        <Link href={`/admin/events/${event.id}/edit`}>
+          <Button variant="primary">Edit Event</Button>
+        </Link>
       </div>
 
+      {/* ---------- STATS ---------- */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
         <div>
           <p className="text-neutral-500">Capacity</p>
@@ -126,6 +132,7 @@ export default async function AdminEventOverviewPage({ params }: PageProps) {
         </div>
       </div>
 
+      {/* ---------- ATTENDEES ---------- */}
       <EventAttendeesTable attendees={attendees} />
     </div>
   );

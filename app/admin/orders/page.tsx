@@ -23,7 +23,7 @@ type OrderRow = {
 
 export default async function AdminOrdersPage() {
   /* ---------------------------------------------
-     AUTH (ADMIN ONLY – SOURCE OF TRUTH = AUTH)
+     AUTH (ADMIN ONLY – SOURCE OF TRUTH = users table)
   --------------------------------------------- */
   const supabase = await supabaseServer();
 
@@ -35,10 +35,14 @@ export default async function AdminOrdersPage() {
     redirect("/sign-in?callbackURL=/admin/orders");
   }
 
-  // ✅ CORRECT: admin role from auth metadata (matches staging)
-  const role = user.app_metadata?.role;
+  // ✅ MATCHES admin/events + admin/dashboard logic
+  const { data: profile } = await supabase
+    .from("users")
+    .select("role")
+    .eq("auth_user_id", user.id)
+    .single();
 
-  if (role !== "admin") {
+  if (profile?.role !== "admin") {
     redirect("/dashboard");
   }
 
@@ -69,9 +73,7 @@ export default async function AdminOrdersPage() {
       <h1 className="text-3xl font-bold">Orders</h1>
 
       {safeOrders.length === 0 && (
-        <p className="text-neutral-500 italic">
-          No orders found.
-        </p>
+        <p className="text-neutral-500 italic">No orders found.</p>
       )}
 
       {safeOrders.length > 0 && (
