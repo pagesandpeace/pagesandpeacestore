@@ -17,10 +17,7 @@ type OrderRow = {
 type ItemRow = {
   quantity: number;
   price: string | number;
-  name?: string | null;
-  kind?: string | null;
-  products?: { name: string | null } | null;
-  events?: { title: string | null } | null;
+  name: string | null;
 };
 
 export async function GET(req: Request) {
@@ -51,7 +48,7 @@ export async function GET(req: Request) {
       .from("orders")
       .select("*")
       .eq("id", orderId)
-      .eq("user_id_uuid", user.id) // 🔑 FIX
+      .eq("user_id_uuid", user.id)
       .single<OrderRow>();
 
     if (orderErr || !order) {
@@ -61,16 +58,13 @@ export async function GET(req: Request) {
       );
     }
 
-    /* -------- LOAD ITEMS -------- */
+    /* -------- LOAD ITEMS (NO JOINS) -------- */
     const { data: items, error: itemsErr } = await supabase
       .from("order_items")
       .select(`
         quantity,
         price,
-        name,
-        kind,
-        products(name),
-        events(title)
+        name
       `)
       .eq("order_id", orderId)
       .returns<ItemRow[]>();
@@ -82,21 +76,15 @@ export async function GET(req: Request) {
       );
     }
 
-    const safeItems = (items ?? []).map((it) => ({
-      productName:
-        it.name ??
-        it.products?.name ??
-        it.events?.title ??
-        "Unknown Item",
-      quantity: it.quantity,
-      price: Number(it.price),
-    }));
-
     return NextResponse.json({
       order: {
         ...order,
         total: Number(order.total),
-        items: safeItems,
+        items: (items ?? []).map((it) => ({
+          productName: it.name ?? "Unknown Item",
+          quantity: it.quantity,
+          price: Number(it.price),
+        })),
       },
     });
   } catch (err) {
