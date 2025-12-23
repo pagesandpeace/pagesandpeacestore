@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
-/* -------------------------------------------------------
-   GET — load current user (SOURCE OF TRUTH: auth_user_id)
-------------------------------------------------------- */
 export async function GET() {
   const supabase = await supabaseServer();
   const { data: auth } = await supabase.auth.getUser();
@@ -12,19 +9,33 @@ export async function GET() {
     return NextResponse.json({ user: null });
   }
 
-  const { data: profile, error } = await supabase
+  const authId = auth.user.id;
+  const authEmail = auth.user.email ?? "";
+
+  // Try loading via email
+  let { data: profile } = await supabase
     .from("users")
     .select("id, email, name, image, role, auth_provider")
-    .eq("auth_user_id", auth.user.id)
-    .single();
+    .eq("email", authEmail)
+    .maybeSingle();
 
-  if (error || !profile) {
-    console.error("[API /user] profile lookup failed", error);
+  // Fallback: load via ID
+  if (!profile) {
+    const { data: byId } = await supabase
+      .from("users")
+      .select("id, email, name, image, role, auth_provider")
+      .eq("id", authId)
+      .maybeSingle();
 
+    profile = byId ?? null;
+  }
+
+  // Fallback profile (rare)
+  if (!profile) {
     return NextResponse.json({
       user: {
-        id: auth.user.id,
-        email: auth.user.email,
+        id: authId,
+        email: authEmail,
         name: "",
         image: null,
         role: "customer",
@@ -36,8 +47,8 @@ export async function GET() {
   return NextResponse.json({
     user: {
       id: profile.id,
-      email: profile.email,
       name: profile.name ?? "",
+      email: profile.email,
       image: profile.image ?? null,
       role: profile.role ?? "customer",
       auth_provider: profile.auth_provider ?? "credentials",
@@ -60,19 +71,23 @@ export async function PATCH(req: Request) {
   const newName = body.name?.toString().trim();
 
   if (!newName || newName.length < 2) {
-    return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid name" },
+      { status: 400 }
+    );
   }
 
-  const { error } = await supabase
+  const { error: updateErr } = await supabase
     .from("users")
     .update({
       name: newName,
       updated_at: new Date().toISOString(),
     })
-    .eq("auth_user_id", auth.user.id);
+    .eq("auth_user_id", auth.user.id)
 
-  if (error) {
-    console.error("[API /user] name update failed", error);
+
+  if (updateErr) {
+    console.error("Update profile error:", updateErr);
     return NextResponse.json(
       { error: "Failed to update profile" },
       { status: 500 }

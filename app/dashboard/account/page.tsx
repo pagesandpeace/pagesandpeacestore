@@ -14,19 +14,17 @@ export default function AccountPage() {
 
   const [tab, setTab] = useState<"profile" | "security">("profile");
 
-  /* --------------------------------------------------------
-     LOCAL STATE (INITIALISED FROM USER — NO EFFECT)
-  --------------------------------------------------------- */
-  const [avatarPreview, setAvatarPreview] = useState(
-    user?.image ?? ""
-  );
-  const [editingName, setEditingName] = useState(
-    user?.name ?? ""
-  );
+  /**
+   * IMPORTANT:
+   * We deliberately do NOT initialise these from `user`
+   * because `user` refreshes after avatar/name updates.
+   * Instead, we fall back to `user` at render time.
+   */
+  const [avatarPreview, setAvatarPreview] = useState<string>("");
+  const [editingName, setEditingName] = useState<string>("");
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-
   const [savingName, setSavingName] = useState(false);
 
   const [newPassword, setNewPassword] = useState("");
@@ -35,10 +33,13 @@ export default function AccountPage() {
   /* --------------------------------------------------------
      AVATAR UPLOAD
   --------------------------------------------------------- */
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleAvatarChange(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Optimistic preview
     setAvatarPreview(URL.createObjectURL(file));
     setAvatarUploading(true);
 
@@ -53,15 +54,18 @@ export default function AccountPage() {
     const data = await res.json();
     setAvatarUploading(false);
 
-    if (!data.imageUrl) {
+    if (!data?.imageUrl) {
       setSaveMessage("Upload failed");
       return;
     }
 
+    // Persist Cloudinary URL immediately
     setAvatarPreview(data.imageUrl);
     setSaveMessage("Saved ✓");
 
+    // Force global user re-fetch (sidebar + navbar)
     window.dispatchEvent(new Event("pp:user-should-refresh"));
+
     setTimeout(() => setSaveMessage(""), 2500);
   }
 
@@ -69,20 +73,21 @@ export default function AccountPage() {
      SAVE NAME
   --------------------------------------------------------- */
   async function saveName() {
-    if (!editingName.trim()) return;
+    const nameToSave = editingName.trim() || user?.name;
+    if (!nameToSave) return;
 
     setSavingName(true);
 
     const res = await fetch("/api/user/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: editingName }),
+      body: JSON.stringify({ name: nameToSave }),
     });
 
     const data = await res.json();
     setSavingName(false);
 
-    if (!data.success) {
+    if (!data?.success) {
       setSaveMessage("Name update failed");
       return;
     }
@@ -124,14 +129,23 @@ export default function AccountPage() {
     );
   }
 
+  const displayAvatar =
+    avatarPreview || user.image || "/user_avatar_placeholder.svg";
+
+  const displayName =
+    editingName || user.name || "";
+
   return (
     <main className="min-h-screen bg-[#FAF6F1] px-6 py-10 md:px-10 font-[Montserrat]">
       <div className="mx-auto max-w-4xl">
-        <h1 className="text-3xl font-semibold tracking-wide">My Account</h1>
+        <h1 className="text-3xl font-semibold tracking-wide">
+          My Account
+        </h1>
         <p className="text-[#555] mt-1 mb-6">
           Manage your profile and account settings.
         </p>
 
+        {/* Tabs */}
         <div className="flex gap-3 mb-8">
           <Button
             size="sm"
@@ -150,17 +164,26 @@ export default function AccountPage() {
           </Button>
         </div>
 
+        {/* ---------------------------------------
+            PROFILE TAB
+        ---------------------------------------- */}
         {tab === "profile" && (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div
+            key={user.id}
+            className="grid gap-6 md:grid-cols-2"
+          >
+            {/* Avatar Card */}
             <Card>
               <CardHeader>
-                <h2 className="text-lg font-semibold">Profile Photo</h2>
+                <h2 className="text-lg font-semibold">
+                  Profile Photo
+                </h2>
               </CardHeader>
               <CardBody>
                 <div className="flex items-center gap-4">
                   <div className="relative w-20 h-20 rounded-full overflow-hidden border bg-white">
                     <Image
-                      src={avatarPreview || "/user_avatar_placeholder.svg"}
+                      src={displayAvatar}
                       alt="Avatar"
                       fill
                       className="object-cover"
@@ -185,25 +208,34 @@ export default function AccountPage() {
                 </div>
 
                 {saveMessage && (
-                  <p className="mt-3 text-sm text-[#2f7c3e]">{saveMessage}</p>
+                  <p className="mt-3 text-sm text-[#2f7c3e]">
+                    {saveMessage}
+                  </p>
                 )}
               </CardBody>
             </Card>
 
+            {/* Profile Info */}
             <Card>
               <CardHeader>
-                <h2 className="text-lg font-semibold">Profile Info</h2>
+                <h2 className="text-lg font-semibold">
+                  Profile Info
+                </h2>
               </CardHeader>
               <CardBody className="space-y-4">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-[#777]">
                     Name
                   </p>
+
                   <Input
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
+                    value={displayName}
+                    onChange={(e) =>
+                      setEditingName(e.target.value)
+                    }
                     className="mt-1"
                   />
+
                   <Button
                     className="mt-2"
                     size="sm"
@@ -218,31 +250,51 @@ export default function AccountPage() {
                   <p className="text-xs uppercase tracking-wide text-[#777]">
                     Email
                   </p>
-                  <p className="text-sm break-all">{user.email}</p>
+                  <p className="text-sm break-all">
+                    {user.email}
+                  </p>
                 </div>
               </CardBody>
             </Card>
           </div>
         )}
 
+        {/* ---------------------------------------
+            SECURITY TAB
+        ---------------------------------------- */}
         {tab === "security" && (
           <Card>
             <CardHeader>
-              <h2 className="text-lg font-semibold">Change Password</h2>
+              <h2 className="text-lg font-semibold">
+                Change Password
+              </h2>
             </CardHeader>
             <CardBody>
-              <form className="space-y-4" onSubmit={updatePassword}>
+              <form
+                className="space-y-4"
+                onSubmit={updatePassword}
+              >
                 <Input
                   type="password"
                   placeholder="New password"
                   required
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) =>
+                    setNewPassword(e.target.value)
+                  }
                 />
+
                 {passwordMessage && (
-                  <p className="text-sm text-green-700">{passwordMessage}</p>
+                  <p className="text-sm text-green-700">
+                    {passwordMessage}
+                  </p>
                 )}
-                <Button type="submit" size="md" className="w-full">
+
+                <Button
+                  type="submit"
+                  size="md"
+                  className="w-full"
+                >
                   Update Password
                 </Button>
               </form>
