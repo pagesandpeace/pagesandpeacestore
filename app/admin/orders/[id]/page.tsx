@@ -1,8 +1,18 @@
 import { redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import RefundOrderButton from "@/components/admin/orders/RefundOrderButton";
 
 export const dynamic = "force-dynamic";
+
+/* --------------------------------------------------
+   SERVICE ROLE CLIENT (DATA ONLY – BYPASS RLS)
+-------------------------------------------------- */
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -10,11 +20,12 @@ type PageProps = {
 
 export default async function AdminOrderDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const supabase = await supabaseServer();
 
   /* --------------------------------------------------
-     AUTH (ADMIN ONLY)
+     AUTH (ADMIN ONLY – SOURCE OF TRUTH = users table)
   -------------------------------------------------- */
+  const supabase = await supabaseServer();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -23,7 +34,6 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
     redirect("/sign-in?callbackURL=/admin/orders");
   }
 
-  // ✅ MATCHES STAGING + admin/events
   const { data: profile } = await supabase
     .from("users")
     .select("role")
@@ -35,9 +45,9 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
   }
 
   /* --------------------------------------------------
-     FETCH ORDER
+     FETCH ORDER (SERVICE ROLE – BYPASS RLS)
   -------------------------------------------------- */
-  const { data: order } = await supabase
+  const { data: order, error } = await supabaseAdmin
     .from("orders")
     .select(`
       id,
@@ -65,6 +75,10 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
     .eq("id", id)
     .single();
 
+  if (error) {
+    console.error("[admin/orders/[id]] fetch error:", error);
+  }
+
   if (!order) {
     return (
       <div className="max-w-4xl mx-auto py-10">
@@ -74,6 +88,9 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
     );
   }
 
+  /* --------------------------------------------------
+     CALCULATIONS
+  -------------------------------------------------- */
   const refundedTotal = order.order_items.reduce(
     (sum, item) => sum + Number(item.refunded_amount ?? 0),
     0
@@ -86,6 +103,7 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
   -------------------------------------------------- */
   return (
     <div className="max-w-4xl mx-auto py-10 space-y-8">
+      {/* HEADER */}
       <div>
         <h1 className="text-2xl font-bold">Order</h1>
         <p className="text-xs font-mono text-neutral-500 mt-1">
@@ -93,6 +111,7 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
         </p>
       </div>
 
+      {/* META */}
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div>
           <p className="text-neutral-500">Date</p>
@@ -113,8 +132,18 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
           <p className="text-neutral-500">Refunded</p>
           <p>£{refundedTotal.toFixed(2)}</p>
         </div>
+
+        {order.stripe_payment_intent_id && (
+          <div className="col-span-2">
+            <p className="text-neutral-500">Payment Intent</p>
+            <p className="font-mono text-xs break-all">
+              {order.stripe_payment_intent_id}
+            </p>
+          </div>
+        )}
       </div>
 
+      {/* ITEMS */}
       <div>
         <h2 className="font-semibold mb-3">Items</h2>
 
@@ -130,8 +159,8 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
 
             const name =
               item.kind === "product"
-                ? product?.name
-                : event?.title;
+                ? product?.name ?? "Product"
+                : event?.title ?? "Event";
 
             return (
               <div
@@ -147,6 +176,7 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
 
                 <div className="text-right">
                   <p>£{Number(item.price).toFixed(2)}</p>
+
                   {item.refunded_quantity > 0 && (
                     <p className="text-xs text-red-600">
                       Refunded {item.refunded_quantity}
@@ -159,6 +189,7 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
         </div>
       </div>
 
+      {/* REFUND */}
       {refundable > 0 && (
         <div className="pt-4 border-t">
           <RefundOrderButton
