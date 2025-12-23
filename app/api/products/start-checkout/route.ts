@@ -6,21 +6,34 @@ import { supabaseServer } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// ---------------------------------------------
-// Stripe client
-// ---------------------------------------------
+/* ---------------------------------------------
+   Stripe client
+--------------------------------------------- */
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
       apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
 });
 
-// ---------------------------------------------
-// POST /api/products/start-checkout
-// ---------------------------------------------
+/* ---------------------------------------------
+   Types
+--------------------------------------------- */
+type StartCheckoutBody = {
+  productId: string;
+  name: string;
+  quantity: number;
+  price: number; // pounds
+  imageUrl?: string | null;
+};
+
+/* ---------------------------------------------
+   POST /api/products/start-checkout
+--------------------------------------------- */
 export async function POST(req: Request) {
   try {
     const supabase = await supabaseServer();
 
-    // Get logged-in user
+    /* -----------------------------
+       Auth
+    ----------------------------- */
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
       return NextResponse.json(
@@ -29,19 +42,29 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json();
+    /* -----------------------------
+       Parse + validate body
+    ----------------------------- */
+    const body = (await req.json()) as StartCheckoutBody;
     const { productId, name, quantity, price, imageUrl } = body;
 
-    if (!productId || !quantity || !price) {
+    if (
+      !productId ||
+      !name ||
+      !Number.isInteger(quantity) ||
+      quantity <= 0 ||
+      typeof price !== "number" ||
+      price < 0.3 // Stripe GBP minimum
+    ) {
       return NextResponse.json(
         { error: "INVALID_REQUEST" },
         { status: 400 }
       );
     }
 
-    // ---------------------------------------------
-    // Create Stripe Checkout Session
-    // ---------------------------------------------
+    /* -----------------------------
+       Stripe Checkout Session
+    ----------------------------- */
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -63,20 +86,25 @@ export async function POST(req: Request) {
 
       metadata: {
         kind: "product",
-        userId: auth.user.id,
-        items: `${productId}|${name}|${quantity}|${Math.round(price * 100)}`,
+        userId: auth.user.id, // auth.users.id (canonical)
+        items: `${productId}|${name}|${quantity}|${Math.round(
+          price * 100
+        )}`,
       },
 
-      success_url:
-        `${process.env.NEXT_PUBLIC_SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/cart`,
     });
 
     return NextResponse.json({ url: session.url });
-  } catch (err: any) {
-    console.error("❌ PRODUCT CHECKOUT ERROR:", err);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "UNKNOWN_ERROR";
+
+    console.error("❌ PRODUCT CHECKOUT ERROR:", message);
+
     return NextResponse.json(
-      { error: err.message || "UNKNOWN_ERROR" },
+      { error: message },
       { status: 500 }
     );
   }
