@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/Input";
@@ -14,31 +14,23 @@ export default function AccountPage() {
 
   const [tab, setTab] = useState<"profile" | "security">("profile");
 
-  const [avatarPreview, setAvatarPreview] = useState("");
+  /* --------------------------------------------------------
+     LOCAL STATE (INITIALISED FROM USER — NO EFFECT)
+  --------------------------------------------------------- */
+  const [avatarPreview, setAvatarPreview] = useState(
+    user?.image ?? ""
+  );
+  const [editingName, setEditingName] = useState(
+    user?.name ?? ""
+  );
+
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
-  const [editingName, setEditingName] = useState("");
   const [savingName, setSavingName] = useState(false);
 
   const [newPassword, setNewPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
-
-  /* Load user on mount */
- useEffect(() => {
-  if (!user) return;
-
-  // Schedule updates outside the effect body → fixes ESLint rule
-  queueMicrotask(() => {
-    setAvatarPreview(prev =>
-      prev !== (user.image ?? "") ? user.image ?? "" : prev
-    );
-
-    setEditingName(prev =>
-      prev !== (user.name ?? "") ? user.name ?? "" : prev
-    );
-  });
-}, [user]);
 
   /* --------------------------------------------------------
      AVATAR UPLOAD
@@ -66,12 +58,10 @@ export default function AccountPage() {
       return;
     }
 
-    setSaveMessage("Saved ✓");
     setAvatarPreview(data.imageUrl);
+    setSaveMessage("Saved ✓");
 
-    // 🔥 Refresh global user state
     window.dispatchEvent(new Event("pp:user-should-refresh"));
-
     setTimeout(() => setSaveMessage(""), 2500);
   }
 
@@ -98,8 +88,6 @@ export default function AccountPage() {
     }
 
     setSaveMessage("Saved ✓");
-
-    // 🔥 Refresh sidebar and navbar instantly
     window.dispatchEvent(new Event("pp:user-should-refresh"));
 
     setTimeout(() => setSaveMessage(""), 2500);
@@ -144,7 +132,6 @@ export default function AccountPage() {
           Manage your profile and account settings.
         </p>
 
-        {/* Tabs */}
         <div className="flex gap-3 mb-8">
           <Button
             size="sm"
@@ -163,12 +150,8 @@ export default function AccountPage() {
           </Button>
         </div>
 
-        {/* ---------------------------------------
-            PROFILE TAB
-        ---------------------------------------- */}
         {tab === "profile" && (
           <div className="grid gap-6 md:grid-cols-2">
-            {/* Avatar Card */}
             <Card>
               <CardHeader>
                 <h2 className="text-lg font-semibold">Profile Photo</h2>
@@ -207,52 +190,41 @@ export default function AccountPage() {
               </CardBody>
             </Card>
 
-            {/* User Info Card */}
             <Card>
               <CardHeader>
                 <h2 className="text-lg font-semibold">Profile Info</h2>
               </CardHeader>
-              <CardBody>
-                <div className="space-y-4">
+              <CardBody className="space-y-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-[#777]">
+                    Name
+                  </p>
+                  <Input
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    className="mt-1"
+                  />
+                  <Button
+                    className="mt-2"
+                    size="sm"
+                    onClick={saveName}
+                    disabled={savingName}
+                  >
+                    {savingName ? "Saving…" : "Save Name"}
+                  </Button>
+                </div>
 
-                  {/* NAME EDIT FIELD */}
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-[#777]">
-                      Name
-                    </p>
-
-                    <Input
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      className="mt-1"
-                    />
-
-                    <Button
-                      className="mt-2"
-                      size="sm"
-                      onClick={saveName}
-                      disabled={savingName}
-                    >
-                      {savingName ? "Saving…" : "Save Name"}
-                    </Button>
-                  </div>
-
-                  {/* EMAIL */}
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-[#777]">
-                      Email
-                    </p>
-                    <p className="text-sm break-all">{user.email}</p>
-                  </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-[#777]">
+                    Email
+                  </p>
+                  <p className="text-sm break-all">{user.email}</p>
                 </div>
               </CardBody>
             </Card>
           </div>
         )}
 
-        {/* ---------------------------------------
-            SECURITY TAB
-        ---------------------------------------- */}
         {tab === "security" && (
           <Card>
             <CardHeader>
@@ -267,13 +239,9 @@ export default function AccountPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
-
                 {passwordMessage && (
-                  <p className="text-sm text-green-700">
-                    {passwordMessage}
-                  </p>
+                  <p className="text-sm text-green-700">{passwordMessage}</p>
                 )}
-
                 <Button type="submit" size="md" className="w-full">
                   Update Password
                 </Button>
