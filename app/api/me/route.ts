@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
+import { cookies, headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -10,6 +11,9 @@ export async function GET() {
   try {
     const supabase = await supabaseServer();
 
+    /* -------------------------
+       AUTH
+    ------------------------- */
     const { data: auth, error: authErr } = await supabase.auth.getUser();
 
     console.log("👤 getUser():", {
@@ -20,16 +24,19 @@ export async function GET() {
 
     if (!auth?.user) {
       console.log("🔓 No authenticated user");
-      return NextResponse.json({ user: null }, { status: 401 });
+      return NextResponse.json(null, { status: 401 });
     }
 
     const authUserId = auth.user.id;
 
+    /* -------------------------
+       USERS TABLE (PROD SAFE)
+    ------------------------- */
     const { data: profile, error: profileErr } = await supabase
       .from("users")
-      .select("id, email, name, image, role, auth_provider")
+      .select("id, email, name, image, role")
       .eq("auth_user_id", authUserId)
-      .single();
+      .maybeSingle();
 
     console.log("📦 users lookup:", {
       profile,
@@ -37,35 +44,25 @@ export async function GET() {
     });
 
     if (!profile) {
-      console.log("⚠ No users row for auth_user_id:", authUserId);
-      return NextResponse.json(
-        {
-          user: {
-            id: authUserId,
-            email: auth.user.email,
-            name: "",
-            image: null,
-            role: "customer",
-          },
-        },
-        { status: 200 }
+      console.log(
+        "⚠ Auth user exists but no users row for auth_user_id:",
+        authUserId
       );
+      return NextResponse.json(null, { status: 401 });
     }
 
     console.log("✅ /api/me SUCCESS");
+
     return NextResponse.json({
-      user: {
-        id: profile.id,
-        email: profile.email,
-        name: profile.name,
-        image: profile.image,
-        role: profile.role,
-        auth_provider: profile.auth_provider,
-      },
+      id: profile.id,
+      email: profile.email,
+      name: profile.name ?? "",
+      image: profile.image ?? null,
+      role: profile.role ?? "customer",
     });
   } catch (err) {
     console.error("🔥 /api/me HARD CRASH:", err);
-    return NextResponse.json({ user: null }, { status: 500 });
+    return NextResponse.json(null, { status: 500 });
   } finally {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   }
