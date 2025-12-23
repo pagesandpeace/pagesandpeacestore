@@ -48,7 +48,7 @@ type BrowseEvent = EventRecord & {
 };
 
 type SearchParams = {
-  past?: string; // "all" to show full history
+  past?: string;
 };
 
 export default async function DashboardEventsPage({
@@ -73,34 +73,27 @@ export default async function DashboardEventsPage({
 
   const now = new Date();
 
-  // rolling window for “Past bookings” (keeps page tidy)
   const SIX_MONTHS_AGO = new Date(now);
   SIX_MONTHS_AGO.setMonth(SIX_MONTHS_AGO.getMonth() - 6);
 
   /* -----------------------------
-     FETCH USER SEATS
+     FETCH USER BOOKINGS
   ----------------------------- */
   const { data: seats } = await supabase
     .from("event_bookings")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id_uuid", user.id)
     .eq("cancelled", false);
 
-  /* -----------------------------
-     FETCH EVENTS
-  ----------------------------- */
   const { data: events } = await supabase.from("events").select("*");
 
-  /* -----------------------------
-     FETCH ORDERS
-  ----------------------------- */
   const { data: orders } = await supabase
     .from("orders")
     .select("*")
-    .eq("user_id", user.id);
+    .eq("user_id_uuid", user.id);
 
   /* -----------------------------
-     GROUP SEATS → BOOKINGS
+     GROUP BOOKINGS
   ----------------------------- */
   const bookingsBySession = new Map<string, BookingGroup>();
 
@@ -109,7 +102,9 @@ export default async function DashboardEventsPage({
 
     if (!bookingsBySession.has(sessionId)) {
       const event = events?.find((e) => e.id === seat.event_id);
-      const order = orders?.find((o) => o.stripe_checkout_session_id === sessionId);
+      const order = orders?.find(
+        (o) => o.stripe_checkout_session_id === sessionId
+      );
 
       if (!event || !order) continue;
 
@@ -131,13 +126,17 @@ export default async function DashboardEventsPage({
   const upcomingBookings = bookings
     .filter((b) => new Date(b.event.date) >= now)
     .sort(
-      (a, b) => new Date(a.event.date).getTime() - new Date(b.event.date).getTime()
+      (a, b) =>
+        new Date(a.event.date).getTime() -
+        new Date(b.event.date).getTime()
     );
 
   const allPastBookings = bookings
     .filter((b) => new Date(b.event.date) < now)
     .sort(
-      (a, b) => new Date(b.event.date).getTime() - new Date(a.event.date).getTime()
+      (a, b) =>
+        new Date(b.event.date).getTime() -
+        new Date(a.event.date).getTime()
     );
 
   const recentPastBookings = allPastBookings.filter(
@@ -148,11 +147,12 @@ export default async function DashboardEventsPage({
     (b) => new Date(b.event.date) < SIX_MONTHS_AGO
   );
 
-  const pastBookingsToShow = showAllPast ? allPastBookings : recentPastBookings;
+  const pastBookingsToShow = showAllPast
+    ? allPastBookings
+    : recentPastBookings;
 
   /* -----------------------------
-     BROWSE EVENTS (UPCOMING ONLY)
-     - Prevents overcrowding + avoids expired clutter
+     BROWSE EVENTS
   ----------------------------- */
   const { data: allSeats } = await supabase
     .from("event_bookings")
@@ -161,10 +161,17 @@ export default async function DashboardEventsPage({
 
   const upcomingEvents = (events || [])
     .filter((evt) => new Date(evt.date) >= now)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .sort(
+      (a, b) =>
+        new Date(a.date).getTime() -
+        new Date(b.date).getTime()
+    );
 
   const browseEvents: BrowseEvent[] = upcomingEvents.map((evt) => {
-    const active = (allSeats || []).filter((b) => b.event_id === evt.id).length;
+    const active = (allSeats || []).filter(
+      (b) => b.event_id === evt.id
+    ).length;
+
     const remaining = evt.capacity - active;
 
     return {
@@ -180,19 +187,42 @@ export default async function DashboardEventsPage({
   return (
     <main className="min-h-screen bg-[#FAF6F1] px-6 py-12">
       <section className="mx-auto max-w-5xl space-y-12">
+
         {/* HEADER */}
         <header className="border-b pb-6">
-          <h1 className="text-3xl font-semibold tracking-widest">Events 🎟️</h1>
+          <h1 className="text-3xl font-semibold tracking-widest">
+            Events 🎟️
+          </h1>
           <p className="text-sm text-neutral-600">
             Your bookings, past events, and what&apos;s coming up next.
           </p>
         </header>
 
+        {/* EMPTY STATE */}
+        {bookings.length === 0 && (
+          <div className="bg-white border rounded-xl p-8 shadow text-center space-y-4">
+            <h2 className="text-xl font-semibold">
+              You haven’t booked any events yet
+            </h2>
+            <p className="text-neutral-600">
+              When you book an event, it will appear here.
+            </p>
+            <Link
+              href="/shop"
+              className="inline-block mt-4 px-5 py-2 bg-accent text-white rounded-md"
+            >
+              Browse events →
+            </Link>
+          </div>
+        )}
+
         {/* NEXT EVENT */}
         {upcomingBookings.length > 0 && (() => {
           const { event, order } = upcomingBookings[0];
           const date = new Date(event.date);
-          const diffDays = Math.ceil((date.getTime() - now.getTime()) / 86400000);
+          const diffDays = Math.ceil(
+            (date.getTime() - now.getTime()) / 86400000
+          );
 
           return (
             <div className="rounded-xl bg-white border shadow overflow-hidden">
@@ -210,8 +240,9 @@ export default async function DashboardEventsPage({
               </div>
 
               <div className="p-6 space-y-2">
-                <h3 className="text-2xl font-semibold">{event.title}</h3>
-                <p className="text-sm text-neutral-600">{event.subtitle}</p>
+                <h3 className="text-2xl font-semibold">
+                  {event.title}
+                </h3>
 
                 <p className="font-medium">
                   {date.toLocaleString("en-GB", {
@@ -241,7 +272,9 @@ export default async function DashboardEventsPage({
         {/* UPCOMING BOOKINGS */}
         {upcomingBookings.length > 1 && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold">Upcoming Bookings</h2>
+            <h2 className="text-2xl font-semibold">
+              Upcoming Bookings
+            </h2>
 
             {upcomingBookings.slice(1).map(({ event, order }) => (
               <div
@@ -257,12 +290,11 @@ export default async function DashboardEventsPage({
                 />
 
                 <div className="flex-1">
-                  <h3 className="font-semibold text-lg">{event.title}</h3>
+                  <h3 className="font-semibold text-lg">
+                    {event.title}
+                  </h3>
                   <p className="text-sm text-neutral-600">
                     {new Date(event.date).toLocaleString("en-GB")}
-                  </p>
-                  <p className="font-medium">
-                    £{(event.price_pence / 100).toFixed(2)}
                   </p>
                 </div>
 
@@ -278,11 +310,13 @@ export default async function DashboardEventsPage({
         )}
 
         {/* PAST BOOKINGS */}
-        {(pastBookingsToShow.length > 0 || olderPastBookings.length > 0) && (
+        {(pastBookingsToShow.length > 0 ||
+          olderPastBookings.length > 0) && (
           <div className="space-y-4 opacity-90">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-semibold">Past Events</h2>
+
                 {!showAllPast && (
                   <p className="text-sm text-neutral-600">
                     Showing the last 6 months.
@@ -290,7 +324,6 @@ export default async function DashboardEventsPage({
                 )}
               </div>
 
-              {/* Toggle history view via query param */}
               {!showAllPast && olderPastBookings.length > 0 && (
                 <Link
                   href="/dashboard/events?past=all"
@@ -316,7 +349,9 @@ export default async function DashboardEventsPage({
                   key={order.id}
                   className="bg-white border rounded-xl p-5 shadow"
                 >
-                  <h3 className="font-semibold text-lg">{event.title}</h3>
+                  <h3 className="font-semibold text-lg">
+                    {event.title}
+                  </h3>
                   <p className="text-sm text-neutral-600">
                     {new Date(event.date).toLocaleString("en-GB")}
                   </p>
@@ -326,20 +361,13 @@ export default async function DashboardEventsPage({
           </div>
         )}
 
-        {/* BROWSE EVENTS (UPCOMING ONLY) */}
+        {/* BROWSE EVENTS */}
         <div className="pt-12 border-t space-y-6">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold">Browse Events</h2>
-              <p className="text-sm text-neutral-600">
-                Upcoming events only.
-              </p>
-            </div>
-          </div>
+          <h2 className="text-2xl font-semibold">Browse Events</h2>
 
           {browseEvents.length === 0 ? (
-            <div className="bg-white border rounded-xl p-6 shadow text-neutral-700">
-              No upcoming events right now.
+            <div className="bg-white border rounded-xl p-6 shadow">
+              No upcoming events available.
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -363,7 +391,7 @@ export default async function DashboardEventsPage({
                     </p>
 
                     {evt.soldOut ? (
-                      <div className="mt-3 px-4 py-2 text-center rounded-md bg-neutral-200 text-neutral-600 text-sm cursor-not-allowed">
+                      <div className="mt-3 px-4 py-2 text-center rounded-md bg-neutral-200 text-neutral-600 text-sm">
                         Sold out
                       </div>
                     ) : (
