@@ -19,13 +19,24 @@ type ItemRow = {
   price: string | number;
   name?: string | null;
   kind?: string | null;
-  products?: { name: string | null } | { name: string | null }[] | null;
-  events?: { title: string | null } | { title: string | null }[] | null;
+  products?: { name: string | null } | null;
+  events?: { title: string | null } | null;
 };
 
 export async function GET(req: Request) {
   try {
     const supabase = await supabaseServer();
+
+    /* ---------------- AUTH ---------------- */
+    const { data: auth } = await supabase.auth.getUser();
+    const user = auth?.user;
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
     const orderId = new URL(req.url).searchParams.get("id");
     if (!orderId) {
@@ -35,11 +46,12 @@ export async function GET(req: Request) {
       );
     }
 
-    // Load order
+    /* -------- LOAD ORDER (OWNERSHIP SAFE) -------- */
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .select("*")
       .eq("id", orderId)
+      .eq("user_id_uuid", user.id) // 🔑 FIX
       .single<OrderRow>();
 
     if (orderErr || !order) {
@@ -49,7 +61,7 @@ export async function GET(req: Request) {
       );
     }
 
-    // Load items + product/event joins
+    /* -------- LOAD ITEMS -------- */
     const { data: items, error: itemsErr } = await supabase
       .from("order_items")
       .select(`
@@ -64,26 +76,21 @@ export async function GET(req: Request) {
       .returns<ItemRow[]>();
 
     if (itemsErr) {
-      return NextResponse.json({ error: itemsErr.message }, { status: 500 });
+      return NextResponse.json(
+        { error: itemsErr.message },
+        { status: 500 }
+      );
     }
 
-    const safeItems = (items ?? []).map((it) => {
-      const product =
-        Array.isArray(it.products) ? it.products[0] : it.products;
-
-      const event =
-        Array.isArray(it.events) ? it.events[0] : it.events;
-
-      return {
-        productName:
-          it.name ??
-          product?.name ??
-          event?.title ??
-          "Unknown Item",
-        quantity: it.quantity,
-        price: Number(it.price),
-      };
-    });
+    const safeItems = (items ?? []).map((it) => ({
+      productName:
+        it.name ??
+        it.products?.name ??
+        it.events?.title ??
+        "Unknown Item",
+      quantity: it.quantity,
+      price: Number(it.price),
+    }));
 
     return NextResponse.json({
       order: {

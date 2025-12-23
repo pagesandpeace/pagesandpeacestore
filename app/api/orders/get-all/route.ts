@@ -16,7 +16,7 @@ type OrderRow = {
 export async function GET() {
   const supabase = await supabaseServer();
 
-  // Get logged-in Supabase user
+  /* ---------------- AUTH ---------------- */
   const { data: auth } = await supabase.auth.getUser();
   const user = auth?.user;
 
@@ -24,23 +24,21 @@ export async function GET() {
     return NextResponse.json({ orders: [] }, { status: 401 });
   }
 
-  // Fetch user orders + item counts
+  /* -------- FETCH USER ORDERS -------- */
   const { data, error } = await supabase
     .from("orders")
-    .select(
-      `
+    .select(`
       id,
       total,
       status,
       created_at,
       stripe_receipt_url,
-      order_items:order_items (
+      order_items (
         quantity,
         price
       )
-    `
-    )
-    .eq("user_id", user.id)
+    `)
+    .eq("user_id_uuid", user.id) // 🔑 FIX
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -48,19 +46,14 @@ export async function GET() {
     return NextResponse.json({ orders: [] }, { status: 500 });
   }
 
-  // Format into a clean view model
-  const orders = (data ?? []).map((order: OrderRow) => {
-    const items = order.order_items ?? [];
-
-    return {
-      id: order.id,
-      total: Number(order.total),
-      status: order.status,
-      created_at: order.created_at,
-      receipt_url: order.stripe_receipt_url,
-      itemCount: items.length,
-    };
-  });
+  const orders = (data ?? []).map((order: OrderRow) => ({
+    id: order.id,
+    total: Number(order.total),
+    status: order.status,
+    created_at: order.created_at,
+    receipt_url: order.stripe_receipt_url,
+    itemCount: order.order_items?.length ?? 0,
+  }));
 
   return NextResponse.json({ orders });
 }
