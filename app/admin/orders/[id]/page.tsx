@@ -19,20 +19,25 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/sign-in");
+  if (!user) {
+    redirect("/sign-in?callbackURL=/admin/orders");
+  }
 
+  // ✅ MATCHES STAGING + admin/events
   const { data: profile } = await supabase
     .from("users")
     .select("role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
-  if (profile?.role !== "admin") redirect("/dashboard");
+  if (profile?.role !== "admin") {
+    redirect("/dashboard");
+  }
 
   /* --------------------------------------------------
-     FETCH ORDER (WITH ITEMS + RELATIONS)
+     FETCH ORDER
   -------------------------------------------------- */
-  const { data: order, error } = await supabase
+  const { data: order } = await supabase
     .from("orders")
     .select(`
       id,
@@ -60,16 +65,11 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
     .eq("id", id)
     .single();
 
-  console.log("[admin/orders/[id]] order:", order);
-  console.log("[admin/orders/[id]] error:", error);
-
   if (!order) {
     return (
       <div className="max-w-4xl mx-auto py-10">
         <h1 className="text-2xl font-bold">Order not found</h1>
-        <p className="text-neutral-600 mt-2">
-          ID: <span className="font-mono">{id}</span>
-        </p>
+        <p className="text-neutral-600 mt-2 font-mono">{id}</p>
       </div>
     );
   }
@@ -86,95 +86,79 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
   -------------------------------------------------- */
   return (
     <div className="max-w-4xl mx-auto py-10 space-y-8">
-      {/* HEADER */}
       <div>
         <h1 className="text-2xl font-bold">Order</h1>
-        <p className="text-sm text-neutral-500 font-mono mt-1">
+        <p className="text-xs font-mono text-neutral-500 mt-1">
           {order.id}
         </p>
       </div>
 
-      {/* META */}
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div>
-          <span className="text-neutral-500">Date</span>
-          <div>{new Date(order.created_at).toLocaleString()}</div>
+          <p className="text-neutral-500">Date</p>
+          <p>{new Date(order.created_at).toLocaleString()}</p>
         </div>
 
         <div>
-          <span className="text-neutral-500">Status</span>
-          <div className="capitalize">{order.status}</div>
+          <p className="text-neutral-500">Status</p>
+          <p className="capitalize">{order.status}</p>
         </div>
 
         <div>
-          <span className="text-neutral-500">Total</span>
-          <div>£{Number(order.total).toFixed(2)}</div>
+          <p className="text-neutral-500">Total</p>
+          <p>£{Number(order.total).toFixed(2)}</p>
         </div>
 
         <div>
-          <span className="text-neutral-500">Refunded</span>
-          <div>£{refundedTotal.toFixed(2)}</div>
-        </div>
-
-        <div className="col-span-2">
-          <span className="text-neutral-500">Payment Intent</span>
-          <div className="font-mono text-xs break-all">
-            {order.stripe_payment_intent_id}
-          </div>
+          <p className="text-neutral-500">Refunded</p>
+          <p>£{refundedTotal.toFixed(2)}</p>
         </div>
       </div>
 
-      {/* ITEMS */}
       <div>
         <h2 className="font-semibold mb-3">Items</h2>
 
-        <table className="w-full text-sm border">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="p-2 text-left">Item</th>
-              <th className="p-2 text-left">Type</th>
-              <th className="p-2 text-left">Qty</th>
-              <th className="p-2 text-left">Refunded</th>
-              <th className="p-2 text-left">Price</th>
-            </tr>
-          </thead>
+        <div className="space-y-3">
+          {order.order_items.map((item) => {
+            const product = Array.isArray(item.product)
+              ? item.product[0]
+              : item.product;
 
-          <tbody>
-            {order.order_items.map((item) => {
-              const product =
-                Array.isArray(item.product)
-                  ? item.product[0]
-                  : item.product;
+            const event = Array.isArray(item.event)
+              ? item.event[0]
+              : item.event;
 
-              const event =
-                Array.isArray(item.event)
-                  ? item.event[0]
-                  : item.event;
+            const name =
+              item.kind === "product"
+                ? product?.name
+                : event?.title;
 
-              const name =
-                item.kind === "product"
-                  ? product?.name ?? "Unknown product"
-                  : event?.title ?? "Unknown event";
+            return (
+              <div
+                key={item.id}
+                className="border rounded-lg p-4 flex justify-between"
+              >
+                <div>
+                  <p className="font-medium">{name}</p>
+                  <p className="text-xs text-neutral-500 capitalize">
+                    {item.kind} · Qty {item.quantity}
+                  </p>
+                </div>
 
-              return (
-                <tr key={item.id} className="border-t">
-                  <td className="p-2 font-medium">{name}</td>
-                  <td className="p-2 capitalize">{item.kind}</td>
-                  <td className="p-2">{item.quantity}</td>
-                  <td className="p-2">
-                    {item.refunded_quantity ?? 0}
-                  </td>
-                  <td className="p-2">
-                    £{Number(item.price).toFixed(2)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                <div className="text-right">
+                  <p>£{Number(item.price).toFixed(2)}</p>
+                  {item.refunded_quantity > 0 && (
+                    <p className="text-xs text-red-600">
+                      Refunded {item.refunded_quantity}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* REFUND ACTION */}
       {refundable > 0 && (
         <div className="pt-4 border-t">
           <RefundOrderButton
