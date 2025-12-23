@@ -49,22 +49,24 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
      Listen for profile updates (avatar/name)
   ------------------------------------------------------- */
   useEffect(() => {
-    const handler = async () => {
-      try {
-        const res = await fetch("/api/profile/me");
-        if (!res.ok) return;
+  const handler = async () => {
+    try {
+      const res = await fetch("/api/me");
+      if (!res.ok) return;
 
-        const updatedProfile = await res.json();
-        setLocalProfile(updatedProfile);
-      } catch (err) {
-        console.error("❌ Failed to refresh admin profile", err);
-      }
-    };
+      const updatedUser = await res.json();
+      setLocalProfile(updatedUser);
+    } catch (err) {
+      console.error("❌ Failed to refresh user profile", err);
+    }
+  };
 
-    window.addEventListener("pp:profile-updated", handler);
-    return () =>
-      window.removeEventListener("pp:profile-updated", handler);
-  }, []);
+  window.addEventListener("pp:user-should-refresh", handler);
+  return () => {
+    window.removeEventListener("pp:user-should-refresh", handler);
+  };
+}, []);
+
 
   /* -------------------------------------------------------
      Close dropdown when clicking outside
