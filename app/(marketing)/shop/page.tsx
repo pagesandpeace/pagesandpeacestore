@@ -29,16 +29,11 @@ export default async function ShopPage({
   /* ----------------------------------------------------
      1. LOAD HERO BLOCK
   ---------------------------------------------------- */
-  console.log("🟣 Loading hero block…");
-
-  const { data: heroBlock, error: heroError } = await supabase
+  const { data: heroBlock } = await supabase
     .from("marketing_blocks")
     .select("*")
     .eq("key", "shop_hero")
     .maybeSingle();
-
-  console.log("🔵 heroBlock:", heroBlock);
-  console.log("🔴 heroError:", heroError);
 
   let heroActive = false;
 
@@ -51,14 +46,10 @@ export default async function ShopPage({
       heroBlock.visible &&
       (!starts || starts <= now) &&
       (!ends || now <= ends);
-
-    console.log("🟢 heroActive:", heroActive);
-    console.log("🟡 Starts:", starts);
-    console.log("🟡 Ends:", ends);
   }
 
   /* -----------------------------
-     GENRES
+     GENRES (SAFE)
   ------------------------------ */
   const { data: genresData } = await supabase
     .from("genres")
@@ -68,13 +59,14 @@ export default async function ShopPage({
   const genres = genresData ?? [];
 
   /* -----------------------------
-     AUTHORS
+     AUTHORS (LIVE PRODUCTS ONLY)
   ------------------------------ */
   const { data: authorRows } = await supabase
     .from("products")
     .select("author")
     .neq("author", null)
-    .neq("product_type", "event"); // 🔒 HARD EXCLUDE EVENTS
+    .neq("product_type", "event") // 🔒 exclude events
+    .eq("is_test", false);        // ✅ exclude test products
 
   const authors = [
     ...new Set((authorRows ?? []).map((a) => a.author)),
@@ -101,12 +93,13 @@ export default async function ShopPage({
   const themes = themesData ?? [];
 
   /* -----------------------------
-     PRODUCTS (EVENTS EXCLUDED IN fetchProducts)
+     PRODUCTS
+     (events + test products excluded inside fetchProducts)
   ------------------------------ */
   const { products, total, page, pageSize } = await fetchProducts(params);
 
   /* -----------------------------
-     CATEGORY TABS (NO EVENTS)
+     CATEGORY TABS
   ------------------------------ */
   const CATEGORIES = [
     { key: "all", label: "All" },

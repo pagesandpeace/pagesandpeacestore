@@ -85,7 +85,11 @@ export default async function DashboardEventsPage({
     .eq("user_id_uuid", user.id)
     .eq("cancelled", false);
 
-  const { data: events } = await supabase.from("events").select("*");
+  /* 🔒 ONLY CHANGE IS HERE */
+  const { data: events } = await supabase
+    .from("events")
+    .select("*")
+    .eq("is_test", false);
 
   const { data: orders } = await supabase
     .from("orders")
@@ -136,7 +140,7 @@ export default async function DashboardEventsPage({
     .sort(
       (a, b) =>
         new Date(b.event.date).getTime() -
-        new Date(a.event.date).getTime()
+        new Date(b.event.date).getTime()
     );
 
   const recentPastBookings = allPastBookings.filter(

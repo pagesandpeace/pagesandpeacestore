@@ -39,33 +39,21 @@ export default async function BookingDetailPage({
   if (!order) notFound();
 
   /* -----------------------------
-     LOAD EVENT ITEM
+     LOAD EVENT ORDER ITEM (FIXED)
   ----------------------------- */
-  const { data: orderItems } = await supabase
+  const { data: eventItem } = await supabase
     .from("order_items")
-    .select(
-      `
-        kind,
-        quantity,
-        events (
-          id,
-          title,
-          date
-        )
-      `
-    )
-    .eq("order_id", orderId);
+    .select("event_id, quantity, kind")
+    .eq("order_id", orderId)
+    .eq("kind", "event")
+    .single();
 
-  const eventItem = orderItems?.find((i) => i.kind === "event");
-  const rawEvent = eventItem?.events as any;
-  const baseEvent = Array.isArray(rawEvent) ? rawEvent[0] : rawEvent;
-
-  if (!baseEvent || !eventItem) notFound();
+  if (!eventItem || !eventItem.event_id) notFound();
 
   /* -----------------------------
-     LOAD FULL EVENT (SAFE)
+     LOAD FULL EVENT (SOURCE OF TRUTH)
   ----------------------------- */
-  const { data: fullEvent } = await supabase
+  const { data: event } = await supabase
     .from("events")
     .select(
       `
@@ -81,10 +69,10 @@ export default async function BookingDetailPage({
       published
     `
     )
-    .eq("id", baseEvent.id)
+    .eq("id", eventItem.event_id)
     .single();
 
-  const event = fullEvent ?? baseEvent;
+  if (!event) notFound();
 
   /* -----------------------------
      LOAD SEATS (SOURCE OF TRUTH)
@@ -145,18 +133,19 @@ export default async function BookingDetailPage({
             )}
           </div>
 
-          {/* 🔴 UPDATED TICKET STATUS BADGE */}
+          {/* TICKET STATUS BADGE */}
           <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-sm">
-  🎟️{" "}
-  {activeTickets === 0
-    ? "All tickets refunded"
-    : activeTickets === totalTickets
-    ? `${totalTickets} ${totalTickets === 1 ? "ticket" : "tickets"} booked`
-    : `${activeTickets} of ${totalTickets} ${
-        totalTickets === 1 ? "ticket" : "tickets"
-      } active`}
-</div>
-
+            🎟️{" "}
+            {activeTickets === 0
+              ? "All tickets refunded"
+              : activeTickets === totalTickets
+              ? `${totalTickets} ${
+                  totalTickets === 1 ? "ticket" : "tickets"
+                } booked`
+              : `${activeTickets} of ${totalTickets} ${
+                  totalTickets === 1 ? "ticket" : "tickets"
+                } active`}
+          </div>
         </div>
       </section>
 
@@ -196,9 +185,7 @@ export default async function BookingDetailPage({
               <div
                 key={seat.id}
                 className={`relative overflow-hidden rounded-xl border p-5 shadow-sm ${
-                  refunded
-                    ? "bg-neutral-100 opacity-60"
-                    : "bg-white"
+                  refunded ? "bg-neutral-100 opacity-60" : "bg-white"
                 }`}
               >
                 <div className="flex items-center gap-4">

@@ -9,11 +9,12 @@ export default async function EventsPage() {
   const now = new Date();
 
   /* -----------------------------
-     FETCH EVENTS
+     FETCH EVENTS (LIVE ONLY)
   ----------------------------- */
   const { data: events, error: eventErr } = await supabase
     .from("events")
     .select("*")
+    .eq("is_test", false) // ✅ hide test events
     .order("date", { ascending: true });
 
   if (eventErr) {
