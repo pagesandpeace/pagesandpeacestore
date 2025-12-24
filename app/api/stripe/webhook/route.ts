@@ -46,16 +46,18 @@ async function readRawBody(stream: ReadableStream | null): Promise<Buffer> {
   if (!stream) return Buffer.alloc(0);
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     if (value) chunks.push(value);
   }
+
   return Buffer.concat(chunks);
 }
 
 /* -----------------------------------------------------
-   SAFE ITEM PARSER (PRODUCTS / CART)
+   PARSE ITEMS (PRODUCT / CART)
 ----------------------------------------------------- */
 function parseItems(md: Metadata): ParsedItem[] {
   if (!md.items) throw new Error("Missing metadata.items");
@@ -82,7 +84,7 @@ function parseItems(md: Metadata): ParsedItem[] {
 }
 
 /* -----------------------------------------------------
-   STRIPE PAYMENT DETAILS
+   PAYMENT DETAILS
 ----------------------------------------------------- */
 async function getPaymentDetails(paymentIntentId: string) {
   const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
@@ -116,9 +118,10 @@ export async function POST(req: Request) {
   let stripeEvent: Stripe.Event;
 
   try {
-    const rawBody = await readRawBody(req.body as ReadableStream);
+    const rawBody = await readRawBody(req.body);
     stripeEvent = stripe.webhooks.constructEvent(rawBody, signature, secret);
-  } catch {
+  } catch (err) {
+    console.error("❌ Invalid Stripe signature", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -127,9 +130,24 @@ export async function POST(req: Request) {
   }
 
   const session = stripeEvent.data.object as Stripe.Checkout.Session;
-  const md: Metadata = session.metadata ?? {};
+  const md = session.metadata as Metadata;
 
-  if (!md.userId || !md.kind) {
+  if (!md?.userId || !md?.kind) {
+    console.warn("⚠️ Missing metadata, skipping session", session.id);
+    return NextResponse.json({ received: true });
+  }
+
+  /* -----------------------------------------------------
+     Resolve internal user ID
+  ----------------------------------------------------- */
+  const { data: userRow, error: userErr } = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", md.userId)
+    .single();
+
+  if (userErr || !userRow) {
+    console.error("❌ Failed to resolve user", userErr);
     return NextResponse.json({ received: true });
   }
 
@@ -165,10 +183,14 @@ export async function POST(req: Request) {
       .eq("id", md.eventId)
       .single();
 
-    if (!event) return NextResponse.json({ received: true });
+    if (!event) {
+      console.error("❌ Event not found", md.eventId);
+      return NextResponse.json({ received: true });
+    }
 
     await supabase.from("orders").insert({
       id: orderId,
+      user_id: userRow.id,
       user_id_uuid: md.userId,
       total,
       status: "completed",
@@ -192,69 +214,67 @@ export async function POST(req: Request) {
     });
 
     const seats = Array.from({ length: quantity }, (_, i) => ({
+      user_id: userRow.id,
       user_id_uuid: md.userId,
       event_id: md.eventId,
       stripe_checkout_session_id: session.id,
-      cancelled: false,
       paid: true,
+      cancelled: false,
       quantity: 1,
       name: i === 0 ? null : `Guest ${i + 1}`,
     }));
 
     await supabase.from("event_bookings").insert(seats);
-
     await sendOrderConfirmationEmail(orderId);
+
     return NextResponse.json({ received: true });
   }
 
   /* =====================================================
      PRODUCT / CART FLOW
   ===================================================== */
-  if (md.kind === "product" || md.kind === "cart") {
-    const items = parseItems(md);
+  const items = parseItems(md);
 
-    await supabase.from("orders").insert({
-      id: orderId,
-      user_id_uuid: md.userId,
-      total,
-      status: "completed",
-      stripe_checkout_session_id: session.id,
-      stripe_payment_intent_id: paymentIntentId,
-    });
+  await supabase.from("orders").insert({
+    id: orderId,
+    user_id: userRow.id,
+    user_id_uuid: md.userId,
+    total,
+    status: "completed",
+    stripe_checkout_session_id: session.id,
+    stripe_payment_intent_id: paymentIntentId,
+  });
 
-    if (paymentIntentId) {
-      const details = await getPaymentDetails(paymentIntentId);
-      await supabase.from("orders").update(details).eq("id", orderId);
-    }
-
-    for (const item of items) {
-      const { data: product } = await supabase
-        .from("products")
-        .select("name")
-        .eq("id", item.productId)
-        .single();
-
-      await supabase.from("order_items").insert({
-        id: crypto.randomUUID(),
-        order_id: orderId,
-        product_id: item.productId,
-        kind: "product",
-        quantity: item.quantity,
-        price: item.price,
-        name: product?.name ?? "Product",
-      });
-
-      await supabase.rpc("decrement_product_inventory", {
-        p_product_id: item.productId,
-        p_quantity: item.quantity,
-        p_reason: "purchase",
-        p_user_id: md.userId,
-      });
-    }
-
-    await sendOrderConfirmationEmail(orderId);
-    return NextResponse.json({ received: true });
+  if (paymentIntentId) {
+    const details = await getPaymentDetails(paymentIntentId);
+    await supabase.from("orders").update(details).eq("id", orderId);
   }
 
+  for (const item of items) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("name")
+      .eq("id", item.productId)
+      .single();
+
+    await supabase.from("order_items").insert({
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      product_id: item.productId,
+      kind: "product",
+      quantity: item.quantity,
+      price: item.price,
+      name: product?.name ?? "Product",
+    });
+
+    await supabase.rpc("decrement_product_inventory", {
+      p_product_id: item.productId,
+      p_quantity: item.quantity,
+      p_reason: "purchase",
+      p_user_id: md.userId,
+    });
+  }
+
+  await sendOrderConfirmationEmail(orderId);
   return NextResponse.json({ received: true });
 }
