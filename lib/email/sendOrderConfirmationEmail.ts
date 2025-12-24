@@ -10,26 +10,6 @@ const supabase = createClient(
   { auth: { persistSession: false } }
 );
 
-/* -----------------------------------------------------
-   TYPES
------------------------------------------------------ */
-type OrderItem = {
-  kind: "product" | "event";
-  name: string | null;
-  quantity: number;
-  price: number;
-};
-
-type OrderRow = {
-  id: string;
-  total: number;
-  created_at: string;
-  stripe_receipt_url: string | null;
-  stripe_card_brand: string | null;
-  stripe_last4: string | null;
-  users: { email: string | null }[];
-  order_items: OrderItem[];
-};
 
 /* =====================================================
    SEND ORDER CONFIRMATION EMAIL
@@ -37,7 +17,10 @@ type OrderRow = {
 export async function sendOrderConfirmationEmail(orderId: string) {
   console.log("🔍 Fetching order details for Order ID:", orderId);
 
-  const { data, error } = await supabase
+  /* -----------------------------------------------------
+     Fetch order + items (NO users join)
+  ----------------------------------------------------- */
+  const { data: order, error } = await supabase
     .from("orders")
     .select(
       `
@@ -47,9 +30,7 @@ export async function sendOrderConfirmationEmail(orderId: string) {
       stripe_receipt_url,
       stripe_card_brand,
       stripe_last4,
-      users!orders_user_id_fkey (
-        email
-      ),
+      user_id_uuid,
       order_items (
         kind,
         name,
@@ -61,20 +42,28 @@ export async function sendOrderConfirmationEmail(orderId: string) {
     .eq("id", orderId)
     .single();
 
-  if (error || !data) {
+  if (error || !order) {
     console.error("❌ Order fetch failed", error);
-    return; // ⛔ do NOT throw
+    return; // webhook-safe
   }
 
-  const order = data as OrderRow;
-  const userEmail = order.users?.[0]?.email;
+  /* -----------------------------------------------------
+     Resolve email via Supabase Auth (SOURCE OF TRUTH)
+  ----------------------------------------------------- */
+  const { data: authUser, error: authErr } =
+    await supabase.auth.admin.getUserById(order.user_id_uuid);
 
-  if (!userEmail) {
-    console.error("❌ No email found via users FK for order:", orderId);
-    return; // ⛔ do NOT throw
+  if (authErr || !authUser?.user?.email) {
+    console.error(
+      "❌ No email found in auth.users for order:",
+      orderId,
+      authErr
+    );
+    return; // webhook-safe
   }
 
-  console.log("📧 Order email resolved:", userEmail);
+  const userEmail = authUser.user.email;
+  console.log("📧 Email resolved from auth.users:", userEmail);
 
   const items = order.order_items ?? [];
 
@@ -178,6 +167,6 @@ export async function sendOrderConfirmationEmail(orderId: string) {
     console.log("✅ Order confirmation email sent");
   } catch (err) {
     console.error("❌ Failed to send order email", err);
-    // do NOT throw — webhook must succeed
+    // never throw
   }
 }
