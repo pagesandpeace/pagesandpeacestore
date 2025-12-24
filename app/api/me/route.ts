@@ -29,22 +29,35 @@ export async function GET() {
     const authUserId = auth.user.id;
 
     /* -------------------------
-       USERS TABLE (SINGLE SOURCE)
+       USERS TABLE (SAFE LOOKUP)
     ------------------------- */
     const { data: profile, error: profileErr } = await supabase
       .from("users")
       .select("id, email, name, image, role")
       .eq("auth_user_id", authUserId)
-      .single();
+      .maybeSingle(); // 🔒 SAFE: allows 0 rows
 
     console.log("📦 users lookup:", {
       profile,
       error: profileErr,
     });
 
+    /* Real error (not just missing row) */
     if (profileErr) {
       console.error("❌ users lookup failed:", profileErr);
       return NextResponse.json(null, { status: 500 });
+    }
+
+    /* Authenticated but NOT signed up */
+    if (!profile) {
+      console.warn("⚠️ Auth user exists but no profile yet");
+      return NextResponse.json(
+        {
+          needsSignup: true,
+          email: auth.user.email,
+        },
+        { status: 200 }
+      );
     }
 
     console.log("✅ /api/me SUCCESS");
