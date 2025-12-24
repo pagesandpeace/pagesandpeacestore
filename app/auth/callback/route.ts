@@ -64,29 +64,37 @@ export async function GET(request: Request) {
   -------------------------------------------------- */
   const {
     data: { user },
+    error: userErr,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (userErr || !user) {
+    console.error("❌ getUser failed:", userErr);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
   /* --------------------------------------------------
-     Check for existing profile (READ = anon is fine)
+     Check for existing profile
   -------------------------------------------------- */
-  const { data: existing } = await supabase
+  const { data: existing, error: lookupErr } = await supabase
     .from("users")
     .select("id")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
+  if (lookupErr) {
+    console.error("❌ users lookup failed:", lookupErr);
+    return NextResponse.redirect(new URL("/sign-in", url));
+  }
+
   /* --------------------------------------------------
-     CREATE PROFILE (SERVICE ROLE, BYPASS RLS)
+     CREATE PROFILE (REQUIRED id PROVIDED)
   -------------------------------------------------- */
   if (!existing) {
     const meta = (user.user_metadata as GoogleMetadata) || {};
 
     const { error: insertErr } = await supabaseAdmin.from("users").insert({
-      auth_user_id: user.id,
+      id: crypto.randomUUID(),              // ✅ REQUIRED
+      auth_user_id: user.id,                // ✅ LINK TO AUTH
       email: user.email,
       name: meta.full_name || meta.name || user.email,
       image: meta.avatar_url || meta.picture || null,
