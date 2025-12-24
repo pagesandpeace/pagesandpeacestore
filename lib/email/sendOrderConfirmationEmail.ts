@@ -20,7 +20,7 @@ type OrderItem = {
   price: number;
 };
 
-type OrderWithUser = {
+type OrderRow = {
   id: string;
   total: number;
   created_at: string;
@@ -35,7 +35,7 @@ export async function sendOrderConfirmationEmail(orderId: string) {
   console.log("🔍 Fetching order details for Order ID:", orderId);
 
   /* -----------------------------------------------------
-     Fetch order + related user email + items
+     Fetch order + user email (EXPLICIT FK) + items
   ----------------------------------------------------- */
   const { data, error } = await supabase
     .from("orders")
@@ -47,7 +47,7 @@ export async function sendOrderConfirmationEmail(orderId: string) {
       stripe_receipt_url,
       stripe_card_brand,
       stripe_last4,
-      users (
+      users!orders_user_id_fkey (
         email
       ),
       order_items (
@@ -66,16 +66,16 @@ export async function sendOrderConfirmationEmail(orderId: string) {
     throw new Error(`Order ${orderId} not found`);
   }
 
-  const order = data as OrderWithUser;
+  const order = data as OrderRow;
 
   const userEmail = order.users?.[0]?.email;
 
   if (!userEmail) {
-    console.error("❌ No email found for order:", orderId);
+    console.error("❌ No email found via users FK for order:", orderId);
     throw new Error(`Order ${orderId} has no associated email`);
   }
 
-  console.log("📧 Order found for email:", userEmail);
+  console.log("📧 Order email resolved:", userEmail);
 
   const items = order.order_items ?? [];
 
@@ -124,66 +124,46 @@ export async function sendOrderConfirmationEmail(orderId: string) {
     ? "Your Pages & Peace event booking is confirmed"
     : "Your Pages & Peace order is confirmed";
 
-  /* -----------------------------------------------------
-     Email HTML
-  ----------------------------------------------------- */
   const html = `
-    <div style="background: #FAF6F1; padding: 40px 0; width: 100%; font-family: 'Montserrat', sans-serif;">
-      <div style="max-width: 640px; margin: 0 auto; background: white; padding: 32px 40px; border-radius: 12px;">
-        <div style="text-align: center; margin-bottom: 24px;">
-          <img src="${LOGO_URL}" alt="Pages & Peace" style="max-width: 200px; width: 100%; height: auto;" />
+    <div style="background:#FAF6F1;padding:40px 0;font-family:Montserrat,sans-serif">
+      <div style="max-width:640px;margin:0 auto;background:#fff;padding:32px 40px;border-radius:12px">
+        <div style="text-align:center;margin-bottom:24px">
+          <img src="${LOGO_URL}" style="max-width:200px" />
         </div>
 
-        <h2 style="text-align: center; font-size: 26px; margin-bottom: 8px; font-weight: 700;">
+        <h2 style="text-align:center">
           Thank you for your ${isEventOnly ? "booking" : "order"}
         </h2>
 
-        <p style="text-align: center; color: #444; font-size: 15px; margin-bottom: 32px;">
+        <p style="text-align:center">
           Your Pages & Peace ${isEventOnly ? "event booking" : "order"} has been confirmed.
         </p>
 
-        <hr style="border: none; border-top: 1px solid #DDD; margin: 32px 0;" />
+        <hr />
 
-        <h3 style="font-size: 20px; margin-bottom: 12px;">Order Summary</h3>
+        <p><strong>Order ID:</strong> ${order.id}</p>
+        <p><strong>Date:</strong> ${date}</p>
 
-        <p style="margin: 4px 0; font-size: 15px;">
-          <strong>Order ID:</strong> ${order.id}
-        </p>
-        <p style="margin: 4px 0; font-size: 15px;">
-          <strong>Order Date:</strong> ${date}
-        </p>
-
-        <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+        <table style="width:100%">
           ${itemsHtml}
         </table>
 
-        <hr style="border: none; border-top: 1px solid #DDD; margin: 32px 0;" />
+        <hr />
 
-        <p style="font-size: 18px; font-weight: 600; margin-bottom: 24px;">
-          Total: £${formattedTotal}
-        </p>
+        <p><strong>Total: £${formattedTotal}</strong></p>
 
         ${paymentLine}
 
         ${
           order.stripe_receipt_url
-            ? `<p><a href="${order.stripe_receipt_url}" target="_blank">View Stripe receipt</a></p>`
+            ? `<p><a href="${order.stripe_receipt_url}">View Stripe receipt</a></p>`
             : ""
         }
-
-        <p style="font-size: 14px; color: #666; margin-top: 32px;">
-          If you have any questions about your ${
-            isEventOnly ? "booking" : "order"
-          }, simply reply to this email.
-        </p>
       </div>
     </div>
   `;
 
-  /* -----------------------------------------------------
-     Send Email
-  ----------------------------------------------------- */
-  console.log("📧 Sending order confirmation email to:", userEmail);
+  console.log("📧 Sending email to:", userEmail);
 
   const resend = getResendClient();
 
