@@ -102,28 +102,30 @@ export default function SignUpClient() {
   }
 
   /* --------------------------------------------------
-     GOOGLE SIGN-UP
-  -------------------------------------------------- */
-  async function handleGoogle() {
-    setGoogleLoading(true);
+   GOOGLE SIGN-UP
+-------------------------------------------------- */
+async function handleGoogle() {
+  setGoogleLoading(true);
 
-    const params = new URLSearchParams();
-    params.set("callbackURL", callbackURL);
+  const params = new URLSearchParams();
+  params.set("callbackURL", callbackURL);
+  params.set("intent", "signup"); // 👈 IMPORTANT: prevents infinite loop
 
-    if (joinIntent === "loyalty") {
-      params.set("join", "loyalty");
-    }
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${location.origin}/auth/callback?${params.toString()}`,
-      },
-    });
-
-    if (error) alert(error.message);
-    setGoogleLoading(false);
+  if (joinIntent === "loyalty") {
+    params.set("join", "loyalty");
   }
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${location.origin}/auth/callback?${params.toString()}`,
+    },
+  });
+
+  if (error) alert(error.message);
+  setGoogleLoading(false);
+}
+
 
   return (
     <div className="w-full space-y-8">

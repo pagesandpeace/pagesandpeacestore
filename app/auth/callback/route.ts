@@ -6,6 +6,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const callbackURL = url.searchParams.get("callbackURL") || "/dashboard";
+  const intent = url.searchParams.get("intent"); // 👈 NEW
 
   if (!code) {
     return NextResponse.redirect(new URL("/sign-in", url));
@@ -55,8 +56,16 @@ export async function GET(request: Request) {
   console.log("👤 OAuth user authenticated:", user.id);
 
   /* --------------------------------------------------
-     🔒 HARD ENFORCEMENT (NO HTTP, NO RACE CONDITIONS)
-     Does a users row exist?
+     🚧 SIGNUP BYPASS (ONE-TIME)
+     Allow user to reach signup page without enforcement
+  -------------------------------------------------- */
+  if (intent === "signup") {
+    console.log("🟢 Signup intent detected → skipping profile enforcement");
+    return NextResponse.redirect(new URL("/sign-up", url));
+  }
+
+  /* --------------------------------------------------
+     🔒 SIGN-IN ENFORCEMENT
   -------------------------------------------------- */
   const { data: profile, error: profileErr } = await supabase
     .from("users")
