@@ -60,6 +60,16 @@ async function getPaymentDetails(paymentIntentId: string) {
   };
 }
 
+/* -----------------------------------------------------
+   TYPES
+----------------------------------------------------- */
+type ParsedProductItem = {
+  productId: string;
+  name: string;
+  qty: number;
+  price: number; // pence
+};
+
 /* =====================================================
    WEBHOOK
 ===================================================== */
@@ -148,7 +158,7 @@ export async function POST(req: Request) {
   }
 
   /* =====================================================
-     EVENT FLOW (STRICT)
+     EVENT FLOW
   ===================================================== */
   if (md.kind === "event") {
     const quantity = Math.max(1, Number(md.quantity ?? 1));
@@ -197,26 +207,23 @@ export async function POST(req: Request) {
   }
 
   /* =====================================================
-     PRODUCT / CART FLOW (STRICT)
+     PRODUCT / CART FLOW
   ===================================================== */
   if (md.kind === "product" || md.kind === "cart") {
-    let items: {
-      productId: string;
-      qty: number;
-      price: number;
-    }[] = [];
+    let items: ParsedProductItem[] = [];
 
     // JSON cart
     if (md.items?.trim().startsWith("[")) {
       items = JSON.parse(md.items);
     }
-    // Pipe format single product
+    // Pipe-delimited single product
     else if (md.items?.includes("|")) {
-      const [productId, _name, qty, price] = md.items.split("|");
+      const [productId, name, qty, price] = md.items.split("|");
 
       items = [
         {
           productId,
+          name: name?.trim() ?? "Unknown product",
           qty: Number(qty),
           price: Number(price),
         },
@@ -234,6 +241,7 @@ export async function POST(req: Request) {
         kind: "product",
         quantity: item.qty,
         price: item.price / 100,
+        name: item.name, // ✅ FIXED
         stripe_checkout_session_id: session.id,
       });
     }
