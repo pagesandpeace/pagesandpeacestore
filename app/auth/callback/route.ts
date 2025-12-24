@@ -2,26 +2,16 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-type GoogleMetadata = {
-  full_name?: string;
-  name?: string;
-  avatar_url?: string;
-  picture?: string;
-};
-
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const callbackURL = url.searchParams.get("callbackURL") || "/dashboard";
 
-  // Optional intent flags (safe to keep)
-  const joinLoyalty = url.searchParams.get("join") === "loyalty";
-
   if (!code) {
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
-    const cookieStore = await cookies();
+  const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,7 +28,6 @@ export async function GET(request: Request) {
     }
   );
 
-
   /* --------------------------------------------------
      Exchange OAuth code → session
   -------------------------------------------------- */
@@ -51,7 +40,7 @@ export async function GET(request: Request) {
   }
 
   /* --------------------------------------------------
-     Load authenticated user
+     Verify authenticated user exists
   -------------------------------------------------- */
   const {
     data: { user },
@@ -63,66 +52,28 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
-  console.log("👤 OAuth user:", user.id);
+  console.log("👤 OAuth user authenticated:", user.id);
 
   /* --------------------------------------------------
-     Extract Google metadata (safe, non-blocking)
+     ENFORCEMENT POINT
+     Delegate provisioning decision to /api/me
   -------------------------------------------------- */
-  const meta = (user.user_metadata as GoogleMetadata) || {};
+  const meRes = await fetch(`${url.origin}/api/me`, {
+    headers: {
+      cookie: request.headers.get("cookie") ?? "",
+    },
+    cache: "no-store",
+  });
 
-  const displayName =
-    meta.full_name || meta.name || user.email || "";
+  const me = await meRes.json();
 
-  const avatar =
-    meta.avatar_url || meta.picture || null;
-
-  /* --------------------------------------------------
-     Ensure public.users row exists (idempotent)
-     JOIN VIA auth_user_id (IMPORTANT)
-  -------------------------------------------------- */
-  const { data: existing } = await supabase
-    .from("users")
-    .select("id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-
-  if (!existing) {
-    const { error: insertErr } = await supabase.from("users").insert({
-      auth_user_id: user.id,
-      email: user.email,
-      name: displayName,
-      image: avatar,
-      role: "customer",
-    });
-
-    if (insertErr) {
-      console.error("❌ users insert failed:", insertErr);
-    } else {
-      console.log("✅ Created public.users profile");
-    }
+  if (me?.needsSignup) {
+    console.log("🚧 OAuth user needs signup → redirecting");
+    return NextResponse.redirect(new URL("/sign-up", url));
   }
 
   /* --------------------------------------------------
-     Optional: loyalty auto-opt-in (idempotent)
-  -------------------------------------------------- */
-  if (joinLoyalty) {
-    const { error: loyaltyErr } = await supabase
-      .from("loyalty_members")
-      .insert({
-        user_id: user.id,
-        status: "active",
-        tier: "starter",
-        marketing_consent: false,
-        terms_version: "v1.0",
-      });
-
-    if (loyaltyErr && loyaltyErr.code !== "23505") {
-      console.error("❌ Loyalty opt-in failed:", loyaltyErr);
-    }
-  }
-
-  /* --------------------------------------------------
-     FINAL redirect — NO role logic here
+     FINAL redirect — user is provisioned
   -------------------------------------------------- */
   return NextResponse.redirect(new URL(callbackURL, url));
 }
