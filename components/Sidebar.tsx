@@ -63,24 +63,7 @@ export default function Sidebar({
   /* -------------------------------------------------------
      Listen for profile updates (avatar/name/etc)
   ------------------------------------------------------- */
-  useEffect(() => {
-  const handler = async () => {
-    try {
-      const res = await fetch("/api/me");
-      if (!res.ok) return;
 
-      const updatedUser = await res.json();
-      setLocalProfile(updatedUser);
-    } catch (err) {
-      console.error("❌ Failed to refresh user profile", err);
-    }
-  };
-
-  window.addEventListener("pp:user-should-refresh", handler);
-  return () => {
-    window.removeEventListener("pp:user-should-refresh", handler);
-  };
-}, []);
 
 
   /* -------------------------------------------------------
