@@ -1,35 +1,55 @@
-// lib/email/sendOrderConfirmationEmail.ts
 import { createClient } from "@supabase/supabase-js";
 import { getResendClient, FROM } from "@/lib/email/client";
 
-// ✅ SERVICE ROLE Supabase client – same as webhook
+/* -----------------------------------------------------
+   Supabase (SERVICE ROLE)
+----------------------------------------------------- */
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false } }
 );
 
+/* -----------------------------------------------------
+   TYPES
+----------------------------------------------------- */
 type OrderItem = {
   kind: "product" | "event";
-  name: string;
+  name: string | null;
   quantity: number;
-  price: number; // pounds
+  price: number;
+};
+
+type OrderWithUser = {
+  id: string;
+  total: number;
+  created_at: string;
+  stripe_receipt_url: string | null;
+  stripe_card_brand: string | null;
+  stripe_last4: string | null;
+  users: { email: string | null }[];
+  order_items: OrderItem[];
 };
 
 export async function sendOrderConfirmationEmail(orderId: string) {
   console.log("🔍 Fetching order details for Order ID:", orderId);
 
-  const { data: order, error } = await supabase
+  /* -----------------------------------------------------
+     Fetch order + related user email + items
+  ----------------------------------------------------- */
+  const { data, error } = await supabase
     .from("orders")
     .select(
       `
       id,
-      email,
       total,
       created_at,
       stripe_receipt_url,
       stripe_card_brand,
       stripe_last4,
+      users (
+        email
+      ),
       order_items (
         kind,
         name,
@@ -41,26 +61,29 @@ export async function sendOrderConfirmationEmail(orderId: string) {
     .eq("id", orderId)
     .single();
 
-  if (error || !order || !order.email) {
-    console.error(
-      `❌ Order not found or inaccessible for orderId: ${orderId}.`,
-      error
-    );
-    // Throw so the webhook logs this as a failure
-    throw new Error(`Order ${orderId} not found when sending email`);
+  if (error || !data) {
+    console.error("❌ Order fetch failed", error);
+    throw new Error(`Order ${orderId} not found`);
   }
 
-  console.log("📧 Order found:", order);
+  const order = data as OrderWithUser;
 
-  const items = (order.order_items ?? []) as OrderItem[];
+  const userEmail = order.users?.[0]?.email;
 
-  if (items.length === 0) {
-    console.log("⚠️ No items found for this order.");
-  } else {
-    console.log("📦 Order contains items:", items);
+  if (!userEmail) {
+    console.error("❌ No email found for order:", orderId);
+    throw new Error(`Order ${orderId} has no associated email`);
   }
 
+  console.log("📧 Order found for email:", userEmail);
+
+  const items = order.order_items ?? [];
+
+  /* -----------------------------------------------------
+     Formatting
+  ----------------------------------------------------- */
   const formattedTotal = Number(order.total).toFixed(2);
+
   const date = new Date(order.created_at).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
@@ -73,15 +96,15 @@ export async function sendOrderConfirmationEmail(orderId: string) {
   const itemsHtml = items
     .map(
       (item) => `
-      <tr>
-        <td style="padding: 8px 0; font-size: 15px;">
-          ${item.name} × ${item.quantity}
-        </td>
-        <td style="padding: 8px 0; text-align: right; font-size: 15px;">
-          £${(item.price * item.quantity).toFixed(2)}
-        </td>
-      </tr>
-    `
+        <tr>
+          <td style="padding: 8px 0; font-size: 15px;">
+            ${item.name ?? "Item"} × ${item.quantity}
+          </td>
+          <td style="padding: 8px 0; text-align: right; font-size: 15px;">
+            £${(item.price * item.quantity).toFixed(2)}
+          </td>
+        </tr>
+      `
     )
     .join("");
 
@@ -94,7 +117,6 @@ export async function sendOrderConfirmationEmail(orderId: string) {
         </p>`
       : "";
 
-  // 🔎 Work out subject: event booking vs normal order
   const isEventOnly =
     items.length > 0 && items.every((item) => item.kind === "event");
 
@@ -102,6 +124,9 @@ export async function sendOrderConfirmationEmail(orderId: string) {
     ? "Your Pages & Peace event booking is confirmed"
     : "Your Pages & Peace order is confirmed";
 
+  /* -----------------------------------------------------
+     Email HTML
+  ----------------------------------------------------- */
   const html = `
     <div style="background: #FAF6F1; padding: 40px 0; width: 100%; font-family: 'Montserrat', sans-serif;">
       <div style="max-width: 640px; margin: 0 auto; background: white; padding: 32px 40px; border-radius: 12px;">
@@ -155,16 +180,19 @@ export async function sendOrderConfirmationEmail(orderId: string) {
     </div>
   `;
 
-  console.log("📧 Preparing to send order confirmation email to:", order.email);
+  /* -----------------------------------------------------
+     Send Email
+  ----------------------------------------------------- */
+  console.log("📧 Sending order confirmation email to:", userEmail);
 
   const resend = getResendClient();
 
-  const response = await resend.emails.send({
+  await resend.emails.send({
     from: FROM,
-    to: order.email,
+    to: userEmail,
     subject,
     html,
   });
 
-  console.log("✅ Order confirmation email sent:", response);
+  console.log("✅ Order confirmation email sent");
 }
