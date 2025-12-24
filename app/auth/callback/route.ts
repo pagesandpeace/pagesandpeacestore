@@ -2,11 +2,18 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+type GoogleMetadata = {
+  full_name?: string;
+  name?: string;
+  avatar_url?: string;
+  picture?: string;
+};
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const callbackURL = url.searchParams.get("callbackURL") || "/dashboard";
-  const intent = url.searchParams.get("intent"); // 👈 NEW
+  const intent = url.searchParams.get("intent");
 
   if (!code) {
     return NextResponse.redirect(new URL("/sign-in", url));
@@ -41,7 +48,7 @@ export async function GET(request: Request) {
   }
 
   /* --------------------------------------------------
-     Get authenticated user
+     Load authenticated user
   -------------------------------------------------- */
   const {
     data: { user },
@@ -49,35 +56,53 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
 
   if (userErr || !user) {
-    console.error("❌ getUser failed after OAuth:", userErr);
+    console.error("❌ getUser failed:", userErr);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
-  console.log("👤 OAuth user authenticated:", user.id);
+  console.log("👤 OAuth user:", user.id);
 
   /* --------------------------------------------------
-     🚧 SIGNUP BYPASS (ONE-TIME)
-     Allow user to reach signup page without enforcement
+     Check for existing profile
   -------------------------------------------------- */
-  if (intent === "signup") {
-    console.log("🟢 Signup intent detected → skipping profile enforcement");
-    return NextResponse.redirect(new URL("/sign-up", url));
-  }
-
-  /* --------------------------------------------------
-     🔒 SIGN-IN ENFORCEMENT
-  -------------------------------------------------- */
-  const { data: profile, error: profileErr } = await supabase
+  const { data: profile } = await supabase
     .from("users")
     .select("id")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
-  if (profileErr) {
-    console.error("❌ users lookup failed:", profileErr);
-    return NextResponse.redirect(new URL("/sign-in", url));
+  /* --------------------------------------------------
+     🟢 GOOGLE SIGN-UP: CREATE PROFILE ONCE
+  -------------------------------------------------- */
+  if (intent === "signup" && !profile) {
+    console.log("🟢 Google signup → creating profile");
+
+    const meta = (user.user_metadata as GoogleMetadata) || {};
+    const displayName =
+      meta.full_name || meta.name || user.email || "";
+    const avatar =
+      meta.avatar_url || meta.picture || null;
+
+    const { error: insertErr } = await supabase.from("users").insert({
+      auth_user_id: user.id,
+      email: user.email,
+      name: displayName,
+      image: avatar,
+      role: "customer",
+      auth_provider: "google",
+    });
+
+    if (insertErr) {
+      console.error("❌ Profile creation failed:", insertErr);
+      return NextResponse.redirect(new URL("/sign-in", url));
+    }
+
+    return NextResponse.redirect(new URL(callbackURL, url));
   }
 
+  /* --------------------------------------------------
+     🔒 GOOGLE SIGN-IN: ENFORCE PROFILE
+  -------------------------------------------------- */
   if (!profile) {
     console.log("🚧 No profile → redirecting to /sign-up");
     return NextResponse.redirect(new URL("/sign-up", url));
