@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 type GoogleMetadata = {
@@ -20,6 +21,9 @@ export async function GET(request: Request) {
 
   const cookieStore = await cookies();
 
+  /* --------------------------------------------------
+     Supabase SERVER client (auth + cookies)
+  -------------------------------------------------- */
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -35,14 +39,29 @@ export async function GET(request: Request) {
     }
   );
 
-  // Exchange OAuth code
+  /* --------------------------------------------------
+     Supabase SERVICE ROLE client (bypass RLS)
+  -------------------------------------------------- */
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+
+  /* --------------------------------------------------
+     Exchange OAuth code → session
+  -------------------------------------------------- */
   const { error: exchangeError } =
     await supabase.auth.exchangeCodeForSession(code);
 
   if (exchangeError) {
+    console.error("❌ OAuth exchange failed:", exchangeError);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
+  /* --------------------------------------------------
+     Get authenticated user
+  -------------------------------------------------- */
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -51,17 +70,22 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
-  // Ensure profile exists (idempotent)
+  /* --------------------------------------------------
+     Check for existing profile (READ = anon is fine)
+  -------------------------------------------------- */
   const { data: existing } = await supabase
     .from("users")
     .select("id")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
+  /* --------------------------------------------------
+     CREATE PROFILE (SERVICE ROLE, BYPASS RLS)
+  -------------------------------------------------- */
   if (!existing) {
     const meta = (user.user_metadata as GoogleMetadata) || {};
 
-    await supabase.from("users").insert({
+    const { error: insertErr } = await supabaseAdmin.from("users").insert({
       auth_user_id: user.id,
       email: user.email,
       name: meta.full_name || meta.name || user.email,
@@ -69,7 +93,15 @@ export async function GET(request: Request) {
       role: "customer",
       auth_provider: "google",
     });
+
+    if (insertErr) {
+      console.error("❌ Failed to create user profile:", insertErr);
+      return NextResponse.redirect(new URL("/sign-in", url));
+    }
   }
 
+  /* --------------------------------------------------
+     Done
+  -------------------------------------------------- */
   return NextResponse.redirect(new URL(callbackURL, url));
 }
