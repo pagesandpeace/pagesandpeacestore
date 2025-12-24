@@ -48,7 +48,7 @@ export default function SignUpClient() {
   }
 
   /* --------------------------------------------------
-     EMAIL SIGN-UP
+     EMAIL SIGN-UP (CREDENTIALS)
   -------------------------------------------------- */
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
@@ -71,7 +71,7 @@ export default function SignUpClient() {
       return;
     }
 
-    // Email confirmation flow
+    // Email confirmation flow (Supabase may not return a session yet)
     if (!data.user) {
       alert("Check your email inbox to confirm your account!");
       setLoading(false);
@@ -79,19 +79,22 @@ export default function SignUpClient() {
     }
 
     /* --------------------------------------------------
-       CREATE USER PROFILE (EMAIL USERS)
+       CREATE USER PROFILE (SERVER — SERVICE ROLE)
     -------------------------------------------------- */
-    const { error: insertError } = await supabase.from("users").insert({
-      auth_user_id: data.user.id,
-      email,
-      name,
-      image: null,
-      role: "customer",
-      auth_provider: "credentials",
+    const res = await fetch("/api/profile/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        auth_user_id: data.user.id,
+        email,
+        name,
+      }),
     });
 
-    if (insertError) {
-      alert("Profile creation failed: " + insertError.message);
+    if (!res.ok) {
+      const err = await res.json();
+      alert("Profile creation failed");
+      console.error("Profile create error:", err);
       setLoading(false);
       return;
     }
@@ -102,7 +105,7 @@ export default function SignUpClient() {
   }
 
   /* --------------------------------------------------
-     GOOGLE SIGN-UP (SAME AS SIGN-IN)
+     GOOGLE SIGN-UP (HANDLED BY CALLBACK)
   -------------------------------------------------- */
   async function handleGoogle() {
     setGoogleLoading(true);
