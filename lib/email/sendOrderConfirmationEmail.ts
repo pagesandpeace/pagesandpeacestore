@@ -31,12 +31,12 @@ type OrderRow = {
   order_items: OrderItem[];
 };
 
+/* =====================================================
+   SEND ORDER CONFIRMATION EMAIL
+===================================================== */
 export async function sendOrderConfirmationEmail(orderId: string) {
   console.log("🔍 Fetching order details for Order ID:", orderId);
 
-  /* -----------------------------------------------------
-     Fetch order + user email (EXPLICIT FK) + items
-  ----------------------------------------------------- */
   const { data, error } = await supabase
     .from("orders")
     .select(
@@ -63,16 +63,15 @@ export async function sendOrderConfirmationEmail(orderId: string) {
 
   if (error || !data) {
     console.error("❌ Order fetch failed", error);
-    throw new Error(`Order ${orderId} not found`);
+    return; // ⛔ do NOT throw
   }
 
   const order = data as OrderRow;
-
   const userEmail = order.users?.[0]?.email;
 
   if (!userEmail) {
     console.error("❌ No email found via users FK for order:", orderId);
-    throw new Error(`Order ${orderId} has no associated email`);
+    return; // ⛔ do NOT throw
   }
 
   console.log("📧 Order email resolved:", userEmail);
@@ -97,10 +96,10 @@ export async function sendOrderConfirmationEmail(orderId: string) {
     .map(
       (item) => `
         <tr>
-          <td style="padding: 8px 0; font-size: 15px;">
+          <td style="padding:8px 0;font-size:15px">
             ${item.name ?? "Item"} × ${item.quantity}
           </td>
-          <td style="padding: 8px 0; text-align: right; font-size: 15px;">
+          <td style="padding:8px 0;text-align:right;font-size:15px">
             £${(item.price * item.quantity).toFixed(2)}
           </td>
         </tr>
@@ -110,10 +109,8 @@ export async function sendOrderConfirmationEmail(orderId: string) {
 
   const paymentLine =
     order.stripe_card_brand && order.stripe_last4
-      ? `<p style="font-size: 14px; color: #555;">
-          Paid with ${order.stripe_card_brand.toUpperCase()} •••• ${
-          order.stripe_last4
-        }
+      ? `<p style="font-size:14px;color:#555">
+          Paid with ${order.stripe_card_brand.toUpperCase()} •••• ${order.stripe_last4}
         </p>`
       : "";
 
@@ -156,23 +153,31 @@ export async function sendOrderConfirmationEmail(orderId: string) {
 
         ${
           order.stripe_receipt_url
-            ? `<p><a href="${order.stripe_receipt_url}">View Stripe receipt</a></p>`
+            ? `<p><a href="${order.stripe_receipt_url}" target="_blank">View Stripe receipt</a></p>`
             : ""
         }
       </div>
     </div>
   `;
 
-  console.log("📧 Sending email to:", userEmail);
+  /* -----------------------------------------------------
+     SEND EMAIL (NON-BLOCKING)
+  ----------------------------------------------------- */
+  try {
+    console.log("📧 Sending email to:", userEmail);
 
-  const resend = getResendClient();
+    const resend = getResendClient();
 
-  await resend.emails.send({
-    from: FROM,
-    to: userEmail,
-    subject,
-    html,
-  });
+    await resend.emails.send({
+      from: FROM,
+      to: userEmail,
+      subject,
+      html,
+    });
 
-  console.log("✅ Order confirmation email sent");
+    console.log("✅ Order confirmation email sent");
+  } catch (err) {
+    console.error("❌ Failed to send order email", err);
+    // do NOT throw — webhook must succeed
+  }
 }
