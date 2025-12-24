@@ -62,6 +62,7 @@ export default function SignInClient() {
     e.preventDefault();
     setLoading(true);
 
+    /* Prevent email sign-in for Google-only accounts */
     const { data: userRow } = await supabase
       .from("users")
       .select("auth_provider")
@@ -87,8 +88,18 @@ export default function SignInClient() {
 
     await autoJoinLoyaltyIfNeeded();
 
+    /* --------------------------------------------------
+       FETCH ME (SAFE + GUARDED)
+    -------------------------------------------------- */
     const res = await fetch("/api/me", { cache: "no-store" });
     const me = await res.json();
+
+    /* 🚧 NEW: signup safeguard */
+    if (me?.needsSignup) {
+      router.push("/sign-up");
+      return;
+    }
+
     const role = me?.role || me?.user?.role;
 
     if (role === "admin") {

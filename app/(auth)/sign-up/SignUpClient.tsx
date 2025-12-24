@@ -5,10 +5,11 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 export default function SignUpClient() {
   const supabase = supabaseBrowser();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const callbackURL = searchParams.get("callbackURL") || "/cart";
@@ -41,8 +42,8 @@ export default function SignUpClient() {
       });
 
       localStorage.setItem("pp:loyalty-confirmed", "true");
-    } catch (err) {
-      console.warn("Auto loyalty opt-in failed:", err);
+    } catch {
+      // silent failure
     }
   }
 
@@ -70,30 +71,34 @@ export default function SignUpClient() {
       return;
     }
 
-    await new Promise((r) => setTimeout(r, 200));
-    const { data: sess } = await supabase.auth.getSession();
-
-    if (data.user && sess.session) {
-      const { error: insertError } = await supabase.from("users").insert({
-        id: data.user.id,
-        email,
-        name,
-        image: null,
-        role: "customer",
-        auth_provider: "credentials",
-      });
-
-      if (insertError) {
-        alert("Profile insert failed: " + insertError.message);
-        setLoading(false);
-        return;
-      }
-
-      await autoJoinLoyaltyIfNeeded();
+    // Email confirmation flow: user may not be logged in yet
+    if (!data.user) {
+      alert("Check your email inbox to confirm your account!");
+      setLoading(false);
+      return;
     }
 
-    alert("Check your email inbox to confirm your account!");
-    setLoading(false);
+    /* --------------------------------------------------
+       CREATE USER PROFILE (CORRECTLY)
+    -------------------------------------------------- */
+    const { error: insertError } = await supabase.from("users").insert({
+      auth_user_id: data.user.id,
+      email,
+      name,
+      image: null,
+      role: "customer",
+      auth_provider: "credentials",
+    });
+
+    if (insertError) {
+      alert("Profile creation failed: " + insertError.message);
+      setLoading(false);
+      return;
+    }
+
+    await autoJoinLoyaltyIfNeeded();
+
+    router.push(callbackURL);
   }
 
   /* --------------------------------------------------
