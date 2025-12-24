@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
    Stripe
 ----------------------------------------------------- */
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-      apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
+  apiVersion: "2022-11-15" as Stripe.LatestApiVersion,
 });
 
 /* -----------------------------------------------------
@@ -29,11 +29,13 @@ async function readRawBody(stream: ReadableStream | null): Promise<Buffer> {
   if (!stream) return Buffer.alloc(0);
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     if (value) chunks.push(value);
   }
+
   return Buffer.concat(chunks);
 }
 
@@ -69,21 +71,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
-  let event: Stripe.Event;
+  let stripeEvent: Stripe.Event;
 
   try {
     const rawBody = await readRawBody(req.body);
-    event = stripe.webhooks.constructEvent(rawBody, signature, secret);
+    stripeEvent = stripe.webhooks.constructEvent(rawBody, signature, secret);
   } catch (err) {
     console.error("❌ Stripe signature verification failed", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  if (event.type !== "checkout.session.completed") {
+  if (stripeEvent.type !== "checkout.session.completed") {
     return NextResponse.json({ received: true });
   }
 
-  const session = event.data.object as Stripe.Checkout.Session;
+  const session = stripeEvent.data.object as Stripe.Checkout.Session;
   const md = session.metadata ?? {};
 
   if (!md.userId || !md.kind) {
@@ -146,7 +148,7 @@ export async function POST(req: Request) {
   }
 
   /* =====================================================
-     EVENT FLOW
+     EVENT FLOW (STRICT)
   ===================================================== */
   if (md.kind === "event") {
     const quantity = Math.max(1, Number(md.quantity ?? 1));
@@ -164,9 +166,6 @@ export async function POST(req: Request) {
 
     const orderItemId = crypto.randomUUID();
 
-    /* -------------------------------------------------
-       Order item (PRODUCT is REQUIRED)
-    ------------------------------------------------- */
     await supabase.from("order_items").insert({
       id: orderItemId,
       order_id: orderId,
@@ -179,9 +178,6 @@ export async function POST(req: Request) {
       stripe_checkout_session_id: session.id,
     });
 
-    /* -------------------------------------------------
-       Event bookings (1 row per seat)
-    ------------------------------------------------- */
     const seats = Array.from({ length: quantity }, (_, i) => ({
       user_id: user.id,
       user_id_uuid: md.userId,
@@ -201,10 +197,34 @@ export async function POST(req: Request) {
   }
 
   /* =====================================================
-     PRODUCT / CART FLOW
+     PRODUCT / CART FLOW (STRICT)
   ===================================================== */
-  if (md.items) {
-    const items = JSON.parse(md.items);
+  if (md.kind === "product" || md.kind === "cart") {
+    let items: {
+      productId: string;
+      qty: number;
+      price: number;
+    }[] = [];
+
+    // JSON cart
+    if (md.items?.trim().startsWith("[")) {
+      items = JSON.parse(md.items);
+    }
+    // Pipe format single product
+    else if (md.items?.includes("|")) {
+      const [productId, _name, qty, price] = md.items.split("|");
+
+      items = [
+        {
+          productId,
+          qty: Number(qty),
+          price: Number(price),
+        },
+      ];
+    } else {
+      console.error("❌ Invalid product metadata format", md.items);
+      return NextResponse.json({ received: true });
+    }
 
     for (const item of items) {
       await supabase.from("order_items").insert({
@@ -217,8 +237,11 @@ export async function POST(req: Request) {
         stripe_checkout_session_id: session.id,
       });
     }
+
+    await sendOrderConfirmationEmail(orderId);
+    return NextResponse.json({ received: true });
   }
 
-  await sendOrderConfirmationEmail(orderId);
+  console.warn("⚠️ Unknown checkout kind", md.kind);
   return NextResponse.json({ received: true });
 }
