@@ -13,51 +13,44 @@ export async function GET() {
     /* -------------------------
        AUTH
     ------------------------- */
-    const { data: auth, error: authErr } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authErr,
+    } = await supabase.auth.getUser();
 
     console.log("👤 getUser():", {
-      id: auth?.user?.id,
-      email: auth?.user?.email,
+      id: user?.id,
+      email: user?.email,
       error: authErr,
     });
 
-    if (!auth?.user) {
+    if (!user) {
       console.log("🔓 No authenticated user");
       return NextResponse.json(null, { status: 401 });
     }
 
-    const authUserId = auth.user.id;
-
     /* -------------------------
-       USERS TABLE (SAFE LOOKUP)
+       USERS TABLE (AUTHORITATIVE)
     ------------------------- */
     const { data: profile, error: profileErr } = await supabase
       .from("users")
       .select("id, email, name, image, role")
-      .eq("auth_user_id", authUserId)
-      .maybeSingle(); // 🔒 SAFE: allows 0 rows
+      .eq("auth_user_id", user.id)
+      .single(); // ✅ profile MUST exist
 
     console.log("📦 users lookup:", {
       profile,
       error: profileErr,
     });
 
-    /* Real error (not just missing row) */
-    if (profileErr) {
-      console.error("❌ users lookup failed:", profileErr);
-      return NextResponse.json(null, { status: 500 });
-    }
+    if (profileErr || !profile) {
+      // This should never happen now
+      console.error("❌ Authenticated user without profile", {
+        userId: user.id,
+        profileErr,
+      });
 
-    /* Authenticated but NOT signed up */
-    if (!profile) {
-      console.warn("⚠️ Auth user exists but no profile yet");
-      return NextResponse.json(
-        {
-          needsSignup: true,
-          email: auth.user.email,
-        },
-        { status: 200 }
-      );
+      return NextResponse.json(null, { status: 500 });
     }
 
     console.log("✅ /api/me SUCCESS");

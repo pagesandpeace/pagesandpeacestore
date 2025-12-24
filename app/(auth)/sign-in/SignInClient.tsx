@@ -70,7 +70,9 @@ export default function SignInClient() {
       .maybeSingle();
 
     if (userRow?.auth_provider === "google") {
-      showError("This account was created using Google. Please sign in with Google.");
+      showError(
+        "This account was created using Google. Please sign in with Google."
+      );
       setLoading(false);
       return;
     }
@@ -89,20 +91,12 @@ export default function SignInClient() {
     await autoJoinLoyaltyIfNeeded();
 
     /* --------------------------------------------------
-       FETCH ME (SAFE + GUARDED)
+       FETCH ME (PROFILE IS GUARANTEED)
     -------------------------------------------------- */
     const res = await fetch("/api/me", { cache: "no-store" });
     const me = await res.json();
 
-    /* 🚧 NEW: signup safeguard */
-    if (me?.needsSignup) {
-      router.push("/sign-up");
-      return;
-    }
-
-    const role = me?.role || me?.user?.role;
-
-    if (role === "admin") {
+    if (me?.role === "admin") {
       router.push("/admin");
       return;
     }

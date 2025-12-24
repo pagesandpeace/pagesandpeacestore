@@ -13,7 +13,6 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const callbackURL = url.searchParams.get("callbackURL") || "/dashboard";
-  const intent = url.searchParams.get("intent");
 
   if (!code) {
     return NextResponse.redirect(new URL("/sign-in", url));
@@ -36,80 +35,41 @@ export async function GET(request: Request) {
     }
   );
 
-  /* --------------------------------------------------
-     Exchange OAuth code → session
-  -------------------------------------------------- */
+  // Exchange OAuth code
   const { error: exchangeError } =
     await supabase.auth.exchangeCodeForSession(code);
 
   if (exchangeError) {
-    console.error("❌ OAuth exchange failed:", exchangeError);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
-  /* --------------------------------------------------
-     Load authenticated user
-  -------------------------------------------------- */
   const {
     data: { user },
-    error: userErr,
   } = await supabase.auth.getUser();
 
-  if (userErr || !user) {
-    console.error("❌ getUser failed:", userErr);
+  if (!user) {
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
-  console.log("👤 OAuth user:", user.id);
-
-  /* --------------------------------------------------
-     Check for existing profile
-  -------------------------------------------------- */
-  const { data: profile } = await supabase
+  // Ensure profile exists (idempotent)
+  const { data: existing } = await supabase
     .from("users")
     .select("id")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
-  /* --------------------------------------------------
-     🟢 GOOGLE SIGN-UP: CREATE PROFILE ONCE
-  -------------------------------------------------- */
-  if (intent === "signup" && !profile) {
-    console.log("🟢 Google signup → creating profile");
-
+  if (!existing) {
     const meta = (user.user_metadata as GoogleMetadata) || {};
-    const displayName =
-      meta.full_name || meta.name || user.email || "";
-    const avatar =
-      meta.avatar_url || meta.picture || null;
 
-    const { error: insertErr } = await supabase.from("users").insert({
+    await supabase.from("users").insert({
       auth_user_id: user.id,
       email: user.email,
-      name: displayName,
-      image: avatar,
+      name: meta.full_name || meta.name || user.email,
+      image: meta.avatar_url || meta.picture || null,
       role: "customer",
       auth_provider: "google",
     });
-
-    if (insertErr) {
-      console.error("❌ Profile creation failed:", insertErr);
-      return NextResponse.redirect(new URL("/sign-in", url));
-    }
-
-    return NextResponse.redirect(new URL(callbackURL, url));
   }
 
-  /* --------------------------------------------------
-     🔒 GOOGLE SIGN-IN: ENFORCE PROFILE
-  -------------------------------------------------- */
-  if (!profile) {
-    console.log("🚧 No profile → redirecting to /sign-up");
-    return NextResponse.redirect(new URL("/sign-up", url));
-  }
-
-  /* --------------------------------------------------
-     Profile exists → proceed
-  -------------------------------------------------- */
   return NextResponse.redirect(new URL(callbackURL, url));
 }

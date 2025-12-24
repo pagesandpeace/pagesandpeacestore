@@ -71,7 +71,7 @@ export default function SignUpClient() {
       return;
     }
 
-    // Email confirmation flow: user may not be logged in yet
+    // Email confirmation flow
     if (!data.user) {
       alert("Check your email inbox to confirm your account!");
       setLoading(false);
@@ -79,7 +79,7 @@ export default function SignUpClient() {
     }
 
     /* --------------------------------------------------
-       CREATE USER PROFILE (CORRECTLY)
+       CREATE USER PROFILE (EMAIL USERS)
     -------------------------------------------------- */
     const { error: insertError } = await supabase.from("users").insert({
       auth_user_id: data.user.id,
@@ -102,30 +102,28 @@ export default function SignUpClient() {
   }
 
   /* --------------------------------------------------
-   GOOGLE SIGN-UP
--------------------------------------------------- */
-async function handleGoogle() {
-  setGoogleLoading(true);
+     GOOGLE SIGN-UP (SAME AS SIGN-IN)
+  -------------------------------------------------- */
+  async function handleGoogle() {
+    setGoogleLoading(true);
 
-  const params = new URLSearchParams();
-  params.set("callbackURL", callbackURL);
-  params.set("intent", "signup"); // 👈 IMPORTANT: prevents infinite loop
+    const params = new URLSearchParams();
+    params.set("callbackURL", callbackURL);
 
-  if (joinIntent === "loyalty") {
-    params.set("join", "loyalty");
+    if (joinIntent === "loyalty") {
+      params.set("join", "loyalty");
+    }
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${location.origin}/auth/callback?${params.toString()}`,
+      },
+    });
+
+    if (error) alert(error.message);
+    setGoogleLoading(false);
   }
-
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${location.origin}/auth/callback?${params.toString()}`,
-    },
-  });
-
-  if (error) alert(error.message);
-  setGoogleLoading(false);
-}
-
 
   return (
     <div className="w-full space-y-8">
