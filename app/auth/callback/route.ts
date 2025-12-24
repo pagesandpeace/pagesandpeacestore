@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   }
 
   /* --------------------------------------------------
-     Verify authenticated user exists
+     Get authenticated user
   -------------------------------------------------- */
   const {
     data: { user },
@@ -55,25 +55,27 @@ export async function GET(request: Request) {
   console.log("👤 OAuth user authenticated:", user.id);
 
   /* --------------------------------------------------
-     ENFORCEMENT POINT
-     Delegate provisioning decision to /api/me
+     🔒 HARD ENFORCEMENT (NO HTTP, NO RACE CONDITIONS)
+     Does a users row exist?
   -------------------------------------------------- */
-  const meRes = await fetch(`${url.origin}/api/me`, {
-    headers: {
-      cookie: request.headers.get("cookie") ?? "",
-    },
-    cache: "no-store",
-  });
+  const { data: profile, error: profileErr } = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
 
-  const me = await meRes.json();
+  if (profileErr) {
+    console.error("❌ users lookup failed:", profileErr);
+    return NextResponse.redirect(new URL("/sign-in", url));
+  }
 
-  if (me?.needsSignup) {
-    console.log("🚧 OAuth user needs signup → redirecting");
+  if (!profile) {
+    console.log("🚧 No profile → redirecting to /sign-up");
     return NextResponse.redirect(new URL("/sign-up", url));
   }
 
   /* --------------------------------------------------
-     FINAL redirect — user is provisioned
+     Profile exists → proceed
   -------------------------------------------------- */
   return NextResponse.redirect(new URL(callbackURL, url));
 }
