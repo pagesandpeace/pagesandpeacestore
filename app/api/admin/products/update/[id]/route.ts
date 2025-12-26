@@ -48,14 +48,19 @@ export async function POST(
     console.log("📨 Incoming body:", body);
 
     /* -------------------------
-       ALLOWED FIELDS
+       EXTRACT INVENTORY
+       (must NOT be updated directly)
+    ------------------------- */
+    const { inventory_count } = body;
+
+    /* -------------------------
+       ALLOWED NON-INVENTORY FIELDS
     ------------------------- */
     const updatableFields = [
       "name",
       "slug",
       "description",
       "price",
-      "inventory_count",
       "image_url",
       "author",
       "format",
@@ -80,10 +85,10 @@ export async function POST(
       }
     }
 
-    console.log("🛠 Final updateData:", updateData);
+    console.log("🛠 Final product updateData:", updateData);
 
     /* -------------------------
-       UPDATE PRODUCT
+       UPDATE PRODUCT (NON-INVENTORY)
     ------------------------- */
     const { data, error } = await supabase
       .from("products")
@@ -105,6 +110,35 @@ export async function POST(
         { error: "Product not found" },
         { status: 404 }
       );
+    }
+
+    /* -------------------------
+       INVENTORY ADJUSTMENT (AUDITED)
+    ------------------------- */
+    if (typeof inventory_count === "number") {
+      console.log("📦 Admin inventory adjustment", {
+        productId,
+        inventory_count,
+        adminUserId: auth.user.id,
+      });
+
+      const { error: inventoryError } = await supabase.rpc(
+        "adjust_product_inventory",
+        {
+          p_product_id: productId,
+          p_new_quantity: inventory_count,
+          p_reason: "admin_adjustment",
+          p_user_id: auth.user.id,
+        }
+      );
+
+      if (inventoryError) {
+        console.error("❌ Inventory adjustment failed", inventoryError);
+        return NextResponse.json(
+          { error: "Inventory update failed" },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({ success: true, product: data });
