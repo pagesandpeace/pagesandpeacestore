@@ -7,6 +7,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /* -----------------------------------------------------
+   DEBUG HELPERS (NEW)
+----------------------------------------------------- */
+function logWebhook(message: string, data?: unknown) {
+  console.log(`🔔 WEBHOOK | ${message}`, data ?? "");
+}
+
+function logStock(message: string, data?: unknown) {
+  console.log(`📦 STOCK | ${message}`, data ?? "");
+}
+
+/* -----------------------------------------------------
    Stripe
 ----------------------------------------------------- */
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
@@ -74,10 +85,19 @@ type ParsedProductItem = {
    WEBHOOK
 ===================================================== */
 export async function POST(req: Request) {
+  logWebhook("Webhook hit");
+
+  logWebhook("Supabase URL", process.env.SUPABASE_URL);
+  logWebhook(
+    "Service role key present",
+    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+  );
+
   const signature = req.headers.get("stripe-signature");
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!signature || !secret) {
+    console.error("❌ Missing Stripe signature or secret");
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
@@ -91,12 +111,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  logWebhook("Stripe event received", {
+    type: stripeEvent.type,
+    id: stripeEvent.id,
+  });
+
   if (stripeEvent.type !== "checkout.session.completed") {
+    logWebhook("Ignoring non-checkout event");
     return NextResponse.json({ received: true });
   }
 
   const session = stripeEvent.data.object as Stripe.Checkout.Session;
   const md = session.metadata ?? {};
+
+  logWebhook("Checkout metadata", md);
 
   if (!md.userId || !md.kind) {
     console.warn("⚠️ Missing metadata, skipping", session.id);
@@ -113,6 +141,7 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (existing) {
+    logWebhook("Order already exists, skipping", existing.id);
     return NextResponse.json({ received: true });
   }
 
@@ -130,6 +159,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true });
   }
 
+  logWebhook("Resolved user", user.id);
+
   const orderId = crypto.randomUUID();
   const paymentIntentId =
     typeof session.payment_intent === "string"
@@ -141,6 +172,8 @@ export async function POST(req: Request) {
   /* -----------------------------------------------------
      Create order
   ----------------------------------------------------- */
+  logWebhook("Creating order", { orderId, total });
+
   await supabase.from("orders").insert({
     id: orderId,
     user_id: user.id,
@@ -161,6 +194,8 @@ export async function POST(req: Request) {
      EVENT FLOW
   ===================================================== */
   if (md.kind === "event") {
+    logWebhook("Processing EVENT checkout");
+
     const quantity = Math.max(1, Number(md.quantity ?? 1));
 
     const { data: eventRow, error: eventErr } = await supabase
@@ -173,6 +208,8 @@ export async function POST(req: Request) {
       console.error("❌ Event or product_id missing", eventErr);
       return NextResponse.json({ received: true });
     }
+
+    logWebhook("Event resolved", eventRow);
 
     const orderItemId = crypto.randomUUID();
 
@@ -202,16 +239,31 @@ export async function POST(req: Request) {
 
     await supabase.from("event_bookings").insert(seats);
 
-    /* 🔽🔽🔽 INVENTORY DECREMENT — EVENT PRODUCT (NEW) 🔽🔽🔽 */
-    await supabase.rpc("decrement_product_inventory", {
-      p_product_id: eventRow.product_id,
-      p_quantity: quantity,
-      p_reason: "event_booking",
-      p_user_id: user.id,
+    /* 🔽 INVENTORY DECREMENT — EVENT (DEBUG) 🔽 */
+    logStock("Attempting decrement (event)", {
+      productId: eventRow.product_id,
+      qty: quantity,
     });
-    /* 🔼🔼🔼 END INVENTORY DECREMENT — EVENT PRODUCT 🔼🔼🔼 */
+
+    const { error: eventStockErr } = await supabase.rpc(
+      "decrement_product_inventory",
+      {
+        p_product_id: eventRow.product_id,
+        p_quantity: quantity,
+        p_reason: "event_booking",
+        p_user_id: user.id,
+      }
+    );
+
+    if (eventStockErr) {
+      console.error("❌ STOCK RPC FAILED (event)", eventStockErr);
+    } else {
+      logStock("Decrement successful (event)", eventRow.product_id);
+    }
+    /* 🔼 END INVENTORY DECREMENT — EVENT 🔼 */
 
     await sendOrderConfirmationEmail(orderId);
+    logWebhook("EVENT checkout complete");
     return NextResponse.json({ received: true });
   }
 
@@ -219,6 +271,8 @@ export async function POST(req: Request) {
      PRODUCT / CART FLOW
   ===================================================== */
   if (md.kind === "product" || md.kind === "cart") {
+    logWebhook("Processing PRODUCT/CART checkout");
+
     let items: ParsedProductItem[] = [];
 
     if (md.items?.trim().startsWith("[")) {
@@ -239,6 +293,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true });
     }
 
+    logWebhook("Parsed items", items);
+
     for (const item of items) {
       await supabase.from("order_items").insert({
         id: crypto.randomUUID(),
@@ -251,17 +307,32 @@ export async function POST(req: Request) {
         stripe_checkout_session_id: session.id,
       });
 
-      /* 🔽🔽🔽 INVENTORY DECREMENT — PRODUCT / CART (NEW) 🔽🔽🔽 */
-      await supabase.rpc("decrement_product_inventory", {
-        p_product_id: item.productId,
-        p_quantity: item.qty,
-        p_reason: "order",
-        p_user_id: user.id,
+      /* 🔽 INVENTORY DECREMENT — PRODUCT/CART (DEBUG) 🔽 */
+      logStock("Attempting decrement (product/cart)", {
+        productId: item.productId,
+        qty: item.qty,
       });
-      /* 🔼🔼🔼 END INVENTORY DECREMENT — PRODUCT / CART 🔼🔼🔼 */
+
+      const { error: stockErr } = await supabase.rpc(
+        "decrement_product_inventory",
+        {
+          p_product_id: item.productId,
+          p_quantity: item.qty,
+          p_reason: "order",
+          p_user_id: user.id,
+        }
+      );
+
+      if (stockErr) {
+        console.error("❌ STOCK RPC FAILED (product/cart)", stockErr);
+      } else {
+        logStock("Decrement successful (product/cart)", item.productId);
+      }
+      /* 🔼 END INVENTORY DECREMENT — PRODUCT/CART 🔼 */
     }
 
     await sendOrderConfirmationEmail(orderId);
+    logWebhook("PRODUCT/CART checkout complete");
     return NextResponse.json({ received: true });
   }
 
