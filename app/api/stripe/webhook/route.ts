@@ -202,6 +202,15 @@ export async function POST(req: Request) {
 
     await supabase.from("event_bookings").insert(seats);
 
+    /* 🔽🔽🔽 INVENTORY DECREMENT — EVENT PRODUCT (NEW) 🔽🔽🔽 */
+    await supabase.rpc("decrement_product_inventory", {
+      p_product_id: eventRow.product_id,
+      p_quantity: quantity,
+      p_reason: "event_booking",
+      p_user_id: user.id,
+    });
+    /* 🔼🔼🔼 END INVENTORY DECREMENT — EVENT PRODUCT 🔼🔼🔼 */
+
     await sendOrderConfirmationEmail(orderId);
     return NextResponse.json({ received: true });
   }
@@ -212,12 +221,9 @@ export async function POST(req: Request) {
   if (md.kind === "product" || md.kind === "cart") {
     let items: ParsedProductItem[] = [];
 
-    // JSON cart
     if (md.items?.trim().startsWith("[")) {
       items = JSON.parse(md.items);
-    }
-    // Pipe-delimited single product
-    else if (md.items?.includes("|")) {
+    } else if (md.items?.includes("|")) {
       const [productId, name, qty, price] = md.items.split("|");
 
       items = [
@@ -241,9 +247,18 @@ export async function POST(req: Request) {
         kind: "product",
         quantity: item.qty,
         price: item.price / 100,
-        name: item.name, // ✅ FIXED
+        name: item.name,
         stripe_checkout_session_id: session.id,
       });
+
+      /* 🔽🔽🔽 INVENTORY DECREMENT — PRODUCT / CART (NEW) 🔽🔽🔽 */
+      await supabase.rpc("decrement_product_inventory", {
+        p_product_id: item.productId,
+        p_quantity: item.qty,
+        p_reason: "order",
+        p_user_id: user.id,
+      });
+      /* 🔼🔼🔼 END INVENTORY DECREMENT — PRODUCT / CART 🔼🔼🔼 */
     }
 
     await sendOrderConfirmationEmail(orderId);
