@@ -75,16 +75,18 @@ export async function fetchProducts(params: ProductQueryParams) {
      BASE QUERY
   -------------------------------------------------------- */
   let query = supabase
-    .from("products")
-    .select(
-      `
-        *,
-        vibe:vibe_id(id, name),
-        theme:theme_id(id, name)
-      `,
-      { count: "exact" }
-    )
-    .neq("product_type", "event");
+  .from("products")
+  .select(
+    `
+      *,
+      vibe:vibe_id(id, name),
+      theme:theme_id(id, name)
+    `,
+    { count: "exact" }
+  )
+  .neq("product_type", "event")
+  .eq("is_test", false); // ✅ ADD THIS LINE
+
 
   // Type filter
   if (type !== "all") {
