@@ -25,7 +25,7 @@ const supabaseAdmin = createClient(
 -------------------------------------------------- */
 type Body =
   | { orderId: string }
-  | { orderItemId: string } // ✅ ADDED (REQUIRED)
+  | { orderItemId: string }
   | { bookingId: string };
 
 /* ==================================================
@@ -44,17 +44,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  /* 🔧 FIX #1 — correct admin lookup */
   const { data: profile } = await supabaseAdmin
     .from("users")
     .select("role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (profile?.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = (await req.json()) as Body;
+  /* 🔧 FIX #2 — support form + JSON bodies */
+  let body: Body;
+  const contentType = req.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    body = (await req.json()) as Body;
+  } else {
+    const formData = await req.formData();
+    body = Object.fromEntries(formData.entries()) as Body;
+  }
+
   console.log("📦 REFUND BODY:", body);
 
   /* ==================================================
@@ -78,9 +89,7 @@ export async function POST(req: Request) {
 
     const { data: items } = await supabaseAdmin
       .from("order_items")
-      .select(
-        "id, product_id, price, quantity, refunded_quantity, kind"
-      )
+      .select("id, product_id, price, quantity, refunded_quantity, kind")
       .eq("order_id", order.id);
 
     if (!items || items.length === 0) {
@@ -145,16 +154,14 @@ export async function POST(req: Request) {
   }
 
   /* ==================================================
-     🟡 PARTIAL PRODUCT REFUND (NEW)
+     🟡 PARTIAL PRODUCT REFUND
   ================================================== */
   if ("orderItemId" in body) {
     const { orderItemId } = body;
 
     const { data: item } = await supabaseAdmin
       .from("order_items")
-      .select(
-        "id, kind, order_id, price, quantity, refunded_quantity"
-      )
+      .select("id, kind, order_id, price, quantity, refunded_quantity")
       .eq("id", orderItemId)
       .single();
 
