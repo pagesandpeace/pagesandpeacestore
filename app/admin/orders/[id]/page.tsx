@@ -43,9 +43,10 @@ export default function AdminOrderDetailPage({
       const { id } = await params;
 
       try {
-        const res = await fetch(`/api/orders/get?id=${id}`, {
+        const res = await fetch(`/api/admin/orders/get?id=${id}`, {
   cache: "no-store",
 });
+
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load order");

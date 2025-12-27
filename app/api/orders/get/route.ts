@@ -12,12 +12,18 @@ type OrderRow = {
   stripe_card_brand?: string | null;
   stripe_last4?: string | null;
   paid_at?: string | null;
+
+  // optional if you store them on orders
+  refunded_amount?: string | number | null;
+  refund_processed_at?: string | null;
 };
 
 type ItemRow = {
   quantity: number;
   price: string | number;
   name: string | null;
+
+  // optional if you want to show refunds per line in receipt UI later
   refunded_quantity?: number | null;
   refunded_amount?: string | number | null;
 };
@@ -31,18 +37,12 @@ export async function GET(req: Request) {
     const user = auth?.user;
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const orderId = new URL(req.url).searchParams.get("id");
     if (!orderId) {
-      return NextResponse.json(
-        { error: "Missing id" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
     /* -------- LOAD ORDER (OWNERSHIP SAFE) -------- */
@@ -54,45 +54,41 @@ export async function GET(req: Request) {
       .single<OrderRow>();
 
     if (orderErr || !order) {
-      return NextResponse.json(
-        { error: "Order not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    /* -------- LOAD ITEMS (NO JOINS) -------- */
+    /* -------- LOAD ITEMS -------- */
     const { data: items, error: itemsErr } = await supabase
       .from("order_items")
-      .select(`
-        quantity,
-        price,
-        name,
-        refunded_quantity,
-        refunded_amount
-      `)
+      .select(
+        `
+          quantity,
+          price,
+          name,
+          refunded_quantity,
+          refunded_amount
+        `
+      )
       .eq("order_id", orderId)
       .returns<ItemRow[]>();
 
     if (itemsErr) {
-      return NextResponse.json(
-        { error: itemsErr.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: itemsErr.message }, { status: 500 });
     }
 
     return NextResponse.json({
       order: {
         ...order,
         total: Number(order.total),
+        refunded_amount:
+          order.refunded_amount != null ? Number(order.refunded_amount) : null,
         items: (items ?? []).map((it) => ({
           productName: it.name ?? "Unknown Item",
           quantity: it.quantity,
           price: Number(it.price),
           refunded_quantity: it.refunded_quantity ?? 0,
           refunded_amount:
-            it.refunded_amount != null
-              ? Number(it.refunded_amount)
-              : null,
+            it.refunded_amount != null ? Number(it.refunded_amount) : 0,
         })),
       },
     });
