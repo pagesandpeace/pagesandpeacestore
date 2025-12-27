@@ -1,65 +1,103 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabaseServer } from "@/lib/supabase/server";
 import RefundOrderButton from "@/components/admin/orders/RefundOrderButton";
 import { Button } from "@/components/ui/Button";
 
 export const dynamic = "force-dynamic";
 
-type PageProps = {
-  params: Promise<{ id: string }>;
+type OrderItem = {
+  id: string;
+  kind: "product" | "event";
+  name: string | null;
+  quantity: number;
+  refunded_quantity: number | null;
+  refunded_amount: number | null;
+  price: number;
+  event_id: string | null;
 };
 
-export default async function AdminOrderDetailPage({ params }: PageProps) {
-  const { id } = await params;
-  const supabase = await supabaseServer();
+type Order = {
+  id: string;
+  created_at: string;
+  total: number;
+  status: string;
+  order_items: OrderItem[];
+};
+
+export default function AdminOrderDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   /* --------------------------------------------------
-     AUTH (ADMIN ONLY)
+     LOAD ORDER (SERVER CALL VIA API)
   -------------------------------------------------- */
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  useEffect(() => {
+    const load = async () => {
+      const { id } = await params;
 
-  if (!user) redirect("/sign-in?callbackURL=/admin/orders");
+      try {
+        const res = await fetch(`/api/admin/orders/get?id=${id}`, {
+          cache: "no-store",
+        });
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role")
-    .eq("auth_user_id", user.id)
-    .single();
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load order");
 
-  if (profile?.role !== "admin") redirect("/dashboard");
+        setOrder(data.order);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load order");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [params]);
 
   /* --------------------------------------------------
-     FETCH ORDER
+     REFUND HELPERS
   -------------------------------------------------- */
-  const { data: order } = await supabase
-    .from("orders")
-    .select(`
-      id,
-      created_at,
-      total,
-      status,
-      stripe_payment_intent_id,
-      order_items (
-        id,
-        kind,
-        name,
-        quantity,
-        refunded_quantity,
-        refunded_amount,
-        price,
-        event_id
-      )
-    `)
-    .eq("id", id)
-    .maybeSingle();
+  async function refundItem(orderItemId: string) {
+    if (!confirm("Refund 1 item?")) return;
 
-  if (!order) {
+    const res = await fetch("/api/admin/refund", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderItemId }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || "Refund failed");
+      return;
+    }
+
+    window.location.reload();
+  }
+
+  /* --------------------------------------------------
+     STATES
+  -------------------------------------------------- */
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto py-10 text-sm opacity-70">
+        Loading order…
+      </div>
+    );
+  }
+
+  if (error || !order) {
     return (
       <div className="max-w-4xl mx-auto py-10">
         <h1 className="text-2xl font-bold">Order not found</h1>
+        <p className="text-sm opacity-70 mt-2">{error}</p>
       </div>
     );
   }
@@ -82,7 +120,9 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
       {/* HEADER */}
       <div>
         <h1 className="text-2xl font-bold">Order</h1>
-        <p className="text-xs font-mono text-neutral-500 mt-1">{order.id}</p>
+        <p className="text-xs font-mono text-neutral-500 mt-1">
+          {order.id}
+        </p>
       </div>
 
       {/* META */}
@@ -139,17 +179,18 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
                 <div className="text-right space-y-2">
                   <p>£{Number(item.price).toFixed(2)}</p>
 
-                  {/* PRODUCT REFUNDS */}
+                  {/* PRODUCT → REFUND 1 */}
                   {item.kind === "product" && remainingQty > 0 && (
-                    <form action="/api/admin/refund" method="POST">
-                      <input type="hidden" name="orderItemId" value={item.id} />
-                      <Button type="submit" size="sm" variant="outline">
-                        Refund 1
-                      </Button>
-                    </form>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => refundItem(item.id)}
+                    >
+                      Refund 1
+                    </Button>
                   )}
 
-                  {/* EVENT MANAGEMENT */}
+                  {/* EVENT → MANAGE SEATS */}
                   {item.kind === "event" && item.event_id && (
                     <Link href={`/admin/events/${item.event_id}`}>
                       <Button size="sm" variant="outline">
@@ -167,7 +208,10 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
       {/* FULL ORDER REFUND */}
       {refundable > 0 && (
         <div className="pt-4 border-t">
-          <RefundOrderButton orderId={order.id} refundable={refundable} />
+          <RefundOrderButton
+            orderId={order.id}
+            refundable={refundable}
+          />
         </div>
       )}
     </div>
