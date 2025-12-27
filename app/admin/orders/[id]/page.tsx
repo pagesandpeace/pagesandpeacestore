@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import RefundOrderButton from "@/components/admin/orders/RefundOrderButton";
+import { Button } from "@/components/ui/Button";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +12,6 @@ type PageProps = {
 export default async function AdminOrderDetailPage({ params }: PageProps) {
   const { id } = await params;
 
-  console.log("🧭 [admin/orders/[id]] START", { id });
-
   const supabase = await supabaseServer();
 
   /* --------------------------------------------------
@@ -20,33 +19,26 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
   -------------------------------------------------- */
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser();
 
-  console.log("👤 auth.getUser()", { user, authError });
-
   if (!user) {
-    console.warn("⛔ No user, redirecting to sign-in");
     redirect("/sign-in?callbackURL=/admin/orders");
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile } = await supabase
     .from("users")
     .select("role")
     .eq("auth_user_id", user.id)
     .single();
 
-  console.log("🧑‍💼 profile lookup", { profile, profileError });
-
   if (profile?.role !== "admin") {
-    console.warn("⛔ Not admin, redirecting to dashboard");
     redirect("/dashboard");
   }
 
   /* --------------------------------------------------
-     FETCH ORDER (NO RELATION JOINS)
+     FETCH ORDER
   -------------------------------------------------- */
-  const { data: order, error: orderError } = await supabase
+  const { data: order } = await supabase
     .from("orders")
     .select(`
       id,
@@ -67,14 +59,10 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
     .eq("id", id)
     .maybeSingle();
 
-  console.log("📦 order fetch", { order, orderError });
-
   if (!order) {
-    console.error("❌ Order not found", { id, orderError });
     return (
       <div className="max-w-4xl mx-auto py-10">
         <h1 className="text-2xl font-bold">Order not found</h1>
-        <p className="text-neutral-600 mt-2 font-mono">{id}</p>
       </div>
     );
   }
@@ -88,8 +76,6 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
   );
 
   const refundable = Number(order.total) - refundedTotal;
-
-  console.log("💰 totals", { refundedTotal, refundable });
 
   /* --------------------------------------------------
      RENDER
@@ -125,13 +111,6 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
           <p className="text-neutral-500">Refunded</p>
           <p>£{refundedTotal.toFixed(2)}</p>
         </div>
-
-        <div className="col-span-2">
-          <p className="text-neutral-500">Payment Intent</p>
-          <p className="font-mono text-xs break-all">
-            {order.stripe_payment_intent_id ?? "—"}
-          </p>
-        </div>
       </div>
 
       {/* ITEMS */}
@@ -140,6 +119,9 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
 
         <div className="space-y-3">
           {order.order_items.map((item) => {
+            const refundedQty = item.refunded_quantity ?? 0;
+            const refundableQty = item.quantity - refundedQty;
+
             const displayName =
               item.name ??
               (item.kind === "event" ? "Event ticket" : "Product");
@@ -147,22 +129,43 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
             return (
               <div
                 key={item.id}
-                className="border rounded-lg p-4 flex justify-between"
+                className="border rounded-lg p-4 flex justify-between items-center"
               >
                 <div>
                   <p className="font-medium">{displayName}</p>
                   <p className="text-xs text-neutral-500 capitalize">
                     {item.kind} · Qty {item.quantity}
                   </p>
+
+                  {refundedQty > 0 && (
+                    <p className="text-xs text-red-600 mt-1">
+                      Refunded {refundedQty}
+                    </p>
+                  )}
                 </div>
 
-                <div className="text-right">
+                <div className="text-right space-y-2">
                   <p>£{Number(item.price).toFixed(2)}</p>
 
-                  {item.refunded_quantity > 0 && (
-                    <p className="text-xs text-red-600">
-                      Refunded {item.refunded_quantity}
-                    </p>
+                  {/* PARTIAL REFUND ACTION */}
+                  {refundableQty > 0 && (
+                    <form
+                      action="/api/admin/refund"
+                      method="POST"
+                    >
+                      <input
+                        type="hidden"
+                        name="orderItemId"
+                        value={item.id}
+                      />
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        size="sm"
+                      >
+                        Refund 1
+                      </Button>
+                    </form>
                   )}
                 </div>
               </div>
@@ -171,7 +174,7 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* REFUND */}
+      {/* FULL ORDER REFUND */}
       {refundable > 0 && (
         <div className="pt-4 border-t">
           <RefundOrderButton
