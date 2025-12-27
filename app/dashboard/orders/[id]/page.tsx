@@ -13,6 +13,7 @@ type OrderItem = {
   productName: string | null;
   quantity: number;
   price: number;
+  refunded_quantity?: number | null;
 };
 
 type StoreOrder = {
@@ -27,10 +28,8 @@ type StoreOrder = {
   stripe_receipt_url?: string | null;
   stripe_card_brand?: string | null;
   stripe_last4?: string | null;
-  paid_at?: string | null;
 
   refunded_amount?: number | null;
-  stripe_refund_id?: string | null;
   refund_processed_at?: string | null;
 };
 
@@ -106,6 +105,13 @@ export default function StoreOrderReceiptPage() {
       ? "This order has been partially refunded"
       : null;
 
+  const refundedTotal = order.items.reduce((sum, item) => {
+    const refundedQty = item.refunded_quantity ?? 0;
+    return sum + refundedQty * item.price;
+  }, 0);
+
+  const netPaid = order.total - refundedTotal;
+
   /* ---------------------------------------------
      RENDER
   --------------------------------------------- */
@@ -132,8 +138,7 @@ export default function StoreOrderReceiptPage() {
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <p className="font-medium">{refundMessage}</p>
             <p className="mt-1">
-              Any refunded amount has been returned to the original payment
-              method.
+              Refunded items are returned to your original payment method.
             </p>
           </div>
         )}
@@ -142,28 +147,62 @@ export default function StoreOrderReceiptPage() {
         <div className="mt-6 rounded-xl border p-4 bg-white">
           <p className="text-sm font-semibold mb-3">Items</p>
 
-          {order.items.map((item, idx) => (
-            <div
-              key={idx}
-              className="flex justify-between items-center py-2 border-b last:border-b-0"
-            >
-              <div>
-                <p className="text-sm font-medium">
-                  {item.productName || "Unknown Product"}
-                </p>
-                <p className="text-xs opacity-70">Qty: {item.quantity}</p>
-              </div>
+          {order.items.map((item, idx) => {
+            const refundedQty = item.refunded_quantity ?? 0;
+            const remainingQty = item.quantity - refundedQty;
 
-              <p className="text-sm font-medium">
-                £{(item.price * item.quantity).toFixed(2)}
-              </p>
-            </div>
-          ))}
+            return (
+              <div
+                key={idx}
+                className="py-3 border-b last:border-b-0 space-y-1"
+              >
+                <div className="flex justify-between">
+                  <p className="text-sm font-medium">
+                    {item.productName || "Item"}
+                  </p>
+                  <p className="text-sm">
+                    £{(item.price * item.quantity).toFixed(2)}
+                  </p>
+                </div>
+
+                <p className="text-xs opacity-70">
+                  Purchased: {item.quantity}
+                  {refundedQty > 0 && (
+                    <>
+                      {" · "}
+                      <span className="text-red-600">
+                        Refunded: {refundedQty}
+                      </span>
+                      {" · "}
+                      Remaining: {remainingQty}
+                    </>
+                  )}
+                </p>
+
+                {refundedQty > 0 && (
+                  <p className="text-xs text-red-600">
+                    Refunded value: £{(refundedQty * item.price).toFixed(2)}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        {/* TOTAL */}
-        <div className="mt-4 text-right text-lg font-semibold">
-          Total paid: £{order.total.toFixed(2)}
+        {/* TOTALS */}
+        <div className="mt-4 space-y-1 text-sm">
+          <p>Total paid: £{order.total.toFixed(2)}</p>
+
+          {refundedTotal > 0 && (
+            <>
+              <p className="text-red-600">
+                Refunded: −£{refundedTotal.toFixed(2)}
+              </p>
+              <p className="font-semibold">
+                Net paid: £{netPaid.toFixed(2)}
+              </p>
+            </>
+          )}
         </div>
 
         {/* PAYMENT DETAILS */}
@@ -195,26 +234,17 @@ export default function StoreOrderReceiptPage() {
         </div>
 
         {/* REFUND DETAILS */}
-        {(order.refunded_amount != null || order.refund_processed_at) && (
+        {order.refund_processed_at && (
           <div className="mt-4 rounded-xl border bg-neutral-50 p-4">
-            <p className="text-sm font-semibold mb-2">Refund Details</p>
-
-            {order.refunded_amount != null && (
-              <p className="text-sm">
-                Refunded amount: £{order.refunded_amount.toFixed(2)}
-              </p>
-            )}
-
-            {order.refund_processed_at && (
-              <p className="text-sm">
-                Processed on:{" "}
-                {new Date(order.refund_processed_at).toLocaleString()}
-              </p>
-            )}
+            <p className="text-sm font-semibold mb-2">Refund Activity</p>
+            <p className="text-sm">
+              Last refund processed on{" "}
+              {new Date(order.refund_processed_at).toLocaleString()}
+            </p>
           </div>
         )}
 
-        {/* NEED REFUND HELP */}
+        {/* NEED HELP */}
         {order.status !== "refunded" && (
           <NeedRefundHelp orderId={order.id} />
         )}

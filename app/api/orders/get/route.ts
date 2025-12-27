@@ -18,6 +18,8 @@ type ItemRow = {
   quantity: number;
   price: string | number;
   name: string | null;
+  refunded_quantity?: number | null;
+  refunded_amount?: string | number | null;
 };
 
 export async function GET(req: Request) {
@@ -64,7 +66,9 @@ export async function GET(req: Request) {
       .select(`
         quantity,
         price,
-        name
+        name,
+        refunded_quantity,
+        refunded_amount
       `)
       .eq("order_id", orderId)
       .returns<ItemRow[]>();
@@ -84,6 +88,11 @@ export async function GET(req: Request) {
           productName: it.name ?? "Unknown Item",
           quantity: it.quantity,
           price: Number(it.price),
+          refunded_quantity: it.refunded_quantity ?? 0,
+          refunded_amount:
+            it.refunded_amount != null
+              ? Number(it.refunded_amount)
+              : null,
         })),
       },
     });
