@@ -11,7 +11,6 @@ type PageProps = {
 
 export default async function AdminOrderDetailPage({ params }: PageProps) {
   const { id } = await params;
-
   const supabase = await supabaseServer();
 
   /* --------------------------------------------------
@@ -120,7 +119,7 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
         <div className="space-y-3">
           {order.order_items.map((item) => {
             const refundedQty = item.refunded_quantity ?? 0;
-            const refundableQty = item.quantity - refundedQty;
+            const remainingQty = item.quantity - refundedQty;
 
             const displayName =
               item.name ??
@@ -133,39 +132,56 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
               >
                 <div>
                   <p className="font-medium">{displayName}</p>
+
                   <p className="text-xs text-neutral-500 capitalize">
-                    {item.kind} · Qty {item.quantity}
+                    {item.kind} · Purchased {item.quantity}
                   </p>
 
-                  {refundedQty > 0 && (
-                    <p className="text-xs text-red-600 mt-1">
-                      Refunded {refundedQty}
-                    </p>
-                  )}
+                  <p className="text-xs text-neutral-500">
+                    Refunded {refundedQty} · Remaining {remainingQty}
+                  </p>
                 </div>
 
                 <div className="text-right space-y-2">
                   <p>£{Number(item.price).toFixed(2)}</p>
 
-                  {/* PARTIAL REFUND ACTION */}
-                  {refundableQty > 0 && (
-                    <form
-                      action="/api/admin/refund"
-                      method="POST"
-                    >
-                      <input
-                        type="hidden"
-                        name="orderItemId"
-                        value={item.id}
-                      />
-                      <Button
-                        type="submit"
-                        variant="outline"
-                        size="sm"
-                      >
-                        Refund 1
-                      </Button>
-                    </form>
+                  {remainingQty > 0 && (
+                    <div className="flex flex-col gap-2 items-end">
+                      {/* REFUND 1 */}
+                      <form action="/api/admin/refund" method="POST">
+                        <input
+                          type="hidden"
+                          name="orderItemId"
+                          value={item.id}
+                        />
+                        <Button
+                          type="submit"
+                          variant="outline"
+                          size="sm"
+                        >
+                          Refund 1
+                        </Button>
+                      </form>
+
+                      {/* REFUND REMAINING */}
+                      {remainingQty > 1 && (
+                        <form action="/api/admin/refund" method="POST">
+                          <input
+                            type="hidden"
+                            name="orderItemId"
+                            value={item.id}
+                          />
+                          <Button
+                            type="submit"
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 border-red-300"
+                          >
+                            Refund remaining ({remainingQty})
+                          </Button>
+                        </form>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
