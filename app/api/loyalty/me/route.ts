@@ -23,15 +23,15 @@ export async function GET() {
   }
 
   const userId = auth.user.id;
-  console.log("👤 User:", userId);
+  console.log("👤 User (auth UUID):", userId);
 
   /* -------------------------
-     FETCH MEMBERSHIP
+     FETCH MEMBERSHIP (✅ FIXED)
   ------------------------- */
   const { data: member, error: memberError } = await supabase
     .from("loyalty_members")
     .select("status, tier, joined_at")
-    .eq("user_id", userId)
+    .eq("user_id_uuid", userId) // ✅ CORRECT COLUMN
     .maybeSingle();
 
   if (memberError) {

@@ -210,22 +210,24 @@ export default function Sidebar({
             />
 
             <div className="flex flex-col leading-tight overflow-hidden">
-              <span className="font-medium text-xs truncate">
-                {localProfile?.name || user.email || "User"}
-              </span>
+  <span className="font-medium text-xs truncate">
+    {localProfile?.name || user.email || "User"}
+  </span>
 
-              {loyalty?.member && (
-                <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-[#2f6b3a]">
-                  Chapters Club
-                  {loyalty.tier && (
-                    <span className="opacity-70">
-                      • {loyalty.tier.charAt(0).toUpperCase() + loyalty.tier.slice(1)}
-                    </span>
-                  )}
-                  ✨
-                </span>
-              )}
-            </div>
+  {loyalty?.member && (
+    <span className="mt-1 inline-flex w-fit items-center rounded-full 
+      bg-[#E5F7E4] border border-[#cce6cc] 
+      px-2 py-[2px] text-[10px] font-semibold text-[#2f6b3a]">
+      Chapters Club
+      {loyalty.tier && (
+        <span className="ml-1 opacity-70">
+          {loyalty.tier.charAt(0).toUpperCase() + loyalty.tier.slice(1)}
+        </span>
+      )}
+    </span>
+  )}
+</div>
+
           </button>
 
           {menuOpen && (
