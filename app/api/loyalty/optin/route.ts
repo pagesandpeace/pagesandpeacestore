@@ -13,34 +13,27 @@ const supabaseAdmin = createClient(
   { auth: { persistSession: false } }
 );
 
-/* =====================================================
-   POST /api/loyalty/optin
-===================================================== */
 export async function POST(req: Request) {
   console.log("🟢 [LOYALTY OPT-IN] request received");
 
   try {
     /* -------------------------
-       AUTH (cookie-based)
+       AUTH
     ------------------------- */
     const supabase = await supabaseServer();
     const { data: auth } = await supabase.auth.getUser();
 
     if (!auth?.user) {
-      console.warn("❌ Not authenticated");
       return NextResponse.json({ error: "NOT_AUTHENTICATED" }, { status: 401 });
     }
 
-    const userId = auth.user.id;
-    console.log("👤 Authenticated user:", userId);
+    const authUserId = auth.user.id;
+    console.log("👤 Auth user:", authUserId);
 
     /* -------------------------
        BODY
     ------------------------- */
-    const body = await req.json();
-    console.log("📦 Body:", body);
-
-    const { termsVersion, marketingConsent } = body ?? {};
+    const { termsVersion, marketingConsent } = await req.json();
 
     if (!termsVersion) {
       return NextResponse.json(
@@ -50,25 +43,40 @@ export async function POST(req: Request) {
     }
 
     /* -------------------------
-       INSERT (SERVICE ROLE)
+       FETCH INTERNAL USER
     ------------------------- */
-    const { data, error } = await supabaseAdmin
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .eq("auth_user_id", authUserId)
+      .single();
+
+    if (userError || !user) {
+      console.error("❌ Internal user missing", userError);
+      return NextResponse.json(
+        { error: "USER_PROFILE_MISSING" },
+        { status: 400 }
+      );
+    }
+
+    console.log("🧩 Internal user ID:", user.id);
+
+    /* -------------------------
+       INSERT LOYALTY ROW
+    ------------------------- */
+    const { error: insertError } = await supabaseAdmin
       .from("loyalty_members")
       .insert({
-        user_id: userId,
-        terms_version: termsVersion,
-        marketing_consent: Boolean(marketingConsent),
+        user_id: authUserId,
+        user_id_uuid: user.id,
         status: "active",
         tier: "starter",
-      })
-      .select()
-      .maybeSingle();
+        marketing_consent: Boolean(marketingConsent),
+        terms_version: termsVersion,
+      });
 
-    console.log("🧾 Insert result:", { data, error });
-
-    // Ignore duplicate key (already joined)
-    if (error && error.code !== "23505") {
-      console.error("❌ Loyalty insert failed:", error);
+    if (insertError && insertError.code !== "23505") {
+      console.error("❌ Loyalty insert failed:", insertError);
       return NextResponse.json(
         { error: "FAILED_TO_JOIN" },
         { status: 500 }
@@ -77,10 +85,7 @@ export async function POST(req: Request) {
 
     console.log("✅ Loyalty opt-in successful");
 
-    return NextResponse.json({
-      success: true,
-      message: "You’re in! Chapters Club features are coming soon.",
-    });
+    return NextResponse.json({ success: true });
   } catch (err) {
     console.error("🔥 LOYALTY OPT-IN CRASH:", err);
     return NextResponse.json(
