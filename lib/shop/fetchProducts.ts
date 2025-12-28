@@ -8,7 +8,7 @@ export type ProductQueryParams = {
   type?: string;
   search?: string;
   genre?: string;
-  author?: string;
+  author?: string; // UUID
   vibe?: string;
   theme?: string;
   inStock?: string;
@@ -16,23 +16,21 @@ export type ProductQueryParams = {
 };
 
 export async function fetchProducts(params: ProductQueryParams) {
-  // ✅ PUBLIC, NO AUTH, NO COOKIES
   const supabase = supabaseService();
 
   const safe = { ...params };
 
   const page = Number(safe.page ?? 1);
   const type = safe.type ?? "all";
-  const search = safe.search ?? "";
+  const search = safe.search?.trim() ?? "";
   const sort = safe.sort ?? "newest";
   const inStock = safe.inStock === "1";
 
   const genre = safe.genre ?? "";
-  const author = safe.author ?? "";
+  const authorId = safe.author ?? "";
   const vibeParam = safe.vibe?.toLowerCase() ?? "";
   const themeParam = safe.theme?.toLowerCase() ?? "";
 
-  // ❌ HARD EXCLUDE EVENTS
   const TYPES = ["blind-date", "book", "coffee", "merch", "physical"];
 
   /* --------------------------------------------------------
@@ -43,13 +41,12 @@ export async function fetchProducts(params: ProductQueryParams) {
     if (vibeParam.length === 36) {
       vibeId = vibeParam;
     } else {
-      const { data: vibeRow } = await supabase
+      const { data } = await supabase
         .from("vibes")
         .select("id")
         .ilike("name", vibeParam)
         .maybeSingle();
-
-      if (vibeRow) vibeId = vibeRow.id;
+      if (data) vibeId = data.id;
     }
   }
 
@@ -61,13 +58,12 @@ export async function fetchProducts(params: ProductQueryParams) {
     if (themeParam.length === 36) {
       themeId = themeParam;
     } else {
-      const { data: themeRow } = await supabase
+      const { data } = await supabase
         .from("themes")
         .select("id")
         .ilike("name", themeParam)
         .maybeSingle();
-
-      if (themeRow) themeId = themeRow.id;
+      if (data) themeId = data.id;
     }
   }
 
@@ -75,50 +71,87 @@ export async function fetchProducts(params: ProductQueryParams) {
      BASE QUERY
   -------------------------------------------------------- */
   let query = supabase
-  .from("products")
-  .select(
-    `
-      *,
-      vibe:vibe_id(id, name),
-      theme:theme_id(id, name)
-    `,
-    { count: "exact" }
-  )
-  .neq("product_type", "event")
-  .eq("is_test", false); // ✅ ADD THIS LINE
+    .from("products")
+    .select(
+      `
+        *,
+        author:author_id(id, name),
+        vibe:vibe_id(id, name),
+        theme:theme_id(id, name)
+      `,
+      { count: "exact" }
+    )
+    .neq("product_type", "event")
+    .eq("is_test", false);
 
-
-  // Type filter
+  /* --------------------------------------------------------
+     TYPE FILTER
+  -------------------------------------------------------- */
   if (type !== "all") {
     query = query.eq("product_type", type);
   } else {
     query = query.in("product_type", TYPES);
   }
 
-  // Search
-  if (search) {
-    query = query.ilike("name", `%${search}%`);
-  }
+  /* --------------------------------------------------------
+   GLOBAL SEARCH (PRODUCT + AUTHOR)
+-------------------------------------------------------- */
+if (search) {
+  // 1️⃣ Find matching authors
+  const { data: matchingAuthors } = await supabase
+    .from("authors")
+    .select("id")
+    .ilike("name", `%${search}%`);
 
-  // In-stock only
+  const authorIds = (matchingAuthors ?? []).map((a) => a.id);
+
+  // 2️⃣ Apply search to products
+  if (authorIds.length > 0) {
+    query = query.or(
+      [
+        `name.ilike.%${search}%`,
+        `description.ilike.%${search}%`,
+        `author_id.in.(${authorIds.join(",")})`,
+      ].join(",")
+    );
+  } else {
+    query = query.or(
+      [
+        `name.ilike.%${search}%`,
+        `description.ilike.%${search}%`,
+      ].join(",")
+    );
+  }
+}
+
+
+  /* --------------------------------------------------------
+     IN STOCK
+  -------------------------------------------------------- */
   if (inStock) {
     query = query.gt("inventory_count", 0);
   }
 
-  // Book filters
+  /* --------------------------------------------------------
+     BOOK FILTERS
+  -------------------------------------------------------- */
   if (type === "book") {
     if (genre) query = query.eq("genre_id", genre);
-    if (author) query = query.ilike("author", `%${author}%`);
+    if (authorId) query = query.eq("author_id", authorId);
   }
 
-  // Blind-date filters
+  /* --------------------------------------------------------
+     BLIND DATE FILTERS
+  -------------------------------------------------------- */
   if (type === "blind-date") {
     if (genre) query = query.eq("genre_id", genre);
     if (vibeId) query = query.eq("vibe_id", vibeId);
     if (themeId) query = query.eq("theme_id", themeId);
   }
 
-  // Sorting
+  /* --------------------------------------------------------
+     SORTING
+  -------------------------------------------------------- */
   switch (sort) {
     case "price-asc":
       query = query.order("price", { ascending: true });
@@ -133,7 +166,9 @@ export async function fetchProducts(params: ProductQueryParams) {
       query = query.order("created_at", { ascending: false });
   }
 
-  // Pagination
+  /* --------------------------------------------------------
+     PAGINATION
+  -------------------------------------------------------- */
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
   query = query.range(from, to);

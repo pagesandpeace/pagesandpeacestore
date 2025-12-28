@@ -9,6 +9,8 @@ import { TextArea } from "@/components/ui/TextArea";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 
+import AuthorSearchSelect from "@/components/admin/AuthorSearchSelect";
+
 /* ---------------------------------------------------
    TYPES
 --------------------------------------------------- */
@@ -23,8 +25,8 @@ interface Product {
 
   product_type: "book" | "merch" | string;
 
-  // book-specific
   author: string | null;
+  author_id?: string | null;
   format: string | null;
   language: string | null;
   genre_id: string | null;
@@ -38,7 +40,7 @@ interface MetaItem {
 }
 
 /* ---------------------------------------------------
-   MAIN COMPONENT
+   COMPONENT
 --------------------------------------------------- */
 export default function AdminProductEditPage({
   params,
@@ -46,11 +48,7 @@ export default function AdminProductEditPage({
   params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
-  const { id } = use(params); // ⭐ Correct Next.js 15 unwrapping
-
-  /* ---------------------------------------------------
-     STATE
-  --------------------------------------------------- */
+  const { id } = use(params);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,82 +65,70 @@ export default function AdminProductEditPage({
   const [imageUrl, setImageUrl] = useState("");
 
   // book-specific
-  const [author, setAuthor] = useState("");
+  const [authorId, setAuthorId] = useState<string | null>(null);
   const [genreId, setGenreId] = useState("");
   const [format, setFormat] = useState("");
   const [language, setLanguage] = useState("");
   const [vibeId, setVibeId] = useState("");
   const [themeId, setThemeId] = useState("");
 
-  // metadata lists
   const [vibes, setVibes] = useState<MetaItem[]>([]);
   const [themes, setThemes] = useState<MetaItem[]>([]);
   const [genres, setGenres] = useState<MetaItem[]>([]);
 
   const isBook =
-  product?.product_type === "book" ||
-  product?.product_type === "blind-date";
+    product?.product_type === "book" ||
+    product?.product_type === "blind-date";
 
   /* ---------------------------------------------------
-     LOAD PRODUCT + META
+     LOAD DATA
   --------------------------------------------------- */
   useEffect(() => {
     async function load() {
-      try {
-        // fetch product
-        const res = await fetch(`/api/admin/products/get/${id}`, {
-          credentials: "include",
-          cache: "no-store",
-        });
+      const res = await fetch(`/api/admin/products/get/${id}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
 
-        const data: Product = await res.json();
-
-        if (!res.ok) {
-          setErrorMsg("Failed to load product.");
-          setLoading(false);
-          return;
-        }
-
-        setProduct(data);
-
-        // general
-        setName(data.name);
-        setSlug(data.slug);
-        setDescription(data.description ?? "");
-        setPrice(data.price);
-        setInventoryCount(data.inventory_count);
-        setImageUrl(data.image_url ?? "");
-
-        // book fields
-        if (data.product_type === "book") {
-          setAuthor(data.author ?? "");
-          setGenreId(data.genre_id ?? "");
-          setFormat(data.format ?? "");
-          setLanguage(data.language ?? "");
-          setVibeId(data.vibe_id ?? "");
-          setThemeId(data.theme_id ?? "");
-        }
-
-        // meta lists
-        const metaRes = await fetch("/api/admin/products/supporting-data", {
-          credentials: "include",
-        });
-        const meta = await metaRes.json();
-
-        setVibes(meta.vibes);
-        setThemes(meta.themes);
-        setGenres(meta.genres);
-
-        setLoading(false);
-      } catch (err) {
-        console.error(err);
+      const data: Product = await res.json();
+      if (!res.ok) {
         setErrorMsg("Failed to load product.");
         setLoading(false);
+        return;
       }
+
+      setProduct(data);
+
+      setName(data.name);
+      setSlug(data.slug);
+      setDescription(data.description ?? "");
+      setPrice(data.price);
+      setInventoryCount(data.inventory_count);
+      setImageUrl(data.image_url ?? "");
+
+      if (data.product_type === "book") {
+        setAuthorId(data.author_id ?? null);
+        setGenreId(data.genre_id ?? "");
+        setFormat(data.format ?? "");
+        setLanguage(data.language ?? "");
+        setVibeId(data.vibe_id ?? "");
+        setThemeId(data.theme_id ?? "");
+      }
+
+      const metaRes = await fetch("/api/admin/products/supporting-data", {
+        credentials: "include",
+      });
+      const meta = await metaRes.json();
+
+      setVibes(meta.vibes);
+      setThemes(meta.themes);
+      setGenres(meta.genres);
+
+      setLoading(false);
     }
 
     load();
-  }, [id]); // no eslint issues now
+  }, [id]);
 
   if (loading) return <p className="p-10">Loading…</p>;
 
@@ -172,7 +158,7 @@ export default function AdminProductEditPage({
   }
 
   /* ---------------------------------------------------
-     SAVE CHANGES
+     SAVE
   --------------------------------------------------- */
   async function saveChanges() {
     if (!product) return;
@@ -190,7 +176,7 @@ export default function AdminProductEditPage({
     };
 
     if (isBook) {
-      payload.author = author || null;
+      payload.author_id = authorId || null;
       payload.genre_id = genreId || null;
       payload.format = format || null;
       payload.language = language || null;
@@ -217,12 +203,13 @@ export default function AdminProductEditPage({
      RENDER
   --------------------------------------------------- */
   return (
-    <div className="max-w-3xl mx-auto py-10 space-y-8">
+    <div className="max-w-3xl mx-auto py-10 space-y-10">
       <h1 className="text-3xl font-bold">Edit Product</h1>
+
       {errorMsg && <Alert type="error" message={errorMsg} />}
 
-      {/* GENERAL FIELDS */}
-      <div className="space-y-5 bg-white p-6 border rounded-lg shadow-sm">
+      {/* GENERAL */}
+      <div className="space-y-5">
         <div>
           <label className="block mb-1 text-sm">Name</label>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -269,21 +256,21 @@ export default function AdminProductEditPage({
               alt="preview"
               width={200}
               height={200}
-              className="border rounded object-cover"
+              className="rounded border object-cover mb-2"
             />
           )}
           <input type="file" onChange={handleUpload} />
         </div>
       </div>
 
-      {/* BOOK FIELDS */}
+      {/* BOOK */}
       {isBook && (
-        <div className="space-y-5 bg-white p-6 border rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold">Book Details</h2>
+        <div className="space-y-5">
+          <h2 className="text-xl font-semibold pt-6">Book Details</h2>
 
           <div>
             <label className="block mb-1 text-sm">Author</label>
-            <Input value={author} onChange={(e) => setAuthor(e.target.value)} />
+            <AuthorSearchSelect value={authorId} onChange={setAuthorId} />
           </div>
 
           <div>
@@ -349,7 +336,8 @@ export default function AdminProductEditPage({
         </div>
       )}
 
-      <div className="flex gap-4">
+      {/* ACTIONS */}
+      <div className="flex gap-4 pt-6">
         <Button variant="primary" disabled={saving} onClick={saveChanges}>
           {saving ? "Saving…" : "Save Changes"}
         </Button>

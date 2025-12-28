@@ -5,13 +5,13 @@ import { supabaseServer } from "@/lib/supabase/server";
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     /* -------------------------
-       ✅ UNWRAP PARAMS (REQUIRED)
+       ✅ UNWRAP PARAMS (FIX)
     ------------------------- */
-    const { id: productId } = await context.params;
+    const { id: productId } = await params;
 
     console.log("🔎 Updating product:", productId);
 
@@ -22,10 +22,7 @@ export async function POST(
     ------------------------- */
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { data: profile } = await supabase
@@ -35,10 +32,7 @@ export async function POST(
       .maybeSingle();
 
     if (!profile || profile.role !== "admin") {
-      return NextResponse.json(
-        { error: "Admins only" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Admins only" }, { status: 403 });
     }
 
     /* -------------------------
@@ -47,22 +41,15 @@ export async function POST(
     const body = await req.json();
     console.log("📨 Incoming body:", body);
 
-    /* -------------------------
-       EXTRACT INVENTORY
-       (must NOT be updated directly)
-    ------------------------- */
     const { inventory_count } = body;
 
-    /* -------------------------
-       ALLOWED NON-INVENTORY FIELDS
-    ------------------------- */
     const updatableFields = [
       "name",
       "slug",
       "description",
       "price",
       "image_url",
-      "author",
+      "author_id",
       "format",
       "language",
       "genre_id",
@@ -73,55 +60,29 @@ export async function POST(
     const updateData: Record<string, unknown> = {};
 
     for (const key of updatableFields) {
-      const value = body[key];
-
-      if (value === "") {
-        updateData[key] = null;
-        continue;
-      }
-
-      if (value !== undefined) {
-        updateData[key] = value;
-      }
+      if (body[key] === "") updateData[key] = null;
+      else if (body[key] !== undefined) updateData[key] = body[key];
     }
 
     console.log("🛠 Final product updateData:", updateData);
 
     /* -------------------------
-       UPDATE PRODUCT (NON-INVENTORY)
+       UPDATE PRODUCT
     ------------------------- */
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("products")
       .update(updateData)
-      .eq("id", productId)
-      .select()
-      .maybeSingle();
+      .eq("id", productId);
 
     if (error) {
       console.error("❌ DB error:", error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
-
-    if (!data) {
-      return NextResponse.json(
-        { error: "Product not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     /* -------------------------
-       INVENTORY ADJUSTMENT (AUDITED)
+       INVENTORY ADJUSTMENT
     ------------------------- */
     if (typeof inventory_count === "number") {
-      console.log("📦 Admin inventory adjustment", {
-        productId,
-        inventory_count,
-        adminUserId: auth.user.id,
-      });
-
       const { error: inventoryError } = await supabase.rpc(
         "adjust_product_inventory",
         {
@@ -133,7 +94,7 @@ export async function POST(
       );
 
       if (inventoryError) {
-        console.error("❌ Inventory adjustment failed", inventoryError);
+        console.error("❌ Inventory error:", inventoryError);
         return NextResponse.json(
           { error: "Inventory update failed" },
           { status: 500 }
@@ -141,13 +102,9 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({ success: true, product: data });
-
+    return NextResponse.json({ success: true });
   } catch (err) {
     console.error("🔥 Update route crashed:", err);
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

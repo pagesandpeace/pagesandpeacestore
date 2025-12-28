@@ -59,18 +59,18 @@ export default async function ShopPage({
   const genres = genresData ?? [];
 
   /* -----------------------------
-     AUTHORS (LIVE PRODUCTS ONLY)
+     AUTHORS (REFERENCE TABLE)
   ------------------------------ */
-  const { data: authorRows } = await supabase
-    .from("products")
-    .select("author")
-    .neq("author", null)
-    .neq("product_type", "event") // 🔒 exclude events
-    .eq("is_test", false);        // ✅ exclude test products
+  const { data: authorsData, error: authorsError } = await supabase
+    .from("authors")
+    .select("id, name")
+    .order("name");
 
-  const authors = [
-    ...new Set((authorRows ?? []).map((a) => a.author)),
-  ];
+  if (authorsError) {
+    console.error("AUTHOR FETCH ERROR", authorsError);
+  }
+
+  const authors = authorsData ?? [];
 
   /* -----------------------------
      VIBES

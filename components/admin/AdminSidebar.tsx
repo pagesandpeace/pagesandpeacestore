@@ -29,31 +29,14 @@ type AdminSidebarProps = {
 
 export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
   const router = useRouter();
-
   const [menuOpen, setMenuOpen] = useState(false);
-
-  // 🔥 local profile state (key fix)
-  const [localProfile, setLocalProfile] =
-    useState<UserProfile>(profile);
-
+  const [localProfile, setLocalProfile] = useState<UserProfile>(profile);
   const accountRef = useRef<HTMLDivElement | null>(null);
 
-  /* -------------------------------------------------------
-     Keep local profile in sync with prop
-  ------------------------------------------------------- */
   useEffect(() => {
     setLocalProfile(profile);
   }, [profile]);
 
-  /* -------------------------------------------------------
-     Listen for profile updates (avatar/name)
-  ------------------------------------------------------- */
- 
-
-
-  /* -------------------------------------------------------
-     Close dropdown when clicking outside
-  ------------------------------------------------------- */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -68,25 +51,16 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  /* -------------------------------------------------------
-     Navigation
-  ------------------------------------------------------- */
   const handleNav = (href: string) => {
     router.push(href);
   };
 
-  /* -------------------------------------------------------
-     Sign out
-  ------------------------------------------------------- */
   const handleSignOut = async () => {
     await fetch("/auth/signout", { method: "POST" });
     window.dispatchEvent(new Event("pp:auth-updated"));
     router.push("/sign-in");
   };
 
-  /* -------------------------------------------------------
-     RENDER
-  ------------------------------------------------------- */
   return (
     <aside
       className="
@@ -96,7 +70,7 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
         flex flex-col justify-between
       "
     >
-      {/* TOP SECTION */}
+      {/* TOP */}
       <div className="px-6 pt-10">
         {/* LOGO */}
         <button
@@ -111,64 +85,71 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
           />
         </button>
 
-        {/* NAVIGATION */}
-        <nav className="mt-6 text-sm flex flex-col gap-y-5 max-h-[60vh] overflow-y-auto pr-2 pb-4">
-          <button onClick={() => handleNav("/admin")} className="text-left hover:text-[#5DA865]">
-            Dashboard
-          </button>
+        {/* NAV */}
+        <nav className="mt-8 text-sm flex flex-col gap-y-6 max-h-[60vh] overflow-y-auto pr-2 pb-4">
 
-          <button onClick={() => handleNav("/admin/events")} className="text-left hover:text-[#5DA865]">
-            Events
-          </button>
+          {/* CONTENT */}
+          <div>
+            <span className="text-xs uppercase text-gray-500 tracking-wider">
+              Content
+            </span>
 
-          <button onClick={() => handleNav("/admin/events/new")} className="text-left hover:text-[#5DA865]">
-            Create Event
-          </button>
+            <div className="mt-3 flex flex-col gap-3">
+              <button onClick={() => handleNav("/admin")} className="text-left hover:text-[#5DA865]">
+                Dashboard
+              </button>
 
-          <button onClick={() => handleNav("/admin/products")} className="text-left hover:text-[#5DA865]">
-            Products
-          </button>
+              <button onClick={() => handleNav("/admin/products")} className="text-left hover:text-[#5DA865]">
+                Products
+              </button>
 
-          <button onClick={() => handleNav("/admin/products/new")} className="text-left hover:text-[#5DA865]">
-            Add Product
-          </button>
+              <button onClick={() => handleNav("/admin/authors")} className="text-left hover:text-[#5DA865]">
+                Authors
+              </button>
 
-          <button onClick={() => handleNav("/admin/orders")} className="text-left hover:text-[#5DA865]">
-            View orders
-          </button>
+              <button onClick={() => handleNav("/admin/events")} className="text-left hover:text-[#5DA865]">
+                Events
+              </button>
+            </div>
+          </div>
 
-          {/* MARKETING SECTION */}
-          <div className="pt-3 border-t border-[#dcd6cf]">
+          {/* COMMERCE */}
+          <div>
+            <span className="text-xs uppercase text-gray-500 tracking-wider">
+              Commerce
+            </span>
+
+            <div className="mt-3 flex flex-col gap-3">
+              <button onClick={() => handleNav("/admin/orders")} className="text-left hover:text-[#5DA865]">
+                Orders
+              </button>
+            </div>
+          </div>
+
+          {/* MARKETING */}
+          <div>
             <span className="text-xs uppercase text-gray-500 tracking-wider">
               Marketing
             </span>
 
-            <button
-              onClick={() => handleNav("/admin/marketing")}
-              className="mt-3 text-left hover:text-[#5DA865]"
-            >
-              Shop Hero Banner
-            </button>
+            <div className="mt-3 flex flex-col gap-3">
+              <button onClick={() => handleNav("/admin/marketing")} className="text-left hover:text-[#5DA865]">
+                Shop Hero Banner
+              </button>
+
+              <button onClick={() => handleNav("/admin/newsletter")} className="text-left hover:text-[#5DA865]">
+                Newsletter Manager
+              </button>
+
+              <button onClick={() => handleNav("/admin/newsletter/history")} className="text-left hover:text-[#5DA865]">
+                Blast History
+              </button>
+            </div>
           </div>
-
-          {/* Newsletter Tools */}
-          <button
-            onClick={() => handleNav("/admin/newsletter")}
-            className="text-left hover:text-[#5DA865] mt-5"
-          >
-            Newsletter Manager
-          </button>
-
-          <button
-            onClick={() => handleNav("/admin/newsletter/history")}
-            className="text-left hover:text-[#5DA865]"
-          >
-            Blast History
-          </button>
         </nav>
       </div>
 
-      {/* BOTTOM ACCOUNT SECTION */}
+      {/* ACCOUNT */}
       <div
         ref={accountRef}
         className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1] relative"

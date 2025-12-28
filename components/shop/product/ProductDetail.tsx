@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 
 import PriceDisplay from "./PriceDisplay";
 import StockStatus from "./StockStatus";
@@ -30,9 +31,13 @@ type ProductDetailProps = {
     vibe?: { id: string; name: string } | null;
     theme?: { id: string; name: string } | null;
     genre?: { id: string; name: string } | null;
-
-    // book-only
-    author?: string | null;
+    author?: {
+      id: string;
+      name: string;
+      slug: string;
+      short_bio?: string | null;
+      profile_image_url?: string | null;
+    } | null;
 
     // metadata
     metadata?: { colour?: string | null } | null;
@@ -55,9 +60,6 @@ export default function ProductDetail({ product }: ProductDetailProps) {
   const themeName = product.theme?.name ?? null;
   const genreName = product.genre?.name ?? null;
 
-  /* ------------------------------------------
-     NORMALISE PRODUCT FOR CART / BUY-NOW
-  ------------------------------------------ */
   const cartProduct = {
     id: product.id,
     slug: product.slug,
@@ -93,38 +95,49 @@ export default function ProductDetail({ product }: ProductDetailProps) {
         {product.name}
       </h1>
 
-      {/* BOOK / BLIND-DATE BADGE */}
-      {isBookLike && genreName && (
-        <ProductBadge genre={genreName} />
-      )}
+      {/* BADGE */}
+      {isBookLike && genreName && <ProductBadge genre={genreName} />}
 
       {/* META */}
       {isBookLike && (
-        <div className="mt-4 space-y-2 text-foreground/80 text-sm">
-          {/* AUTHOR — hidden for blind-date */}
+        <div className="mt-4 space-y-3 text-sm text-foreground/80">
+
+          {/* AUTHOR CARD */}
           {!isBlindDate && product.author && (
-            <p>
-              <strong>Author:</strong> {product.author}
-            </p>
+            <Link
+              href={`/authors/${product.author.slug}`}
+              className="flex items-center gap-4 p-4 border rounded-xl bg-white hover:shadow-sm transition"
+            >
+              {product.author.profile_image_url ? (
+                <Image
+                  src={product.author.profile_image_url}
+                  alt={product.author.name}
+                  width={56}
+                  height={56}
+                  className="rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-gray-200" />
+              )}
+
+              <div>
+                <p className="font-medium">
+                  {product.author.name}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {product.author.short_bio ??
+                    "Discover more books by this author"}
+                </p>
+                <span className="text-xs text-[#189458] font-medium mt-2 inline-block">
+                  Discover more →
+                </span>
+              </div>
+            </Link>
           )}
 
-          {genreName && (
-            <p>
-              <strong>Genre:</strong> {genreName}
-            </p>
-          )}
-
-          {themeName && (
-            <p>
-              <strong>Theme:</strong> {themeName}
-            </p>
-          )}
-
-          {vibeName && (
-            <p>
-              <strong>Vibe:</strong> {vibeName}
-            </p>
-          )}
+          {genreName && <p><strong>Genre:</strong> {genreName}</p>}
+          {themeName && <p><strong>Theme:</strong> {themeName}</p>}
+          {vibeName && <p><strong>Vibe:</strong> {vibeName}</p>}
 
           {isBlindDate && colour && (
             <div className="flex items-center gap-2">
@@ -134,12 +147,6 @@ export default function ProductDetail({ product }: ProductDetailProps) {
                 style={{ backgroundColor: getColour(colour) }}
               />
             </div>
-          )}
-
-          {isBlindDate && (
-            <p className="italic text-sm text-muted-foreground mt-2">
-              A blind date with a book — details revealed after purchase.
-            </p>
           )}
         </div>
       )}

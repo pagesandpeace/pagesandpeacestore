@@ -14,11 +14,12 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
 
   const supabase = await supabaseServer();
 
-  // Fetch product WITH joined metadata — EXCLUDING event products
+  // Fetch product WITH joined metadata — INCLUDING author via author_id
   const { data: product, error } = await supabase
     .from("products")
     .select(`
       *,
+      author:authors(id, name, slug),
       genre:genres(name),
       vibe:vibes(name),
       theme:themes(name)
@@ -98,7 +99,10 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
           {/* 📚 BOOK + BLIND-DATE FIELDS */}
           {isBook && (
             <>
-              <p><strong>Author:</strong> {product.author || "—"}</p>
+              <p>
+                <strong>Author:</strong>{" "}
+                {product.author?.name ?? "—"}
+              </p>
               <p><strong>Genre:</strong> {product.genre?.name || "—"}</p>
               <p><strong>Format:</strong> {product.format || "—"}</p>
               <p><strong>Language:</strong> {product.language || "—"}</p>
