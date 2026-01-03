@@ -32,7 +32,7 @@ export default async function BookingDetailPage({
     "You (booker)";
 
   /* -----------------------------
-     ORDER (RLS: orders_select_own)
+     ORDER
   ----------------------------- */
   const { data: order } = await supabase
     .from("orders")
@@ -44,7 +44,6 @@ export default async function BookingDetailPage({
 
   /* -----------------------------
      EVENT ORDER ITEM
-     (THIS IS THE TRUE LINK)
   ----------------------------- */
   const { data: eventItems } = await supabase
     .from("order_items")
@@ -59,7 +58,7 @@ export default async function BookingDetailPage({
   const eventItem = eventItems[0];
 
   /* -----------------------------
-     EVENT (PUBLIC READ)
+     EVENT
   ----------------------------- */
   const { data: event } = await supabase
     .from("events")
@@ -81,13 +80,11 @@ export default async function BookingDetailPage({
   if (!event) fail("NO EVENT");
 
   /* -----------------------------
-     LOAD SEATS (CORRECT LINK)
-     ✅ order_item_id (authoritative)
-     🔁 fallback to session id
+     LOAD SEATS
   ----------------------------- */
   const { data: seats } = await supabase
     .from("event_bookings")
-    .select("id, name, refunded, cancelled")
+    .select("id, name, refunded, cancelled, created_at, user_id_uuid")
     .eq("order_item_id", eventItem.id)
     .order("created_at", { ascending: true });
 
@@ -96,10 +93,28 @@ export default async function BookingDetailPage({
   }
 
   /* -----------------------------
+     ✅ ADDITIVE FIX:
+     Force booker seat to index 0
+  ----------------------------- */
+  const sortedSeats = [...seats].sort((a, b) => {
+    const aIsBooker = a.user_id_uuid === user.id;
+    const bIsBooker = b.user_id_uuid === user.id;
+
+    if (aIsBooker && !bIsBooker) return -1;
+    if (!aIsBooker && bIsBooker) return 1;
+
+    // stable fallback
+    return (
+      new Date(a.created_at).getTime() -
+      new Date(b.created_at).getTime()
+    );
+  });
+
+  /* -----------------------------
      DERIVED COUNTS
   ----------------------------- */
   const totalTickets = eventItem.quantity;
-  const activeTickets = seats.filter(
+  const activeTickets = sortedSeats.filter(
     (s) => !s.refunded && !s.cancelled
   ).length;
 
@@ -147,43 +162,25 @@ export default async function BookingDetailPage({
             {activeTickets === 0
               ? "All tickets refunded"
               : activeTickets === totalTickets
-              ? `${totalTickets} ${totalTickets === 1 ? "ticket" : "tickets"} booked`
+              ? `${totalTickets} ${
+                  totalTickets === 1 ? "ticket" : "tickets"
+                } booked`
               : `${activeTickets} of ${totalTickets} tickets active`}
           </div>
         </div>
       </section>
-
-      {/* EVENT DESCRIPTION */}
-      {(event.short_description || event.description) && (
-        <section className="rounded-xl border bg-white p-6 shadow-sm space-y-2">
-          <h2 className="text-lg font-semibold">About this event</h2>
-
-          {event.short_description && (
-            <p className="text-sm text-neutral-700">
-              {event.short_description}
-            </p>
-          )}
-
-          {event.description && (
-            <p className="whitespace-pre-line text-sm text-neutral-700">
-              {event.description}
-            </p>
-          )}
-        </section>
-      )}
 
       {/* TICKETS */}
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Your tickets</h2>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {seats.map((seat, idx) => {
+          {sortedSeats.map((seat, idx) => {
             const isBooker = idx === 0;
 
-const displayName =
-  seat.name ||
-  (isBooker ? bookerName : `Guest ${idx + 1}`);
-
+            const displayName =
+              seat.name ||
+              (isBooker ? bookerName : `Guest ${idx + 1}`);
 
             const refunded = seat.refunded || seat.cancelled;
 
@@ -211,7 +208,9 @@ const displayName =
       {/* PAYMENT */}
       <section className="rounded-xl border bg-white p-6 text-sm text-neutral-700 shadow-sm">
         <h3 className="mb-2 font-medium">Payment summary</h3>
-        <p><strong>Total paid:</strong> £{order.total}</p>
+        <p>
+          <strong>Total paid:</strong> £{order.total}
+        </p>
         <p>
           <strong>Status:</strong>{" "}
           <span className="capitalize">{order.status}</span>
