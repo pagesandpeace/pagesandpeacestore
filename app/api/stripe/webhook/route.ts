@@ -58,7 +58,7 @@ type ParsedProductItem = {
   productId: string;
   name: string;
   qty: number;
-  price: number; // pence
+  price: number;
 };
 
 /* =====================================================
@@ -71,6 +71,7 @@ export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!signature || !secret) {
+    logWebhook("Missing signature or secret");
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
@@ -79,38 +80,115 @@ export async function POST(req: Request) {
   try {
     const rawBody = await readRawBody(req.body);
     stripeEvent = stripe.webhooks.constructEvent(rawBody, signature, secret);
-  } catch {
+  } catch (err) {
+    logWebhook("Invalid signature", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  if (stripeEvent.type !== "checkout.session.completed") {
-    return NextResponse.json({ received: true });
-  }
-
-  const session = stripeEvent.data.object as Stripe.Checkout.Session;
-  const md = session.metadata ?? {};
-
-  if (!md.userId || !md.kind) {
-    return NextResponse.json({ received: true });
-  }
-
-  /* -----------------------------------------------------
-     Advisory lock (retry safety)
-  ----------------------------------------------------- */
-  await supabase.rpc("lock_checkout_session", {
-    session_id: session.id,
+  logWebhook("Stripe event received", {
+    type: stripeEvent.type,
+    id: stripeEvent.id,
   });
 
-  /* -----------------------------------------------------
-     Resolve internal user
-  ----------------------------------------------------- */
-  const { data: user } = await supabase
-    .from("users")
-    .select("id")
-    .eq("auth_user_id", md.userId)
-    .single();
+  const isCheckoutSession =
+    stripeEvent.type === "checkout.session.completed";
 
-  if (!user) return NextResponse.json({ received: true });
+  const isChargeSucceeded =
+    stripeEvent.type === "charge.succeeded";
+
+  if (!isCheckoutSession && !isChargeSucceeded) {
+    logWebhook("Ignoring non-target event");
+    return NextResponse.json({ received: true });
+  }
+
+  const session = isCheckoutSession
+    ? (stripeEvent.data.object as Stripe.Checkout.Session)
+    : null;
+
+  const md = session?.metadata ?? {};
+
+  logWebhook("Session metadata", md);
+  logWebhook("Session payment_intent", session?.payment_intent);
+
+  if (
+    isCheckoutSession &&
+    (!md.userId || !md.kind)
+  ) {
+    logWebhook("Missing metadata on checkout.session, exiting");
+    return NextResponse.json({ received: true });
+  }
+
+  /* -----------------------------------------------------
+     CHARGE SUCCEEDED (STRIPE SOURCE OF TRUTH)
+  ----------------------------------------------------- */
+  if (isChargeSucceeded) {
+    const charge = stripeEvent.data.object as Stripe.Charge;
+
+    logWebhook("charge.succeeded received", {
+      charge_id: charge.id,
+      payment_intent: charge.payment_intent,
+      receipt_url: charge.receipt_url,
+      brand: charge.payment_method_details?.card?.brand,
+      last4: charge.payment_method_details?.card?.last4,
+    });
+
+    const paymentIntentId =
+      typeof charge.payment_intent === "string"
+        ? charge.payment_intent
+        : null;
+
+    if (!paymentIntentId) {
+      logWebhook("Charge has no payment_intent, exiting");
+      return NextResponse.json({ received: true });
+    }
+
+    await supabase
+      .from("orders")
+      .update({
+        stripe_receipt_url: charge.receipt_url ?? null,
+        stripe_card_brand: charge.payment_method_details?.card?.brand ?? null,
+        stripe_last4: charge.payment_method_details?.card?.last4 ?? null,
+        paid_at: new Date(charge.created * 1000).toISOString(),
+      })
+      .eq("stripe_payment_intent_id", paymentIntentId);
+
+    logWebhook("Charge details attached to order (charge path)", {
+      paymentIntentId,
+    });
+
+    return NextResponse.json({ received: true });
+  }
+
+  /* -----------------------------------------------------
+     Advisory lock (CHECKOUT ONLY)
+  ----------------------------------------------------- */
+  if (isCheckoutSession && session) {
+    await supabase.rpc("lock_checkout_session", {
+      session_id: session.id,
+    });
+
+    logWebhook("Advisory lock acquired", session.id);
+  }
+
+  /* -----------------------------------------------------
+     Resolve user (CHECKOUT ONLY)
+  ----------------------------------------------------- */
+  let user: { id: string } | null = null;
+
+  if (isCheckoutSession) {
+    const { data } = await supabase
+      .from("users")
+      .select("id")
+      .eq("auth_user_id", md.userId)
+      .single();
+
+    user = data ?? null;
+
+    if (!user) {
+      logWebhook("User not found", md.userId);
+      return NextResponse.json({ received: true });
+    }
+  }
 
   /* -----------------------------------------------------
      Find or create order
@@ -118,31 +196,89 @@ export async function POST(req: Request) {
   const { data: existingOrder } = await supabase
     .from("orders")
     .select("id, inventory_processed, confirmation_email_sent")
-    .eq("stripe_checkout_session_id", session.id)
+    .eq("stripe_checkout_session_id", session!.id)
     .maybeSingle();
 
   const orderId = existingOrder?.id ?? crypto.randomUUID();
 
+  logWebhook("Order resolution", {
+    orderId,
+    existing: !!existingOrder,
+  });
+
   if (!existingOrder) {
     await supabase.from("orders").insert({
       id: orderId,
-      user_id: user.id,
+      user_id: user!.id,
       user_id_uuid: md.userId,
-      total: (session.amount_total ?? 0) / 100,
+      total: (session!.amount_total ?? 0) / 100,
       status: "completed",
-      stripe_checkout_session_id: session.id,
+      stripe_checkout_session_id: session!.id,
       stripe_payment_intent_id:
-        typeof session.payment_intent === "string"
-          ? session.payment_intent
+        typeof session!.payment_intent === "string"
+          ? session!.payment_intent
           : null,
       inventory_processed: false,
       confirmation_email_sent: false,
-      is_test: !session.livemode,
+      is_test: !session!.livemode,
     });
+
+    logWebhook("Order inserted", { orderId });
   }
+  
+  /* -----------------------------------------------------
+   RECONCILE STRIPE CHARGE (RACE + STRIPE SAFE)
+----------------------------------------------------- */
+if (typeof session!.payment_intent === "string") {
+  const { data: existingStripeData } = await supabase
+    .from("orders")
+    .select("stripe_receipt_url, stripe_card_brand, stripe_last4, paid_at")
+    .eq("id", orderId)
+    .single();
+
+  const missingStripeData =
+    !existingStripeData?.stripe_receipt_url ||
+    !existingStripeData?.stripe_card_brand ||
+    !existingStripeData?.stripe_last4;
+
+  if (missingStripeData) {
+    logWebhook("Reconciling Stripe charge after order creation", {
+      orderId,
+      paymentIntentId: session!.payment_intent,
+    });
+
+    const charges = await stripe.charges.list({
+      payment_intent: session!.payment_intent,
+      limit: 1,
+    });
+
+    const charge = charges.data[0];
+
+    if (charge) {
+      await supabase
+        .from("orders")
+        .update({
+          stripe_receipt_url: charge.receipt_url ?? null,
+          stripe_card_brand:
+            charge.payment_method_details?.card?.brand ?? null,
+          stripe_last4:
+            charge.payment_method_details?.card?.last4 ?? null,
+          paid_at: new Date(charge.created * 1000).toISOString(),
+        })
+        .eq("id", orderId);
+
+      logWebhook("Stripe charge reconciled successfully", { orderId });
+    } else {
+      logWebhook("Stripe reconciliation found no charge", {
+        paymentIntentId: session!.payment_intent,
+      });
+    }
+  }
+}
+
 
   /* -----------------------------------------------------
-     🔒 ATOMIC CLAIM (HARDENING)
+     ATOMIC CLAIM
   ----------------------------------------------------- */
   const { data: claim } = await supabase
     .from("orders")
@@ -152,44 +288,16 @@ export async function POST(req: Request) {
     .select("id")
     .maybeSingle();
 
-  if (!claim) {
-    logWebhook("Order already claimed, exiting", orderId);
-    return NextResponse.json({ received: true });
-  }
-
-  /* -----------------------------------------------------
-   STRIPE PAYMENT DETAILS (RECEIPT / CARD / PAID AT)
------------------------------------------------------ */
-if (typeof session.payment_intent === "string") {
-  const piResponse = await stripe.paymentIntents.retrieve(
-    session.payment_intent,
-    { expand: ["charges.data.payment_method_details"] }
-  );
-
-  const pi = piResponse as unknown as Stripe.PaymentIntent & {
-    charges: Stripe.ApiList<Stripe.Charge>;
-  };
-
-  const charge = pi.charges?.data?.[0];
-
-  if (charge) {
-    await supabase
-      .from("orders")
-      .update({
-        stripe_receipt_url: charge.receipt_url ?? null,
-        stripe_card_brand:
-          charge.payment_method_details?.card?.brand ?? null,
-        stripe_last4:
-          charge.payment_method_details?.card?.last4 ?? null,
-        paid_at: new Date(charge.created * 1000).toISOString(),
-      })
-      .eq("id", orderId);
-  }
+  if (!claim && md.kind !== "event") {
+  logWebhook("Order already claimed, exiting", orderId);
+  return NextResponse.json({ received: true });
 }
 
 
+  logWebhook("Order claimed for processing", orderId);
+
   /* =====================================================
-     EVENT FLOW (AUTHORITATIVE)
+     EVENT FLOW
   ===================================================== */
   if (md.kind === "event") {
     logWebhook("Processing EVENT checkout");
@@ -216,33 +324,30 @@ if (typeof session.payment_intent === "string") {
       event_id: eventRow.id,
       kind: "event",
       quantity,
-      price: (session.amount_total ?? 0) / 100 / quantity,
+      price: (session!.amount_total ?? 0) / 100 / quantity,
       name: eventRow.title,
-      stripe_checkout_session_id: session.id,
+      stripe_checkout_session_id: session!.id,
     });
 
-    /* -----------------------------------------------------
-       ✅ SURGICAL FIX: PAYMENT INTENT ON SEATS
-    ----------------------------------------------------- */
     const paymentIntentId =
-      typeof session.payment_intent === "string"
-        ? session.payment_intent
+      typeof session!.payment_intent === "string"
+        ? session!.payment_intent
         : null;
 
     const bookerName =
-      session.customer_details?.name ||
-      session.customer_details?.email ||
+      session!.customer_details?.name ||
+      session!.customer_details?.email ||
       "Booker";
 
-    const bookerEmail = session.customer_details?.email ?? null;
+    const bookerEmail = session!.customer_details?.email ?? null;
 
     const seats = Array.from({ length: quantity }, (_, i) => ({
-      user_id: user.id,
+      user_id: user!.id,
       user_id_uuid: md.userId,
       event_id: eventRow.id,
       order_item_id: orderItemId,
-      stripe_checkout_session_id: session.id,
-      stripe_payment_intent_id: paymentIntentId, // ✅ ADDED
+      stripe_checkout_session_id: session!.id,
+      stripe_payment_intent_id: paymentIntentId,
       paid: true,
       cancelled: false,
       name: i === 0 ? bookerName : `Guest ${i + 1}`,
@@ -291,7 +396,7 @@ if (typeof session.payment_intent === "string") {
       price: item.price / 100,
       name: item.name,
       kind: "product",
-      stripe_checkout_session_id: session.id,
+      stripe_checkout_session_id: session!.id,
     });
   }
 
@@ -315,13 +420,13 @@ if (typeof session.payment_intent === "string") {
           payment_status: "paid",
           status: "awaiting_order",
           order_date: new Date().toISOString().slice(0, 10),
-          customer_email: session.customer_details?.email ?? null,
-          customer_name: session.customer_details?.name ?? "Online customer",
-          customer_phone: session.customer_details?.phone ?? null,
+          customer_email: session!.customer_details?.email ?? null,
+          customer_name: session!.customer_details?.name ?? "Online customer",
+          customer_phone: session!.customer_details?.phone ?? null,
           payment_reference:
-            typeof session.payment_intent === "string"
-              ? session.payment_intent
-              : session.id,
+            typeof session!.payment_intent === "string"
+              ? session!.payment_intent
+              : session!.id,
           notes: "Created automatically from online order",
           created_by: md.userId,
         },
@@ -337,7 +442,7 @@ if (typeof session.payment_intent === "string") {
       p_product_id: item.productId,
       p_new_quantity: after,
       p_reason: "order",
-      p_user_id: user.id,
+      p_user_id: user!.id,
     });
   }
 
