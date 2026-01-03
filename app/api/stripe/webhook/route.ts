@@ -157,6 +157,37 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true });
   }
 
+  /* -----------------------------------------------------
+   STRIPE PAYMENT DETAILS (RECEIPT / CARD / PAID AT)
+----------------------------------------------------- */
+if (typeof session.payment_intent === "string") {
+  const piResponse = await stripe.paymentIntents.retrieve(
+    session.payment_intent,
+    { expand: ["charges.data.payment_method_details"] }
+  );
+
+  const pi = piResponse as unknown as Stripe.PaymentIntent & {
+    charges: Stripe.ApiList<Stripe.Charge>;
+  };
+
+  const charge = pi.charges?.data?.[0];
+
+  if (charge) {
+    await supabase
+      .from("orders")
+      .update({
+        stripe_receipt_url: charge.receipt_url ?? null,
+        stripe_card_brand:
+          charge.payment_method_details?.card?.brand ?? null,
+        stripe_last4:
+          charge.payment_method_details?.card?.last4 ?? null,
+        paid_at: new Date(charge.created * 1000).toISOString(),
+      })
+      .eq("id", orderId);
+  }
+}
+
+
   /* =====================================================
      EVENT FLOW (AUTHORITATIVE)
   ===================================================== */

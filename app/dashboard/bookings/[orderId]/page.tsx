@@ -179,9 +179,11 @@ export default async function BookingDetailPage({
         <div className="grid gap-4 sm:grid-cols-2">
           {seats.map((seat, idx) => {
             const isBooker = idx === 0;
-            const displayName = isBooker
-              ? bookerName
-              : seat.name || "Guest";
+
+const displayName =
+  seat.name ||
+  (isBooker ? bookerName : `Guest ${idx + 1}`);
+
 
             const refunded = seat.refunded || seat.cancelled;
 
