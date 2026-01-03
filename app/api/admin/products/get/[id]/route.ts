@@ -8,15 +8,18 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    // ⭐ FIX: unwrap params (Next.js 15)
     const { id: productId } = await context.params;
-
     const supabase = await supabaseServer();
 
-    // AUTH
+    /* -------------------------
+       AUTH
+    ------------------------- */
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      );
     }
 
     const { data: profile } = await supabase
@@ -26,10 +29,16 @@ export async function GET(
       .maybeSingle();
 
     if (!profile || profile.role !== "admin") {
-      return NextResponse.json({ error: "Admins only" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Admins only" },
+        { status: 403 }
+      );
     }
 
-    // ⭐ FIX: JOIN metadata instead of returning raw IDs
+    /* -------------------------
+       FETCH PRODUCT
+       (format + language come directly from products)
+    ------------------------- */
     const { data: product, error } = await supabase
       .from("products")
       .select(`
@@ -39,17 +48,54 @@ export async function GET(
         theme:themes(id, name)
       `)
       .eq("id", productId)
-      .neq("product_type", "event") // 🚫 never show event ticket products
+      .neq("product_type", "event")
       .single();
 
     if (error || !product) {
-      console.error("❌ Product fetch error:", error);
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Product not found" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json(product);
+    /* -------------------------
+       FETCH SUPPLIER LINK
+    ------------------------- */
+    const { data: link } = await supabase
+      .from("product_supplier_links")
+      .select(`
+        supplier,
+        supplier_ref,
+        supplier_import_batch_id,
+        created_at
+      `)
+      .eq("product_id", productId)
+      .maybeSingle();
+
+    const supplierConfidence = link ? "exact" : "manual";
+
+    /* -------------------------
+       RETURN
+    ------------------------- */
+    return NextResponse.json({
+      ...product,
+
+      // canonical author link (may be null)
+      author_id: product.author_id ?? null,
+
+      // supplier-only author text (read-only context)
+      supplier_author: product.author ?? null,
+
+      // supplier metadata
+      supplier: link?.supplier ?? product.supplier_name ?? null,
+      supplier_ref: link?.supplier_ref ?? product.isbn_13 ?? null,
+      supplier_confidence: supplierConfidence,
+    });
   } catch (err) {
     console.error("🔥 Product GET route crashed:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server error" },
+      { status: 500 }
+    );
   }
 }

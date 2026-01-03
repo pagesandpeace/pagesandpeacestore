@@ -1,7 +1,6 @@
 "use client";
 
 import { useCart } from "@/context/CartContext";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 
 export default function AddToCartButton({
@@ -15,34 +14,28 @@ export default function AddToCartButton({
     price: number;
     imageUrl: string;
     inventory_count?: number;
+    fulfilment_mode: "physical" | "made_to_order";
   };
   qty?: number;
 }) {
   const { addToCart } = useCart();
-  const [loggedIn, setLoggedIn] = useState(false);
 
   const stock = product.inventory_count ?? 0;
   const quantity = qty ?? 1;
-
-  useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((me) => setLoggedIn(Boolean(me?.id)))
-      .catch(() => setLoggedIn(false));
-  }, []);
+  const isPhysical = product.fulfilment_mode === "physical";
 
   function handleAdd() {
-    if (stock <= 0) {
+    // ❌ Only block PHYSICAL items
+    if (isPhysical && stock <= 0) {
       alert("Sorry — this item is out of stock.");
       return;
     }
 
-    if (quantity > stock) {
+    if (isPhysical && quantity > stock) {
       alert(`Only ${stock} left.`);
       return;
     }
 
-    // ✅ ALWAYS add to cart (no login needed)
     addToCart({
       id: product.id,
       name: product.name,
@@ -50,9 +43,8 @@ export default function AddToCartButton({
       imageUrl: product.imageUrl,
       quantity,
       inventory_count: stock,
+      fulfilment_mode: product.fulfilment_mode,
     });
-
-    // No modal here — user stays on product page
   }
 
   return (
@@ -61,9 +53,9 @@ export default function AddToCartButton({
       size="lg"
       className="w-full"
       onClick={handleAdd}
-      disabled={stock <= 0}
+      disabled={isPhysical && stock <= 0}
     >
-      {stock <= 0 ? "Out of Stock" : "Add to Basket"}
+      {isPhysical && stock <= 0 ? "Out of Stock" : "Add to Basket"}
     </Button>
   );
 }

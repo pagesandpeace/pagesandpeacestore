@@ -132,8 +132,14 @@ export default async function AdminEventOverviewPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* ---------- ATTENDEES ---------- */}
-      <EventAttendeesTable attendees={attendees} />
+      {/* ---------- ATTENDEES SECTION ---------- */}
+      {activeAttendees === 0 ? (
+        <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+          No attendees have booked this event yet.
+        </div>
+      ) : (
+        <EventAttendeesTable attendees={attendees} />
+      )}
     </div>
   );
 }

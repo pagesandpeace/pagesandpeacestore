@@ -8,16 +8,16 @@ import { Alert } from "@/components/ui/Alert";
 import AuthPromptModal from "@/components/ui/AuthPromptModal";
 
 export default function CartPage() {
-  const { cart, removeFromCart, updateQuantity, clearCart, total } = useCart();
+  const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
 
   const [stockMap, setStockMap] = useState<Record<string, number>>({});
   const [loadingStock, setLoadingStock] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [showAuth, setShowAuth] = useState(false);
 
-  // ---------------------------
-  // Load logged-in user
-  // ---------------------------
+  /* ---------------------------
+     Load logged-in user
+  --------------------------- */
   useEffect(() => {
     fetch("/api/me", { cache: "no-store" })
       .then((res) => res.json())
@@ -25,14 +25,17 @@ export default function CartPage() {
       .catch(() => setUserId(null));
   }, []);
 
-  // ---------------------------
-  // Fetch live stock for items in cart
-  // ---------------------------
+  /* ---------------------------
+     Fetch live stock (physical only)
+  --------------------------- */
   useEffect(() => {
     async function fetchStock() {
       try {
-        const ids = cart.map((i) => i.id);
-        if (ids.length === 0) {
+        const physicalIds = cart
+          .filter((i) => i.fulfilment_mode === "physical")
+          .map((i) => i.id);
+
+        if (physicalIds.length === 0) {
           setStockMap({});
           setLoadingStock(false);
           return;
@@ -41,11 +44,11 @@ export default function CartPage() {
         const res = await fetch("/api/products/stock-check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids }),
+          body: JSON.stringify({ ids: physicalIds }),
         });
 
         const data = await res.json();
-        setStockMap(data); // { productId: stock }
+        setStockMap(data);
       } catch (err) {
         console.error("Stock fetch failed", err);
       } finally {
@@ -56,23 +59,29 @@ export default function CartPage() {
     fetchStock();
   }, [cart]);
 
-  // ---------------------------
-  // Check stock issues
-  // ---------------------------
+  /* ---------------------------
+     Stock issue detection
+     Only physical products are checked
+  --------------------------- */
   const cartHasStockIssues = cart.some((item) => {
+    if (item.fulfilment_mode !== "physical") return false;
+
     const stock = stockMap[item.id];
-    return stock !== undefined && item.quantity > stock;
+    if (stock === undefined) return false;
+
+    return item.quantity > stock;
   });
 
-  // ---------------------------
-  // Handle checkout
-  // ---------------------------
+  /* ---------------------------
+     Checkout handler
+  --------------------------- */
   const handleCheckout = async () => {
     if (cart.length === 0) return alert("Your cart is empty.");
     if (cartHasStockIssues)
-      return alert("Some items exceed available stock. Please adjust quantities.");
+      return alert(
+        "Some items exceed available stock. Please adjust quantities."
+      );
 
-    // 🔥 Require login before creating checkout session
     if (!userId) {
       setShowAuth(true);
       return;
@@ -102,9 +111,9 @@ export default function CartPage() {
     }
   };
 
-  // ---------------------------
-  // UI
-  // ---------------------------
+  /* ---------------------------
+     UI
+  --------------------------- */
   return (
     <main className="min-h-screen bg-[#FAF6F1] px-6 py-16 font-[Montserrat]">
       <h1 className="text-3xl font-bold text-center text-[#111] mb-10">
@@ -126,10 +135,10 @@ export default function CartPage() {
         </div>
       ) : (
         <div className="max-w-4xl mx-auto space-y-10">
-          {/* CART ITEMS */}
           <ul className="space-y-6">
             {cart.map((item) => {
               const stock = stockMap[item.id];
+              const isPhysical = item.fulfilment_mode === "physical";
 
               return (
                 <li
@@ -151,30 +160,20 @@ export default function CartPage() {
                         £{item.price.toFixed(2)}
                       </p>
 
-                      {/* STOCK STATUS */}
-                      {!loadingStock && stock !== undefined && (
-                        <p
-                          className={`text-xs mt-1 ${
-                            stock === 0
-                              ? "text-red-600"
-                              : item.quantity > stock
-                              ? "text-red-600"
-                              : stock <= 3
-                              ? "text-amber-600"
-                              : "text-neutral-500"
-                          }`}
-                        >
+                      {!loadingStock && isPhysical && stock !== undefined && (
+                        <p className="text-xs mt-1 text-red-600">
                           {stock === 0
                             ? "Out of stock"
-                            : item.quantity > stock
-                            ? `Only ${stock} left — please reduce quantity`
-                            : stock <= 3
-                            ? `Only ${stock} left`
-                            : `${stock} in stock`}
+                            : `Only ${stock} left`}
                         </p>
                       )}
 
-                      {/* QUANTITY */}
+                      {!isPhysical && (
+                        <p className="text-xs mt-1 text-neutral-500">
+                          Made to order
+                        </p>
+                      )}
+
                       <div className="flex items-center gap-3 mt-2">
                         <button
                           onClick={() =>
@@ -191,12 +190,21 @@ export default function CartPage() {
 
                         <button
                           onClick={() => {
-                            if (stock !== undefined && item.quantity >= stock)
+                            if (
+                              isPhysical &&
+                              stock !== undefined &&
+                              item.quantity >= stock
+                            )
                               return;
+
                             updateQuantity(item.id, item.quantity + 1);
                           }}
                           className="px-3 py-1 rounded-full border border-[#5DA865]/40 hover:bg-[#5DA865]/10"
-                          disabled={stock !== undefined && item.quantity >= stock}
+                          disabled={
+                            isPhysical &&
+                            stock !== undefined &&
+                            item.quantity >= stock
+                          }
                         >
                           +
                         </button>
@@ -219,29 +227,6 @@ export default function CartPage() {
             })}
           </ul>
 
-          {/* DELIVERY */}
-          <div className="border border-[#5DA865]/20 rounded-lg p-4 bg-white">
-            <h3 className="font-semibold text-[#111] mb-3">Delivery Method</h3>
-
-            <label className="flex items-center gap-3">
-              <input type="radio" checked readOnly className="w-4 h-4" />
-              <span className="text-sm text-[#111]">
-                Pick up in store — Pages & Peace Bookshop
-              </span>
-            </label>
-
-            <p className="text-xs text-neutral-600 mt-2">
-              Delivery options coming soon.
-            </p>
-          </div>
-
-          {/* TOTAL */}
-          <div className="flex items-center justify-between text-lg font-semibold text-[#111] pt-4">
-            <p>Total:</p>
-            <p>£{total.toFixed(2)}</p>
-          </div>
-
-          {/* CHECKOUT BUTTON */}
           <div className="flex flex-col sm:flex-row gap-4 pt-4">
             <Button
               variant="primary"
@@ -265,7 +250,6 @@ export default function CartPage() {
         </div>
       )}
 
-      {/* LOGIN POPUP */}
       <AuthPromptModal
         open={showAuth}
         onClose={() => setShowAuth(false)}

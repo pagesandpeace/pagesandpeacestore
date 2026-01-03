@@ -103,6 +103,7 @@ export default async function ShopPage({
   ------------------------------ */
   const CATEGORIES = [
     { key: "all", label: "All" },
+    { key: "bestsellers", label: "Bestsellers" }, 
     { key: "book", label: "Books" },
     { key: "blind-date", label: "Blind Date Books" },
     { key: "coffee", label: "Coffee" },

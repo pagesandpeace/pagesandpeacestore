@@ -9,9 +9,10 @@ type ProductForBuyNow = {
   id: string;
   slug: string;
   name: string;
-  price: number; // pounds
+  price: number;
   imageUrl: string;
   inventory_count?: number;
+  fulfilment_mode: "physical" | "made_to_order";
 };
 
 interface BuyNowProps {
@@ -27,6 +28,8 @@ export default function BuyNowButton({ product, qty }: BuyNowProps) {
 
   const stock = product.inventory_count ?? 0;
   const quantity = qty ?? 1;
+
+  const isPhysical = product.fulfilment_mode === "physical";
 
   /* ---------------------------------------------------------
      AUTH UPDATE LISTENER
@@ -47,12 +50,13 @@ export default function BuyNowButton({ product, qty }: BuyNowProps) {
      BUY NOW HANDLER
   --------------------------------------------------------- */
   async function handleBuyNow() {
-    if (stock <= 0) {
+    // ❌ Block ONLY physical products with no stock
+    if (isPhysical && stock <= 0) {
       alert("Sorry — this item is currently out of stock.");
       return;
     }
 
-    if (quantity > stock) {
+    if (isPhysical && quantity > stock) {
       alert(`Only ${stock} available.`);
       return;
     }
@@ -72,7 +76,7 @@ export default function BuyNowButton({ product, qty }: BuyNowProps) {
       return;
     }
 
-    // 2. SEND TO YOUR PRODUCT CHECKOUT ROUTE
+    // 2. START CHECKOUT
     const checkoutRes = await fetch("/api/products/start-checkout", {
       method: "POST",
       credentials: "include",
@@ -80,7 +84,7 @@ export default function BuyNowButton({ product, qty }: BuyNowProps) {
       body: JSON.stringify({
         productId: product.id,
         name: product.name,
-        quantity, // ✔ FIXED (was qty)
+        quantity,
         price: product.price,
         imageUrl: product.imageUrl || null,
       }),
@@ -95,7 +99,7 @@ export default function BuyNowButton({ product, qty }: BuyNowProps) {
       return;
     }
 
-    // 3. REDIRECT TO STRIPE CHECKOUT
+    // 3. REDIRECT TO STRIPE
     window.location.href = data.url;
   }
 
@@ -109,9 +113,13 @@ export default function BuyNowButton({ product, qty }: BuyNowProps) {
         size="lg"
         className="w-full"
         onClick={handleBuyNow}
-        disabled={loading || stock <= 0}
+        disabled={loading || (isPhysical && stock <= 0)}
       >
-        {stock <= 0 ? "Out of Stock" : loading ? "Processing…" : "Buy Now"}
+        {loading
+          ? "Processing…"
+          : isPhysical && stock <= 0
+          ? "Out of Stock"
+          : "Buy Now"}
       </Button>
 
       <AuthPromptModal

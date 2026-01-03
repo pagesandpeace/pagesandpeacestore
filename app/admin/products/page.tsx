@@ -3,37 +3,89 @@ export const dynamic = "force-dynamic";
 import { supabaseServer } from "@/lib/supabase/server";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { redirect } from "next/navigation";
+import AdminProductFilterBar from "./AdminProductFilterBar";
 
-export const metadata = {
-  title: "Products | Pages & Peace",
-  robots: { index: false, follow: false },
+/* ------------------------------------
+   TYPES
+------------------------------------ */
+
+type SearchParams = {
+  search?: string;
+  status?: string;
+  page?: string;
 };
+
+type ProductRow = {
+  id: string;
+  name: string;
+  display_title: string | null;
+  price: number;
+  inventory_count: number | null;
+  fulfilment_mode: "physical" | "made_to_order";
+  product_type: string;
+  created_at: string;
+};
+
+type StockMovement = {
+  product_id: string;
+  reason: string;
+  created_at: string;
+};
+
+type ProductStatus = "out" | "made_to_order" | "low" | "in_stock";
 
 const PAGE_SIZE = 20;
 
-const PRODUCT_TYPE_LABELS: Record<string, string> = {
-  merch: "Merch",
-  book: "Book",
-  other: "Other",
-};
+/* ------------------------------------
+   STATUS LOGIC
+------------------------------------ */
 
-type RawSearchParams = {
-  search?: string;
-  page?: string;
-};
+function deriveStatus(p: ProductRow): ProductStatus {
+  if (p.fulfilment_mode === "made_to_order") {
+    return "made_to_order";
+  }
+
+  const qty = p.inventory_count ?? 0;
+
+  if (qty === 0) return "out";
+  if (qty <= 3) return "low";
+  return "in_stock";
+}
+
+
+function statusRank(status: ProductStatus): number {
+  return ["out", "made_to_order", "low", "in_stock"].indexOf(status);
+}
+
+function statusBadge(status: ProductStatus) {
+  switch (status) {
+    case "out":
+      return { label: "Out of stock", color: "red" as const };
+    case "made_to_order":
+      return { label: "Made to order", color: "blue" as const };
+    case "low":
+      return { label: "Low stock", color: "yellow" as const };
+    default:
+      return { label: "In stock", color: "green" as const };
+  }
+}
+
+/* ====================================
+   PAGE
+==================================== */
 
 export default async function AdminProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<RawSearchParams>;
+  searchParams: Promise<SearchParams>;
 }) {
   const supabase = await supabaseServer();
-
-  // ✅ MUST AWAIT IN NEXT 15
   const params = await searchParams;
 
   const search = params.search?.trim() ?? "";
+  const statusFilter = (params.status ?? "all") as ProductStatus | "all";
   const page = Math.max(Number(params.page ?? 1), 1);
 
   const from = (page - 1) * PAGE_SIZE;
@@ -47,14 +99,55 @@ export default async function AdminProductsPage({
     .range(from, to);
 
   if (search) {
-    query = query.ilike("name", `%${search}%`);
+    query = query.or(
+      `display_title.ilike.%${search}%,name.ilike.%${search}%`
+    );
   }
 
   const { data: products, count, error } = await query;
 
-  if (error) {
-    console.error("PRODUCT FETCH ERROR:", error);
+  if (error || !products) {
+    console.error("ADMIN PRODUCTS FETCH ERROR:", error);
+    return null;
   }
+
+  /* ------------------------------------
+     FETCH LAST STOCK MOVEMENTS
+  ------------------------------------ */
+
+  const productIds = products.map((p) => p.id);
+
+  const { data: movements } = await supabase
+    .from("stock_movements")
+    .select("product_id, reason, created_at")
+    .in("product_id", productIds)
+    .order("created_at", { ascending: false });
+
+  const lastMovementByProduct: Record<string, StockMovement> = {};
+
+  movements?.forEach((m: StockMovement) => {
+    if (!lastMovementByProduct[m.product_id]) {
+      lastMovementByProduct[m.product_id] = m;
+    }
+  });
+
+  /* ------------------------------------
+     ENRICH + FILTER + SORT
+  ------------------------------------ */
+
+  const enriched = products
+    .map((p: ProductRow) => {
+      const status = deriveStatus(p);
+      return {
+        ...p,
+        status,
+        lastMovement: lastMovementByProduct[p.id] ?? null,
+      };
+    })
+    .filter(
+      (p) => statusFilter === "all" || p.status === statusFilter
+    )
+    .sort((a, b) => statusRank(a.status) - statusRank(b.status));
 
   const totalPages = count ? Math.ceil(count / PAGE_SIZE) : 1;
 
@@ -62,105 +155,84 @@ export default async function AdminProductsPage({
     redirect(`/admin/products?page=${totalPages}`);
   }
 
+  /* ------------------------------------
+     RENDER
+  ------------------------------------ */
+
   return (
-    <main className="max-w-6xl mx-auto py-10 px-6 space-y-8">
+    <main className="max-w-7xl mx-auto py-10 px-6 space-y-8">
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-4">
+      <div className="flex justify-between items-center border-b pb-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-wide">Products</h1>
-          <p className="text-neutral-600 text-sm">
-            Manage shop products and track inventory.
+          <h1 className="text-3xl font-semibold">Products</h1>
+          <p className="text-sm text-neutral-600">
+            Inventory & fulfilment overview
           </p>
         </div>
 
-        <div className="flex gap-3">
-          <form action="/admin/products" method="get">
-            <input
-              type="text"
-              name="search"
-              defaultValue={search}
-              placeholder="Search products…"
-              className="border rounded-md px-3 py-2 text-sm w-64"
-            />
-          </form>
-
-          <Link href="/admin/products/new">
-            <Button variant="primary">+ Add Product</Button>
-          </Link>
-        </div>
+        <Link href="/admin/products/new">
+          <Button>+ Add Product</Button>
+        </Link>
       </div>
 
+      {/* FILTER BAR */}
+      <AdminProductFilterBar />
+
       {/* TABLE */}
-      <div className="overflow-x-auto border rounded-lg bg-white shadow-sm">
+      <div className="border rounded-lg bg-white overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#f4f0ea] text-left text-xs uppercase tracking-wide text-[#444]">
+          <thead className="bg-[#f4f0ea] text-xs uppercase text-[#444]">
             <tr>
               <th className="px-4 py-3">Product</th>
-              <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3">Price</th>
               <th className="px-4 py-3">Inventory</th>
-              <th className="px-4 py-3 w-28">Actions</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Last movement</th>
+              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
 
           <tbody>
-            {products?.map((p) => {
-              const low = p.inventory_count <= 3;
-              const out = p.inventory_count <= 0;
+            {enriched.map((p) => {
+              const badge = statusBadge(p.status);
 
               return (
-                <tr
-                  key={p.id}
-                  className="border-t hover:bg-[#faf8f5] transition"
-                >
-                  {/* PRODUCT */}
-                  <td className="px-4 py-3 flex items-center gap-3">
-                    {p.image_url && (
-                      <img
-                        src={p.image_url}
-                        alt={p.name}
-                        className="w-10 h-10 rounded object-cover border"
-                      />
-                    )}
-                    <span className="font-medium">{p.name}</span>
+                <tr key={p.id} className="border-t hover:bg-[#faf8f5]">
+                  <td className="px-4 py-3 font-medium">
+                    {p.display_title || p.name}
                   </td>
 
-                  {/* TYPE */}
-                  <td className="px-4 py-3">
-                    {PRODUCT_TYPE_LABELS[p.product_type] ?? p.product_type}
-                  </td>
-
-                  {/* PRICE */}
                   <td className="px-4 py-3">
                     £{Number(p.price).toFixed(2)}
                   </td>
 
-                  {/* INVENTORY + STATUS */}
                   <td className="px-4 py-3">
-                    <span className="font-medium">
-                      {out ? "0" : p.inventory_count}
-                    </span>
-
-                    {out ? (
-                      <span className="ml-2 inline-block px-2 py-0.5 text-xs rounded-full bg-red-200 text-red-800 border border-red-300">
-                        Out
-                      </span>
-                    ) : low ? (
-                      <span className="ml-2 inline-block px-2 py-0.5 text-xs rounded-full bg-yellow-200 text-yellow-800 border border-yellow-300">
-                        Low
-                      </span>
-                    ) : (
-                      <span className="ml-2 inline-block px-2 py-0.5 text-xs rounded-full bg-green-200 text-green-800 border border-green-300">
-                        In Stock
-                      </span>
-                    )}
+                    {p.inventory_count ?? 0}
                   </td>
 
-                  {/* ACTIONS */}
+                  <td className="px-4 py-3">
+                    <Link href={`/admin/products?status=${p.status}`}>
+                      <Badge
+                        color={badge.color}
+                        className="cursor-pointer hover:opacity-80"
+                      >
+                        {badge.label}
+                      </Badge>
+                    </Link>
+                  </td>
+
+                  <td className="px-4 py-3 text-xs text-neutral-600">
+                    {p.lastMovement
+                      ? `${p.lastMovement.reason} · ${new Date(
+                          p.lastMovement.created_at
+                        ).toLocaleDateString()}`
+                      : "—"}
+                  </td>
+
                   <td className="px-4 py-3">
                     <Link href={`/admin/products/${p.id}`}>
-                      <Button variant="neutral" size="sm">
-                        Edit
+                      <Button size="sm" variant="neutral">
+                        View
                       </Button>
                     </Link>
                   </td>
@@ -170,39 +242,12 @@ export default async function AdminProductsPage({
           </tbody>
         </table>
 
-        {products?.length === 0 && (
+        {enriched.length === 0 && (
           <p className="p-6 text-neutral-600 text-center">
-            No products found.
+            No products match your filters.
           </p>
         )}
       </div>
-
-      {/* PAGINATION */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 pt-4">
-          <Link
-            href={`/admin/products?search=${encodeURIComponent(search)}&page=${page - 1}`}
-            aria-disabled={page <= 1}
-          >
-            <Button variant="neutral" disabled={page <= 1}>
-              Previous
-            </Button>
-          </Link>
-
-          <span className="text-sm text-neutral-600">
-            Page {page} of {totalPages}
-          </span>
-
-          <Link
-            href={`/admin/products?search=${encodeURIComponent(search)}&page=${page + 1}`}
-            aria-disabled={page >= totalPages}
-          >
-            <Button variant="neutral" disabled={page >= totalPages}>
-              Next
-            </Button>
-          </Link>
-        </div>
-      )}
     </main>
   );
 }

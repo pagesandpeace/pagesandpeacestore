@@ -25,6 +25,8 @@ type ProductDetailProps = {
     image_url: string | null;
     description?: string | null;
     product_type: string;
+
+    fulfilment_mode: "physical" | "made_to_order";
     inventory_count?: number;
 
     // relational data
@@ -60,6 +62,9 @@ export default function ProductDetail({ product }: ProductDetailProps) {
   const themeName = product.theme?.name ?? null;
   const genreName = product.genre?.name ?? null;
 
+  const stock = product.inventory_count ?? 0;
+  const isPhysical = product.fulfilment_mode === "physical";
+
   const cartProduct = {
     id: product.id,
     slug: product.slug,
@@ -69,7 +74,8 @@ export default function ProductDetail({ product }: ProductDetailProps) {
         ? Number(product.price)
         : product.price,
     imageUrl: product.image_url ?? "",
-    inventory_count: product.inventory_count,
+    inventory_count: stock,
+    fulfilment_mode: product.fulfilment_mode,
   };
 
   return (
@@ -101,8 +107,6 @@ export default function ProductDetail({ product }: ProductDetailProps) {
       {/* META */}
       {isBookLike && (
         <div className="mt-4 space-y-3 text-sm text-foreground/80">
-
-          {/* AUTHOR CARD */}
           {!isBlindDate && product.author && (
             <Link
               href={`/authors/${product.author.slug}`}
@@ -121,9 +125,7 @@ export default function ProductDetail({ product }: ProductDetailProps) {
               )}
 
               <div>
-                <p className="font-medium">
-                  {product.author.name}
-                </p>
+                <p className="font-medium">{product.author.name}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {product.author.short_bio ??
                     "Discover more books by this author"}
@@ -163,16 +165,19 @@ export default function ProductDetail({ product }: ProductDetailProps) {
         <PriceDisplay price={cartProduct.price} />
       </div>
 
-      {/* STOCK */}
+      {/* STOCK STATUS */}
       <div className="my-4">
-        <StockStatus count={product.inventory_count} />
+        <StockStatus
+          count={stock}
+          fulfilmentMode={product.fulfilment_mode}
+        />
       </div>
 
-      {/* QTY */}
+      {/* QUANTITY */}
       <QuantitySelector
         qty={qty}
         setQty={setQty}
-        max={product.inventory_count}
+        max={isPhysical ? stock : undefined}
       />
 
       {/* ACTIONS */}

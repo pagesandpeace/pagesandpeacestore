@@ -1,23 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    typedRoutes: false,
-    typedEnv: false,
-  },
-
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // moved out of experimental
+  typedRoutes: false,
 
   images: {
-    domains: [
-      "res.cloudinary.com",
-      "lh3.googleusercontent.com",
-      "pagesandpeace.supabase.co", // Supabase public bucket
-      "utfs.io", // Vercel Blob / UploadThing
-      "imgs.search.brave.com", // If fallback URLs ever come from Brave CDN
-    ],
-
     remotePatterns: [
       {
         protocol: "https",
@@ -37,6 +23,11 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "utfs.io",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "imgs.search.brave.com",
         pathname: "/**",
       },
     ],

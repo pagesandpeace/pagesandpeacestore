@@ -9,18 +9,48 @@ import { TextArea } from "@/components/ui/TextArea";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 
+import AuthorSearchSelect from "@/components/admin/AuthorSearchSelect";
+import SupplierLinkSection from "@/components/admin/SupplierLinkSection";
+import PricingAssistant from "@/components/admin/PricingAssistant";
+
+/* ---------------------------------------------------
+   TYPES
+--------------------------------------------------- */
 type ProductType = "book" | "blind-date" | "merch" | "other";
+type FulfilmentMode = "made_to_order" | "physical";
+type CommercialModel = "wholesale" | "consignment" | "owned_stock";
+type OutOfStockBehavior = "stop_selling" | "switch_to_made_to_order";
 
 type CategoryOption = {
   id: string;
   name: string;
 };
 
+/* ---------------------------------------------------
+   CONFIG
+--------------------------------------------------- */
+const DEFAULT_MARKUP_PERCENT = 30;
+
+/* ---------------------------------------------------
+   HELPERS
+--------------------------------------------------- */
+function calculateRetailPrice(
+  supplierPrice: number,
+  markupPercent: number
+) {
+  if (supplierPrice <= 0 || markupPercent < 0) return 0;
+  return Math.ceil(supplierPrice * (1 + markupPercent / 100));
+}
+
+/* ---------------------------------------------------
+   COMPONENT
+--------------------------------------------------- */
 export default function AdminCreateProductPage() {
   const router = useRouter();
   const params = useParams();
 
   const productType = params.type as ProductType;
+  const isBookLike = productType === "book" || productType === "blind-date";
 
   /* -------------------------------
      Guard rail
@@ -31,22 +61,41 @@ export default function AdminCreateProductPage() {
     }
   }, [productType, router]);
 
-  const isBookLike = productType === "book" || productType === "blind-date";
-
   /* -------------------------------
      Form state
   -------------------------------- */
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+
+  // 🔹 supplier link (NEW)
+  const [supplier, setSupplier] = useState("");
+  const [supplierRef, setSupplierRef] = useState("");
+
+  // pricing
+  const [supplierPrice, setSupplierPrice] = useState<number>(0);
+  const [markupPercent, setMarkupPercent] =
+    useState<number>(DEFAULT_MARKUP_PERCENT);
   const [price, setPrice] = useState<number>(0);
+
+  // fulfilment
+  const [fulfilmentMode, setFulfilmentMode] =
+    useState<FulfilmentMode>("made_to_order");
   const [inventoryCount, setInventoryCount] = useState<number>(0);
 
-  // Book / Blind-date fields
-  const [author, setAuthor] = useState("");
+  // commercial
+  const [commercialModel, setCommercialModel] =
+    useState<CommercialModel>("wholesale");
+
+  // out of stock behaviour
+  const [outOfStockBehavior, setOutOfStockBehavior] =
+    useState<OutOfStockBehavior>("stop_selling");
+
+  // book / blind-date
+  const [authorId, setAuthorId] = useState<string | null>(null);
   const [format, setFormat] = useState("Paperback");
   const [language, setLanguage] = useState("English");
 
-  // Categories
+  // categories
   const [genreId, setGenreId] = useState("");
   const [vibeId, setVibeId] = useState("");
   const [themeId, setThemeId] = useState("");
@@ -55,7 +104,7 @@ export default function AdminCreateProductPage() {
   const [vibes, setVibes] = useState<CategoryOption[]>([]);
   const [themes, setThemes] = useState<CategoryOption[]>([]);
 
-  // Image upload
+  // image upload
   const [imageUrl, setImageUrl] = useState("");
   const [uploading, setUploading] = useState(false);
 
@@ -69,21 +118,19 @@ export default function AdminCreateProductPage() {
     if (!isBookLike) return;
 
     async function loadSupportingData() {
-      try {
-        const res = await fetch("/api/admin/products/supporting-data", {
-          credentials: "include",
-        });
+      const res = await fetch("/api/admin/products/supporting-data", {
+        credentials: "include",
+      });
 
-        if (!res.ok) throw new Error("Failed to load categories");
-
-        const data = await res.json();
-        setGenres(data.genres || []);
-        setVibes(data.vibes || []);
-        setThemes(data.themes || []);
-      } catch (err) {
-        console.error(err);
-        setErrorMsg("Failed to load category data.");
+      if (!res.ok) {
+        setErrorMsg("Failed to load categories.");
+        return;
       }
+
+      const data = await res.json();
+      setGenres(data.genres || []);
+      setVibes(data.vibes || []);
+      setThemes(data.themes || []);
     }
 
     loadSupportingData();
@@ -129,27 +176,47 @@ export default function AdminCreateProductPage() {
 
     if (!name || price <= 0) {
       setSubmitting(false);
-      setErrorMsg("Name and price are required.");
+      setErrorMsg("Name and retail price are required.");
+      return;
+    }
+
+    if (isBookLike && (!genreId || !vibeId || !themeId)) {
+      setSubmitting(false);
+      setErrorMsg("Genre, vibe and theme are required for books.");
       return;
     }
 
     const payload: Record<string, unknown> = {
       name,
       description,
-      price,
-      inventory_count: inventoryCount,
-      image_url: imageUrl,
       product_type: productType,
+      image_url: imageUrl || null,
+
+      supplier_price: supplierPrice || null,
+      markup_percent: markupPercent,
+      price,
+
+      fulfilment_mode: fulfilmentMode,
+      commercial_model: commercialModel,
+      supply_source:
+        fulfilmentMode === "made_to_order" ? "supplier" : "stock",
+
+      out_of_stock_behavior: outOfStockBehavior,
+      inventory_count:
+        fulfilmentMode === "physical" ? inventoryCount : 0,
+
+      // 🔹 supplier link
+      supplier,
+      supplier_ref: supplierRef,
     };
 
     if (isBookLike) {
-      payload.author = author || null;
+      payload.author_id = authorId || null;
       payload.format = format || null;
       payload.language = language || null;
-
-      payload.genre_id = genreId || null;
-      payload.vibe_id = vibeId || null;
-      payload.theme_id = themeId || null;
+      payload.genre_id = genreId;
+      payload.vibe_id = vibeId;
+      payload.theme_id = themeId;
     }
 
     const res = await fetch("/api/admin/products/create", {
@@ -159,8 +226,6 @@ export default function AdminCreateProductPage() {
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      console.error("CREATE PRODUCT FAILED:", text);
       setSubmitting(false);
       setErrorMsg("Failed to create product.");
       return;
@@ -180,13 +245,11 @@ export default function AdminCreateProductPage() {
 
       {errorMsg && <Alert type="error" message={errorMsg} />}
 
-      {/* NAME */}
       <div>
         <label className="block mb-1 text-sm font-medium">Name *</label>
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </div>
 
-      {/* DESCRIPTION */}
       <div>
         <label className="block mb-1 text-sm font-medium">Description</label>
         <TextArea
@@ -200,7 +263,12 @@ export default function AdminCreateProductPage() {
       <div>
         <label className="block mb-1 text-sm font-medium">Product Image</label>
         <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition">
-          <input type="file" className="hidden" accept="image/*" onChange={handleUpload} />
+          <input
+            type="file"
+            className="hidden"
+            accept="image/*"
+            onChange={handleUpload}
+          />
           <span className="text-sm text-gray-500">
             {uploading ? "Uploading…" : "Click to upload image"}
           </span>
@@ -219,63 +287,177 @@ export default function AdminCreateProductPage() {
         )}
       </div>
 
-      {/* BOOK / BLIND-DATE FIELDS */}
+      {/* SUPPLIER (NEW) */}
+      <SupplierLinkSection
+        supplier={supplier}
+        supplierRef={supplierRef}
+        onChange={(key, value) =>
+          key === "supplier"
+            ? setSupplier(value)
+            : setSupplierRef(value)
+        }
+      />
+
+      {/* FULFILMENT */}
+      <div>
+        <label className="block mb-1 text-sm font-medium">Fulfilment</label>
+        <select
+          className="w-full border rounded-md px-3 py-2 text-sm"
+          value={fulfilmentMode}
+          onChange={(e) =>
+            setFulfilmentMode(e.target.value as FulfilmentMode)
+          }
+        >
+          <option value="made_to_order">
+            Made to order (supplier fulfilment)
+          </option>
+          <option value="physical">Physical stock (in shop)</option>
+        </select>
+      </div>
+
+      {/* COMMERCIAL */}
+      <div>
+        <label className="block mb-1 text-sm font-medium">
+          Commercial model
+        </label>
+        <select
+          className="w-full border rounded-md px-3 py-2 text-sm"
+          value={commercialModel}
+          onChange={(e) =>
+            setCommercialModel(e.target.value as CommercialModel)
+          }
+        >
+          <option value="wholesale">Supplier / trade</option>
+          <option value="consignment">Consignment</option>
+          <option value="owned_stock">Owned stock</option>
+        </select>
+      </div>
+
+      {/* OUT OF STOCK */}
+      <div>
+        <label className="block mb-1 text-sm font-medium">
+          When stock reaches zero
+        </label>
+        <select
+          className="w-full border rounded-md px-3 py-2 text-sm"
+          value={outOfStockBehavior}
+          onChange={(e) =>
+            setOutOfStockBehavior(e.target.value as OutOfStockBehavior)
+          }
+        >
+          <option value="stop_selling">Stop selling</option>
+          <option value="switch_to_made_to_order">
+            Switch to made-to-order
+          </option>
+        </select>
+      </div>
+
+      {fulfilmentMode === "physical" && (
+        <div>
+          <label className="block mb-1 text-sm font-medium">
+            Inventory Count
+          </label>
+          <Input
+            type="number"
+            value={inventoryCount}
+            onChange={(e) =>
+              setInventoryCount(Number(e.target.value))
+            }
+          />
+        </div>
+      )}
+
+      {/* PRICING (REPLACED) */}
+      <PricingAssistant
+        supplierPrice={supplierPrice}
+        markupPercent={markupPercent}
+        price={price}
+        onSupplierPriceChange={(v) => {
+          setSupplierPrice(v);
+          setPrice(calculateRetailPrice(v, markupPercent));
+        }}
+        onMarkupChange={(v) => {
+          setMarkupPercent(v);
+          setPrice(calculateRetailPrice(supplierPrice, v));
+        }}
+        onPriceChange={setPrice}
+      />
+
+      {/* BOOK */}
       {isBookLike && (
         <>
           <div>
             <label className="block mb-1 text-sm font-medium">Author</label>
-            <Input value={author} onChange={(e) => setAuthor(e.target.value)} />
+            <AuthorSearchSelect value={authorId} onChange={setAuthorId} />
           </div>
 
           <div>
             <label className="block mb-1 text-sm font-medium">Language</label>
-            <Input value={language} onChange={(e) => setLanguage(e.target.value)} />
+            <Input
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            />
           </div>
 
           <div>
             <label className="block mb-1 text-sm font-medium">Format</label>
-            <Input value={format} onChange={(e) => setFormat(e.target.value)} />
+            <Input
+              value={format}
+              onChange={(e) => setFormat(e.target.value)}
+            />
           </div>
 
           <div>
-            <label className="block mb-1 text-sm font-medium">Genre</label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm" value={genreId} onChange={(e) => setGenreId(e.target.value)}>
-              <option value="">Select genre</option>
-              {genres.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </div>
+  <label className="block mb-1 text-sm font-medium">Genre *</label>
+  <select
+    className="w-full border rounded-md px-3 py-2"
+    value={genreId}
+    onChange={(e) => setGenreId(e.target.value)}
+  >
+    <option value="">Select genre</option>
+    {genres.map((g) => (
+      <option key={g.id} value={g.id}>
+        {g.name}
+      </option>
+    ))}
+  </select>
+</div>
 
-          <div>
-            <label className="block mb-1 text-sm font-medium">Vibe</label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm" value={vibeId} onChange={(e) => setVibeId(e.target.value)}>
-              <option value="">Select vibe</option>
-              {vibes.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
-          </div>
+<div>
+  <label className="block mb-1 text-sm font-medium">Vibe *</label>
+  <select
+    className="w-full border rounded-md px-3 py-2"
+    value={vibeId}
+    onChange={(e) => setVibeId(e.target.value)}
+  >
+    <option value="">Select vibe</option>
+    {vibes.map((v) => (
+      <option key={v.id} value={v.id}>
+        {v.name}
+      </option>
+    ))}
+  </select>
+</div>
 
-          <div>
-            <label className="block mb-1 text-sm font-medium">Theme</label>
-            <select className="w-full border rounded-md px-3 py-2 text-sm" value={themeId} onChange={(e) => setThemeId(e.target.value)}>
-              <option value="">Select theme</option>
-              {themes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
+<div>
+  <label className="block mb-1 text-sm font-medium">Theme *</label>
+  <select
+    className="w-full border rounded-md px-3 py-2"
+    value={themeId}
+    onChange={(e) => setThemeId(e.target.value)}
+  >
+    <option value="">Select theme</option>
+    {themes.map((t) => (
+      <option key={t.id} value={t.id}>
+        {t.name}
+      </option>
+    ))}
+  </select>
+</div>
+
         </>
       )}
 
-      {/* PRICE */}
-      <div>
-        <label className="block mb-1 text-sm font-medium">Price (£)</label>
-        <Input type="number" step="0.01" value={price} onChange={(e) => setPrice(Number(e.target.value))} />
-      </div>
-
-      {/* INVENTORY */}
-      <div>
-        <label className="block mb-1 text-sm font-medium">Inventory Count</label>
-        <Input type="number" value={inventoryCount} onChange={(e) => setInventoryCount(Number(e.target.value))} />
-      </div>
-
-      {/* ACTIONS */}
       <div className="flex gap-4 pt-4">
         <Button onClick={handleSubmit} disabled={submitting}>
           {submitting ? "Creating…" : "Create Product"}

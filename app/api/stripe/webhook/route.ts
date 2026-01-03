@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { sendOrderConfirmationEmail } from "@/lib/email/sendOrderConfirmationEmail";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /* -----------------------------------------------------
-   DEBUG HELPERS (NEW)
+   DEBUG HELPERS
 ----------------------------------------------------- */
 function logWebhook(message: string, data?: unknown) {
   console.log(`🔔 WEBHOOK | ${message}`, data ?? "");
@@ -51,27 +52,6 @@ async function readRawBody(stream: ReadableStream | null): Promise<Buffer> {
 }
 
 /* -----------------------------------------------------
-   PAYMENT DETAILS
------------------------------------------------------ */
-async function getPaymentDetails(paymentIntentId: string) {
-  const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
-    expand: ["latest_charge"],
-  });
-
-  const charge = pi.latest_charge as Stripe.Charge | null;
-
-  return {
-    stripe_receipt_url: charge?.receipt_url ?? null,
-    stripe_card_brand: charge?.payment_method_details?.card?.brand ?? null,
-    stripe_last4: charge?.payment_method_details?.card?.last4 ?? null,
-    paid_at:
-      typeof charge?.created === "number"
-        ? new Date(charge.created * 1000).toISOString()
-        : null,
-  };
-}
-
-/* -----------------------------------------------------
    TYPES
 ----------------------------------------------------- */
 type ParsedProductItem = {
@@ -87,17 +67,10 @@ type ParsedProductItem = {
 export async function POST(req: Request) {
   logWebhook("Webhook hit");
 
-  logWebhook("Supabase URL", process.env.SUPABASE_URL);
-  logWebhook(
-    "Service role key present",
-    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
-  );
-
   const signature = req.headers.get("stripe-signature");
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!signature || !secret) {
-    console.error("❌ Missing Stripe signature or secret");
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
@@ -106,110 +79,91 @@ export async function POST(req: Request) {
   try {
     const rawBody = await readRawBody(req.body);
     stripeEvent = stripe.webhooks.constructEvent(rawBody, signature, secret);
-  } catch (err) {
-    console.error("❌ Stripe signature verification failed", err);
+  } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  logWebhook("Stripe event received", {
-    type: stripeEvent.type,
-    id: stripeEvent.id,
-  });
-
   if (stripeEvent.type !== "checkout.session.completed") {
-    logWebhook("Ignoring non-checkout event");
     return NextResponse.json({ received: true });
   }
 
   const session = stripeEvent.data.object as Stripe.Checkout.Session;
   const md = session.metadata ?? {};
 
-  logWebhook("Checkout metadata", md);
-
   if (!md.userId || !md.kind) {
-    console.warn("⚠️ Missing metadata, skipping", session.id);
     return NextResponse.json({ received: true });
   }
 
   /* -----------------------------------------------------
-     Idempotency
+     Advisory lock (retry safety)
   ----------------------------------------------------- */
-  const { data: existing } = await supabase
-    .from("orders")
-    .select("id")
-    .eq("stripe_checkout_session_id", session.id)
-    .maybeSingle();
-
-  if (existing) {
-    logWebhook("Order already exists, skipping", existing.id);
-    return NextResponse.json({ received: true });
-  }
+  await supabase.rpc("lock_checkout_session", {
+    session_id: session.id,
+  });
 
   /* -----------------------------------------------------
      Resolve internal user
   ----------------------------------------------------- */
-  const { data: user, error: userErr } = await supabase
+  const { data: user } = await supabase
     .from("users")
     .select("id")
     .eq("auth_user_id", md.userId)
     .single();
 
-  if (userErr || !user) {
-    console.error("❌ User resolution failed", userErr);
+  if (!user) return NextResponse.json({ received: true });
+
+  /* -----------------------------------------------------
+     Find or create order
+  ----------------------------------------------------- */
+  const { data: existingOrder } = await supabase
+    .from("orders")
+    .select("id, inventory_processed, confirmation_email_sent")
+    .eq("stripe_checkout_session_id", session.id)
+    .maybeSingle();
+
+  const orderId = existingOrder?.id ?? crypto.randomUUID();
+
+  if (!existingOrder) {
+    await supabase.from("orders").insert({
+      id: orderId,
+      user_id: user.id,
+      user_id_uuid: md.userId,
+      total: (session.amount_total ?? 0) / 100,
+      status: "completed",
+      stripe_checkout_session_id: session.id,
+      stripe_payment_intent_id:
+        typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : null,
+      inventory_processed: false,
+      confirmation_email_sent: false,
+      is_test: !session.livemode,
+    });
+  }
+
+  if (existingOrder?.inventory_processed) {
+    logWebhook("Order already processed, exiting", orderId);
     return NextResponse.json({ received: true });
   }
 
-  logWebhook("Resolved user", user.id);
-
-  const orderId = crypto.randomUUID();
-  const paymentIntentId =
-    typeof session.payment_intent === "string"
-      ? session.payment_intent
-      : null;
-
-  const total = (session.amount_total ?? 0) / 100;
-
-  /* -----------------------------------------------------
-     Create order
-  ----------------------------------------------------- */
-  logWebhook("Creating order", { orderId, total });
-
-  await supabase.from("orders").insert({
-    id: orderId,
-    user_id: user.id,
-    user_id_uuid: md.userId,
-    total,
-    status: "completed",
-    stripe_checkout_session_id: session.id,
-    stripe_payment_intent_id: paymentIntentId,
-    is_test: !session.livemode,
-  });
-
-  if (paymentIntentId) {
-    const details = await getPaymentDetails(paymentIntentId);
-    await supabase.from("orders").update(details).eq("id", orderId);
-  }
-
   /* =====================================================
-     EVENT FLOW
+     EVENT FLOW (RESTORED – AUTHORITATIVE)
   ===================================================== */
   if (md.kind === "event") {
     logWebhook("Processing EVENT checkout");
 
     const quantity = Math.max(1, Number(md.quantity ?? 1));
 
-    const { data: eventRow, error: eventErr } = await supabase
+    const { data: eventRow } = await supabase
       .from("events")
       .select("id, title, product_id")
       .eq("id", md.eventId)
       .single();
 
-    if (eventErr || !eventRow || !eventRow.product_id) {
-      console.error("❌ Event or product_id missing", eventErr);
+    if (!eventRow || !eventRow.product_id) {
+      logWebhook("Event or product missing, skipping");
       return NextResponse.json({ received: true });
     }
-
-    logWebhook("Event resolved", eventRow);
 
     const orderItemId = crypto.randomUUID();
 
@@ -217,10 +171,10 @@ export async function POST(req: Request) {
       id: orderItemId,
       order_id: orderId,
       product_id: eventRow.product_id,
-      event_id: eventRow.id,
-      kind: "event",
+      event_id: eventRow.id,      // 🔥 REQUIRED
+      kind: "event",              // 🔥 REQUIRED
       quantity,
-      price: total / quantity,
+      price: (session.amount_total ?? 0) / 100 / quantity,
       name: eventRow.title,
       stripe_checkout_session_id: session.id,
     });
@@ -233,109 +187,123 @@ export async function POST(req: Request) {
       stripe_checkout_session_id: session.id,
       paid: true,
       cancelled: false,
-      quantity: 1,
       name: i === 0 ? null : `Guest ${i + 1}`,
     }));
 
     await supabase.from("event_bookings").insert(seats);
 
-    /* 🔽 INVENTORY DECREMENT — EVENT (DEBUG) 🔽 */
-    logStock("Attempting decrement (event)", {
-      productId: eventRow.product_id,
-      qty: quantity,
-    });
+    await supabase
+      .from("orders")
+      .update({ inventory_processed: true })
+      .eq("id", orderId);
 
-    const { error: eventStockErr } = await supabase.rpc(
-      "decrement_product_inventory",
-      {
-        p_product_id: eventRow.product_id,
-        p_quantity: quantity,
-        p_reason: "event_booking",
-        p_user_id: user.id,
-      }
-    );
+    const { data: emailLock } = await supabase
+      .from("orders")
+      .update({ confirmation_email_sent: true })
+      .eq("id", orderId)
+      .is("confirmation_email_sent", false)
+      .select("id")
+      .maybeSingle();
 
-    if (eventStockErr) {
-      console.error("❌ STOCK RPC FAILED (event)", eventStockErr);
-    } else {
-      logStock("Decrement successful (event)", eventRow.product_id);
+    if (emailLock) {
+      await sendOrderConfirmationEmail(orderId);
+      logWebhook("Event confirmation email sent", { orderId });
     }
-    /* 🔼 END INVENTORY DECREMENT — EVENT 🔼 */
 
-    await sendOrderConfirmationEmail(orderId);
-    logWebhook("EVENT checkout complete");
     return NextResponse.json({ received: true });
   }
 
   /* =====================================================
-     PRODUCT / CART FLOW
+     PRODUCT / CART FLOW (UNCHANGED)
   ===================================================== */
-  if (md.kind === "product" || md.kind === "cart") {
-    logWebhook("Processing PRODUCT/CART checkout");
 
-    let items: ParsedProductItem[] = [];
+  let items: ParsedProductItem[] = [];
 
-    if (md.items?.trim().startsWith("[")) {
-      items = JSON.parse(md.items);
-    } else if (md.items?.includes("|")) {
-      const [productId, name, qty, price] = md.items.split("|");
-
-      items = [
-        {
-          productId,
-          name: name?.trim() ?? "Unknown product",
-          qty: Number(qty),
-          price: Number(price),
-        },
-      ];
-    } else {
-      console.error("❌ Invalid product metadata format", md.items);
-      return NextResponse.json({ received: true });
-    }
-
-    logWebhook("Parsed items", items);
-
-    for (const item of items) {
-      await supabase.from("order_items").insert({
-        id: crypto.randomUUID(),
-        order_id: orderId,
-        product_id: item.productId,
-        kind: "product",
-        quantity: item.qty,
-        price: item.price / 100,
-        name: item.name,
-        stripe_checkout_session_id: session.id,
-      });
-
-      /* 🔽 INVENTORY DECREMENT — PRODUCT/CART (DEBUG) 🔽 */
-      logStock("Attempting decrement (product/cart)", {
-        productId: item.productId,
-        qty: item.qty,
-      });
-
-      const { error: stockErr } = await supabase.rpc(
-        "decrement_product_inventory",
-        {
-          p_product_id: item.productId,
-          p_quantity: item.qty,
-          p_reason: "order",
-          p_user_id: user.id,
-        }
-      );
-
-      if (stockErr) {
-        console.error("❌ STOCK RPC FAILED (product/cart)", stockErr);
-      } else {
-        logStock("Decrement successful (product/cart)", item.productId);
-      }
-      /* 🔼 END INVENTORY DECREMENT — PRODUCT/CART 🔼 */
-    }
-
-    await sendOrderConfirmationEmail(orderId);
-    logWebhook("PRODUCT/CART checkout complete");
-    return NextResponse.json({ received: true });
+  if (md.items?.includes("|")) {
+    const [productId, name, qty, price] = md.items.split("|");
+    items = [{ productId, name, qty: Number(qty), price: Number(price) }];
+  } else {
+    items = JSON.parse(md.items || "[]");
   }
 
-  console.warn("⚠️ Unknown checkout kind", md.kind);
+  await supabase.from("order_items").delete().eq("order_id", orderId);
+
+  for (const item of items) {
+    await supabase.from("order_items").insert({
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      product_id: item.productId,
+      quantity: item.qty,
+      price: item.price / 100,
+      name: item.name,
+      kind: "product",
+      stripe_checkout_session_id: session.id,
+    });
+  }
+
+  for (const item of items) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("inventory_count, fulfilment_mode")
+      .eq("id", item.productId)
+      .maybeSingle();
+
+    if (!product) continue;
+
+    const fulfilmentMode = product.fulfilment_mode?.trim();
+
+    if (fulfilmentMode === "made_to_order") {
+      await supabase.from("customer_backorders").upsert(
+        {
+          order_id: orderId,
+          product_id: item.productId,
+          quantity: item.qty,
+          payment_status: "paid",
+          status: "awaiting_order",
+          order_date: new Date().toISOString().slice(0, 10),
+          customer_email: session.customer_details?.email ?? null,
+          customer_name: session.customer_details?.name ?? "Online customer",
+          customer_phone: session.customer_details?.phone ?? null,
+          payment_reference:
+            typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : session.id,
+          notes: "Created automatically from online order",
+          created_by: md.userId,
+        },
+        { onConflict: "order_id,product_id" }
+      );
+      continue;
+    }
+
+    const after = Number(product.inventory_count) - item.qty;
+    if (after < 0) return NextResponse.json({ received: true });
+
+    await supabase.rpc("adjust_product_inventory", {
+      p_product_id: item.productId,
+      p_new_quantity: after,
+      p_reason: "order",
+      p_user_id: user.id,
+    });
+  }
+
+  await supabase
+    .from("orders")
+    .update({ inventory_processed: true })
+    .eq("id", orderId);
+
+  const { data: emailLock } = await supabase
+    .from("orders")
+    .update({ confirmation_email_sent: true })
+    .eq("id", orderId)
+    .is("confirmation_email_sent", false)
+    .select("id")
+    .maybeSingle();
+
+  if (emailLock) {
+    await sendOrderConfirmationEmail(orderId);
+    logWebhook("Order confirmation email sent", { orderId });
+  }
+
   return NextResponse.json({ received: true });
 }

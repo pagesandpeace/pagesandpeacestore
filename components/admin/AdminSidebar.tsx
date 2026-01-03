@@ -121,8 +121,24 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
 
             <div className="mt-3 flex flex-col gap-3">
               <button onClick={() => handleNav("/admin/orders")} className="text-left hover:text-[#5DA865]">
-                Orders
+                Online Orders
               </button>
+
+              {/* NEW: Manual customer & supplier backorders (Gardners / phone / web) */}
+              <button
+                onClick={() => handleNav("/admin/backorders")}
+                className="text-left hover:text-[#5DA865]"
+              >
+                Place Backorder
+              </button>
+
+              <button
+                onClick={() => handleNav("/admin/supplier-orders")}
+                className="text-left hover:text-[#5DA865]"
+              >
+                Order status
+              </button>
+
             </div>
           </div>
 
@@ -146,6 +162,38 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
               </button>
             </div>
           </div>
+
+          {/* DATA */}
+          <div>
+            <span className="text-xs uppercase text-gray-500 tracking-wider">
+              Data
+            </span>
+
+            <div className="mt-3 flex flex-col gap-3">
+              <button
+                onClick={() => handleNav("/admin/suppliers/gardners")}
+                className="text-left hover:text-[#5DA865]"
+              >
+                Gardners Import
+              </button>
+
+              <button
+                onClick={() => handleNav("/admin/suppliers/gardners/catalogue")}
+                className="text-left hover:text-[#5DA865]"
+              >
+                Gardners Catalogue
+              </button>
+
+              <button
+                onClick={() => handleNav("/admin/supplier-changes")}
+                className="text-left hover:text-[#5DA865]"
+              >
+                Product Catalogue Changes
+              </button>
+
+            </div>
+          </div>
+
         </nav>
       </div>
 

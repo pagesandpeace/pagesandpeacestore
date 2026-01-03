@@ -23,15 +23,19 @@ type BlindDateProduct = {
   // inventory
   inventory_count: number;
 
+  // fulfilment (REQUIRED by cart / buy-now)
+  fulfilment_mode: "made_to_order";
+
   // images
   image_url?: string | null;
-  imageUrl: string; // 👈 REQUIRED by cart / buy-now buttons
+  imageUrl: string;
 
   // metadata
   genre_name?: string | null;
   vibe_name?: string | null;
   theme_name?: string | null;
 };
+
 
 /* ------------------------------------------
    COMPONENT
@@ -61,21 +65,18 @@ export default function BlindDateDetail({
 
       {/* Badges */}
       <div className="flex gap-3 mb-4">
-        {product.genre_name && (
-          <ProductBadge genre={product.genre_name} />
-        )}
-        {product.vibe_name && (
-          <ProductBadge genre={product.vibe_name} />
-        )}
-        {product.theme_name && (
-          <ProductBadge genre={product.theme_name} />
-        )}
+        {product.genre_name && <ProductBadge genre={product.genre_name} />}
+        {product.vibe_name && <ProductBadge genre={product.vibe_name} />}
+        {product.theme_name && <ProductBadge genre={product.theme_name} />}
       </div>
 
       <PriceDisplay price={product.price} />
 
       <div className="my-4">
-        <StockStatus count={product.inventory_count} />
+        <StockStatus
+          count={product.inventory_count}
+          fulfilmentMode="made_to_order"
+        />
       </div>
 
       <QuantitySelector

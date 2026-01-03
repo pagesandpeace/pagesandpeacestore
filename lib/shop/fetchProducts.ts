@@ -1,4 +1,3 @@
-// lib/shop/fetchProducts.ts
 import { supabaseService } from "@/lib/supabase/service";
 
 export const PAGE_SIZE = 12;
@@ -8,7 +7,7 @@ export type ProductQueryParams = {
   type?: string;
   search?: string;
   genre?: string;
-  author?: string; // UUID
+  author?: string;
   vibe?: string;
   theme?: string;
   inStock?: string;
@@ -69,13 +68,30 @@ export async function fetchProducts(params: ProductQueryParams) {
 
   /* --------------------------------------------------------
      BASE QUERY
+     (supplier author + canonical author relation)
   -------------------------------------------------------- */
   let query = supabase
     .from("products")
     .select(
       `
-        *,
-        author:author_id(id, name),
+        id,
+        name,
+        display_title,
+        slug,
+        description,
+        price,
+        image_url,
+        inventory_count,
+        fulfilment_mode,
+        product_type,
+        format,
+        language,
+        author_id,
+        author,
+        genre_id,
+        vibe_id,
+        theme_id,
+        author_rel:authors(id, name),
         vibe:vibe_id(id, name),
         theme:theme_id(id, name)
       `,
@@ -94,42 +110,36 @@ export async function fetchProducts(params: ProductQueryParams) {
   }
 
   /* --------------------------------------------------------
-   GLOBAL SEARCH (PRODUCT + AUTHOR)
--------------------------------------------------------- */
-if (search) {
-  // 1️⃣ Find matching authors
-  const { data: matchingAuthors } = await supabase
-    .from("authors")
-    .select("id")
-    .ilike("name", `%${search}%`);
+     GLOBAL SEARCH
+  -------------------------------------------------------- */
+  if (search) {
+    const { data: matchingAuthors } = await supabase
+      .from("authors")
+      .select("id")
+      .ilike("name", `%${search}%`);
 
-  const authorIds = (matchingAuthors ?? []).map((a) => a.id);
+    const authorIds = (matchingAuthors ?? []).map((a) => a.id);
 
-  // 2️⃣ Apply search to products
-  if (authorIds.length > 0) {
-    query = query.or(
-      [
-        `name.ilike.%${search}%`,
-        `description.ilike.%${search}%`,
-        `author_id.in.(${authorIds.join(",")})`,
-      ].join(",")
-    );
-  } else {
-    query = query.or(
-      [
-        `name.ilike.%${search}%`,
-        `description.ilike.%${search}%`,
-      ].join(",")
-    );
+    const clauses = [
+      `display_title.ilike.%${search}%`,
+      `name.ilike.%${search}%`,
+      `description.ilike.%${search}%`,
+    ];
+
+    if (authorIds.length > 0) {
+      clauses.push(`author_id.in.(${authorIds.join(",")})`);
+    }
+
+    query = query.or(clauses.join(","));
   }
-}
-
 
   /* --------------------------------------------------------
-     IN STOCK
+     IN STOCK FILTER
   -------------------------------------------------------- */
   if (inStock) {
-    query = query.gt("inventory_count", 0);
+    query = query.or(
+      "inventory_count.gt.0,fulfilment_mode.eq.made_to_order"
+    );
   }
 
   /* --------------------------------------------------------
@@ -160,7 +170,9 @@ if (search) {
       query = query.order("price", { ascending: false });
       break;
     case "az":
-      query = query.order("name", { ascending: true });
+      query = query
+        .order("display_title", { ascending: true, nullsFirst: false })
+        .order("name", { ascending: true });
       break;
     default:
       query = query.order("created_at", { ascending: false });
@@ -180,8 +192,21 @@ if (search) {
     throw error;
   }
 
+  /* --------------------------------------------------------
+     NORMALISE AUTHOR FOR SHOP UI
+     (canonical > supplier > null)
+  -------------------------------------------------------- */
+  const products =
+    (data ?? []).map((p: any) => ({
+      ...p,
+      author:
+        p.author_rel?.name ??
+        p.author ??
+        null,
+    }));
+
   return {
-    products: data ?? [],
+    products,
     total: count ?? 0,
     page,
     pageSize: PAGE_SIZE,

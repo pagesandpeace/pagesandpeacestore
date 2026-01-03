@@ -9,7 +9,7 @@ import React, {
 } from "react";
 
 /* =========================================================
-   CART ITEM TYPE — FIXED & EXTENDED
+   CART ITEM TYPE — CLEAN & EXPLICIT
 ========================================================= */
 
 export type CartItem = {
@@ -19,10 +19,13 @@ export type CartItem = {
   imageUrl?: string | null;
   quantity: number;
 
-  // 🔥 NEW: Track inventory for out-of-stock logic
+  // Inventory (only enforced for physical items)
   inventory_count: number;
 
-  // 🔥 Supports blind-date metadata
+  // ✅ SINGLE SOURCE OF TRUTH FOR AVAILABILITY
+  fulfilment_mode: "physical" | "made_to_order";
+
+  // Blind-date metadata
   metadata?: {
     genreSelected?: string;
     colour?: string;
@@ -54,7 +57,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
 
-    /* -----------------------------
+  /* -----------------------------
      LOAD FROM STORAGE
   ----------------------------- */
   useEffect(() => {
@@ -66,19 +69,14 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (stored) {
         const parsed = JSON.parse(stored);
-
         if (Array.isArray(parsed)) {
-          // Avoid synchronous setState inside effect
-          Promise.resolve().then(() => {
-            setCart(parsed);
-          });
+          Promise.resolve().then(() => setCart(parsed));
         }
       }
     } catch (err) {
       console.warn("⚠️ Failed to read cart:", err);
     }
   }, []);
-
 
   /* -----------------------------
      SAVE TO STORAGE
@@ -94,17 +92,18 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   }, [cart]);
 
   /* -----------------------------
-     ADD TO CART (WITH STOCK LOGIC)
+     ADD TO CART (FULFILMENT AWARE)
   ----------------------------- */
   const addToCart = (item: CartItem) => {
     setCart((prev) => {
       const existing = prev.find((p) => p.id === item.id);
+      const isPhysical = item.fulfilment_mode === "physical";
 
       // Item already in cart
       if (existing) {
         const newQty = existing.quantity + item.quantity;
 
-        if (newQty > existing.inventory_count) {
+        if (isPhysical && newQty > existing.inventory_count) {
           alert(`Only ${existing.inventory_count} in stock.`);
           return prev;
         }
@@ -120,8 +119,8 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
         );
       }
 
-      // Adding new item to cart
-      if (item.quantity > item.inventory_count) {
+      // Adding new item
+      if (isPhysical && item.quantity > item.inventory_count) {
         alert(`Only ${item.inventory_count} in stock.`);
         return prev;
       }
@@ -138,13 +137,15 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   /* -----------------------------
-     UPDATE QUANTITY (WITH STOCK CHECK)
+     UPDATE QUANTITY (FULFILMENT AWARE)
   ----------------------------- */
   const updateQuantity = (id: string, quantity: number) => {
     setCart((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          if (quantity > item.inventory_count) {
+          const isPhysical = item.fulfilment_mode === "physical";
+
+          if (isPhysical && quantity > item.inventory_count) {
             alert(`Only ${item.inventory_count} available.`);
             return item;
           }
@@ -170,7 +171,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   /* -----------------------------
-     CALCULATE TOTALS
+     TOTALS
   ----------------------------- */
   const total = useMemo(
     () =>

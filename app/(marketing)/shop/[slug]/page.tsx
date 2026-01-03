@@ -17,9 +17,6 @@ export default async function ProductPage({
   const { slug } = await params;
   const supabase = await supabaseServer();
 
-  /* ------------------------------------------
-     FETCH PRODUCT (WITH AUTHOR)
-  ------------------------------------------ */
   const { data: product, error } = await supabase
     .from("products")
     .select(`
@@ -47,12 +44,24 @@ export default async function ProductPage({
     );
   }
 
-  /* ------------------------------------------
-     FETCH MORE BY SAME AUTHOR
-  ------------------------------------------ */
+  // 🔍 SERVER-SIDE DEBUG LOG (REFINED)
+  console.log("SHOP PRODUCT DEBUG", {
+    id: product.id,
+    slug: product.slug,
+    inventory_count: product.inventory_count,
+    fulfilment_mode: product.fulfilment_mode,
+    commercial_model: product.commercial_model,
+  });
+
+  const displayProduct = {
+    ...product,
+    name: product.display_title ?? product.name,
+  };
+
   let moreByAuthor: {
     id: string;
     name: string;
+    display_title: string | null;
     slug: string;
     image_url: string | null;
     price: number | string;
@@ -61,7 +70,7 @@ export default async function ProductPage({
   if (product.author?.id) {
     const { data } = await supabase
       .from("products")
-      .select("id, name, slug, image_url, price")
+      .select("id, name, display_title, slug, image_url, price")
       .eq("author_id", product.author.id)
       .eq("product_type", "book")
       .neq("id", product.id)
@@ -72,13 +81,10 @@ export default async function ProductPage({
 
   return (
     <div className="space-y-16">
-      {/* MAIN PRODUCT */}
-      <ProductDetail product={product} />
+      <ProductDetail product={displayProduct} />
 
-      {/* MORE FROM THIS AUTHOR */}
       {moreByAuthor.length > 0 && product.author && (
         <div className="max-w-6xl mx-auto px-6 pb-20">
-          {/* AUTHOR HEADER */}
           <div className="flex items-center gap-4 mb-8">
             {product.author.profile_image_url ? (
               <Image
@@ -97,43 +103,23 @@ export default async function ProductPage({
                 More from{" "}
                 <Link
                   href={`/authors/${product.author.slug}`}
-                  className="underline hover:text-foreground"
+                  className="underline"
                 >
                   {product.author.name}
                 </Link>
               </h2>
-              <p className="text-sm text-muted-foreground">
-                Explore other books by this author
-              </p>
             </div>
           </div>
 
-          {/* BOOK GRID */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
             {moreByAuthor.map((p) => (
-              <Link
-                key={p.id}
-                href={`/shop/${p.slug}`}
-                className="group"
-              >
-                <div className="border rounded-lg overflow-hidden bg-white hover:shadow-md transition">
-                  {p.image_url ? (
-                    <Image
-                      src={p.image_url}
-                      alt={p.name}
-                      width={300}
-                      height={400}
-                      className="w-full h-56 object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-56 bg-gray-100" />
-                  )}
-
+              <Link key={p.id} href={`/shop/${p.slug}`}>
+                <div className="border rounded-lg bg-white">
                   <div className="p-3">
-                    <h3 className="text-sm font-medium group-hover:underline">
-                      {p.name}
+                    <h3 className="text-sm font-medium">
+                      {p.display_title ?? p.name}
                     </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="text-sm text-muted-foreground">
                       £{Number(p.price).toFixed(2)}
                     </p>
                   </div>

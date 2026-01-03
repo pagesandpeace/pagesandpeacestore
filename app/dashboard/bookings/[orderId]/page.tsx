@@ -1,5 +1,12 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseServer } from "@/lib/supabase/server";
+
+/* -----------------------------
+   HARD FAIL HELPER (KEEP)
+----------------------------- */
+function fail(where: string): never {
+  throw new Error("BOOKING PAGE FAIL → " + where);
+}
 
 export default async function BookingDetailPage({
   params,
@@ -7,56 +14,56 @@ export default async function BookingDetailPage({
   params: Promise<{ orderId: string }>;
 }) {
   const { orderId } = await params;
-
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
+  const supabase = await supabaseServer();
 
   /* -----------------------------
-     LOAD AUTH USER (BOOKER)
+     AUTH USER
   ----------------------------- */
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  if (!user) notFound();
+
   const bookerName =
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
-    user?.email ||
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    user.email ||
     "You (booker)";
 
   /* -----------------------------
-     LOAD ORDER
+     ORDER (RLS: orders_select_own)
   ----------------------------- */
   const { data: order } = await supabase
     .from("orders")
-    .select(`id, total, status, stripe_checkout_session_id`)
+    .select("id, total, status, stripe_checkout_session_id")
     .eq("id", orderId)
     .single();
 
-  if (!order) notFound();
+  if (!order) fail("NO ORDER");
 
   /* -----------------------------
-     LOAD EVENT ORDER ITEM (FIXED)
+     EVENT ORDER ITEM
+     (THIS IS THE TRUE LINK)
   ----------------------------- */
-  const { data: eventItem } = await supabase
+  const { data: eventItems } = await supabase
     .from("order_items")
-    .select("event_id, quantity, kind")
+    .select("id, event_id, quantity")
     .eq("order_id", orderId)
-    .eq("kind", "event")
-    .single();
+    .eq("kind", "event");
 
-  if (!eventItem || !eventItem.event_id) notFound();
+  if (!eventItems || eventItems.length === 0) {
+    fail("NO EVENT ITEM");
+  }
+
+  const eventItem = eventItems[0];
 
   /* -----------------------------
-     LOAD FULL EVENT (SOURCE OF TRUTH)
+     EVENT (PUBLIC READ)
   ----------------------------- */
   const { data: event } = await supabase
     .from("events")
-    .select(
-      `
+    .select(`
       id,
       title,
       subtitle,
@@ -67,23 +74,26 @@ export default async function BookingDetailPage({
       price_pence,
       image_url,
       published
-    `
-    )
+    `)
     .eq("id", eventItem.event_id)
     .single();
 
-  if (!event) notFound();
+  if (!event) fail("NO EVENT");
 
   /* -----------------------------
-     LOAD SEATS (SOURCE OF TRUTH)
+     LOAD SEATS (CORRECT LINK)
+     ✅ order_item_id (authoritative)
+     🔁 fallback to session id
   ----------------------------- */
   const { data: seats } = await supabase
     .from("event_bookings")
-    .select(`id, name, refunded, cancelled`)
-    .eq("stripe_checkout_session_id", order.stripe_checkout_session_id)
+    .select("id, name, refunded, cancelled")
+    .eq("order_item_id", eventItem.id)
     .order("created_at", { ascending: true });
 
-  if (!seats || seats.length === 0) notFound();
+  if (!seats || seats.length === 0) {
+    fail("NO SEATS");
+  }
 
   /* -----------------------------
      DERIVED COUNTS
@@ -98,7 +108,6 @@ export default async function BookingDetailPage({
   ----------------------------- */
   return (
     <main className="mx-auto max-w-3xl space-y-12">
-
       {/* EVENT HERO */}
       <section className="overflow-hidden rounded-2xl bg-neutral-900 text-white shadow">
         {event.image_url && (
@@ -133,18 +142,13 @@ export default async function BookingDetailPage({
             )}
           </div>
 
-          {/* TICKET STATUS BADGE */}
           <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-sm">
             🎟️{" "}
             {activeTickets === 0
               ? "All tickets refunded"
               : activeTickets === totalTickets
-              ? `${totalTickets} ${
-                  totalTickets === 1 ? "ticket" : "tickets"
-                } booked`
-              : `${activeTickets} of ${totalTickets} ${
-                  totalTickets === 1 ? "ticket" : "tickets"
-                } active`}
+              ? `${totalTickets} ${totalTickets === 1 ? "ticket" : "tickets"} booked`
+              : `${activeTickets} of ${totalTickets} tickets active`}
           </div>
         </div>
       </section>
@@ -184,26 +188,18 @@ export default async function BookingDetailPage({
             return (
               <div
                 key={seat.id}
-                className={`relative overflow-hidden rounded-xl border p-5 shadow-sm ${
+                className={`rounded-xl border p-5 shadow-sm ${
                   refunded ? "bg-neutral-100 opacity-60" : "bg-white"
                 }`}
               >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 text-lg">
-                    🎟️
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-neutral-500">
-                      Ticket {idx + 1}
-                      {isBooker && " • Booker"}
-                    </p>
-                    <p className="font-medium">{displayName}</p>
-                    <p className="text-xs mt-1">
-                      {refunded ? "Refunded" : "Active"}
-                    </p>
-                  </div>
-                </div>
+                <p className="text-sm text-neutral-500">
+                  Ticket {idx + 1}
+                  {isBooker && " • Booker"}
+                </p>
+                <p className="font-medium">{displayName}</p>
+                <p className="text-xs mt-1">
+                  {refunded ? "Refunded" : "Active"}
+                </p>
               </div>
             );
           })}
@@ -219,7 +215,6 @@ export default async function BookingDetailPage({
           <span className="capitalize">{order.status}</span>
         </p>
       </section>
-
     </main>
   );
 }
