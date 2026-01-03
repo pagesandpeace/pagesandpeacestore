@@ -190,15 +190,32 @@ export async function POST(req: Request) {
       stripe_checkout_session_id: session.id,
     });
 
+    /* -----------------------------------------------------
+       ✅ SURGICAL FIX: PAYMENT INTENT ON SEATS
+    ----------------------------------------------------- */
+    const paymentIntentId =
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : null;
+
+    const bookerName =
+      session.customer_details?.name ||
+      session.customer_details?.email ||
+      "Booker";
+
+    const bookerEmail = session.customer_details?.email ?? null;
+
     const seats = Array.from({ length: quantity }, (_, i) => ({
       user_id: user.id,
       user_id_uuid: md.userId,
       event_id: eventRow.id,
       order_item_id: orderItemId,
       stripe_checkout_session_id: session.id,
+      stripe_payment_intent_id: paymentIntentId, // ✅ ADDED
       paid: true,
       cancelled: false,
-      name: i === 0 ? null : `Guest ${i + 1}`,
+      name: i === 0 ? bookerName : `Guest ${i + 1}`,
+      email: bookerEmail,
     }));
 
     await supabase.from("event_bookings").insert(seats);
