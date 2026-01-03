@@ -78,7 +78,7 @@ export default function EventCard({ event }: EventCardProps) {
             <Button variant="primary">View / Edit</Button>
           </Link>
 
-          <Button variant="outline">Duplicate</Button>
+        
         </div>
       </CardBody>
     </Card>

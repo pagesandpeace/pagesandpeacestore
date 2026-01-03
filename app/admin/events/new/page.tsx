@@ -18,7 +18,9 @@ type Store = {
 export default function CreateEventPage() {
   const router = useRouter();
 
-  // FORM STATE
+  /* -------------------------------
+     FORM STATE
+  -------------------------------- */
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [shortDescription, setShortDescription] = useState("");
@@ -29,29 +31,38 @@ export default function CreateEventPage() {
   const [price, setPrice] = useState(0);
   const [published, setPublished] = useState(true);
 
+  /* -------------------------------
+     STORES (ADDITIVE FIX)
+  -------------------------------- */
   const [stores, setStores] = useState<Store[]>([]);
-
   const [storeId, setStoreId] = useState("");
+  const [loadingStores, setLoadingStores] = useState(true);
 
+  /* -------------------------------
+     IMAGE
+  -------------------------------- */
   const [imageUrl, setImageUrl] = useState("");
   const [uploading, setUploading] = useState(false);
 
+  /* -------------------------------
+     UI STATE
+  -------------------------------- */
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   /* -------------------------------
-     LOAD STORES — WITH COOKIES
+     LOAD STORES (FIXED, ADDITIVE)
   -------------------------------- */
   useEffect(() => {
+    let cancelled = false;
+
     async function loadStores() {
       try {
         const res = await fetch("/api/admin/stores/list", {
           method: "GET",
           cache: "no-store",
-          credentials: "include", // 🔥 REQUIRED OR auth = null in route
+          credentials: "include",
         });
-
-        console.log("STORE FETCH STATUS:", res.status);
 
         if (!res.ok) {
           console.error("Store fetch failed:", await res.text());
@@ -59,15 +70,29 @@ export default function CreateEventPage() {
         }
 
         const data = await res.json();
-        console.log("STORES RECEIVED:", data);
 
-        setStores(data);
+        if (!cancelled) {
+          setStores(data);
+
+          // ✅ auto-select if exactly one store
+          if (data.length === 1) {
+            setStoreId(data[0].id);
+          }
+        }
       } catch (err) {
         console.error("Store fetch error:", err);
+      } finally {
+        if (!cancelled) {
+          setLoadingStores(false);
+        }
       }
     }
 
     loadStores();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /* -------------------------------
@@ -86,7 +111,7 @@ export default function CreateEventPage() {
     const uploadRes = await fetch("/api/admin/events/upload-image", {
       method: "POST",
       body: form,
-      credentials: "include", // optional, but added for consistency
+      credentials: "include",
     });
 
     const data = await uploadRes.json();
@@ -101,56 +126,48 @@ export default function CreateEventPage() {
     setUploading(false);
   }
 
- /* -------------------------------
-   SUBMIT FORM — SEND SESSION
--------------------------------- */
-async function handleSubmit() {
-  setSubmitting(true);
-  setErrorMsg(null);
+  /* -------------------------------
+     SUBMIT
+  -------------------------------- */
+  async function handleSubmit() {
+    setSubmitting(true);
+    setErrorMsg(null);
 
-  if (!title || !date || !storeId) {
-    setSubmitting(false);
-    setErrorMsg("Please fill all required fields.");
-    return;
+    if (!title || !date || !storeId) {
+      setSubmitting(false);
+      setErrorMsg("Please fill all required fields.");
+      return;
+    }
+
+    const payload = {
+      title,
+      subtitle,
+      short_description: shortDescription,
+      description,
+      date,
+      capacity,
+      price_pence: Math.round(price * 100),
+      image_url: imageUrl,
+      store_id: storeId,
+      published,
+    };
+
+    const res = await fetch("/api/admin/events/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      console.error(await res.text());
+      setSubmitting(false);
+      setErrorMsg("Failed to create event.");
+      return;
+    }
+
+    router.push("/admin/events");
   }
-
-  const payload = {
-    title,
-    subtitle,
-    short_description: shortDescription,
-    description,
-    date,
-    capacity,
-    price_pence: Math.round(price * 100),
-    image_url: imageUrl,
-    store_id: storeId,
-    published,
-  };
-
-  console.log("🚀 SENDING EVENT CREATE PAYLOAD:", payload);
-
-  const res = await fetch("/api/admin/events/create", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    credentials: "include", // 🔥 REQUIRED — sends Supabase session cookies
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("EVENT CREATE FAILED:", errText);
-    setSubmitting(false);
-    setErrorMsg("Failed to create event.");
-    return;
-  }
-
-  console.log("✅ EVENT CREATED");
-
-  router.push("/admin/events");
-}
-
 
   /* -------------------------------
      UI
@@ -212,8 +229,11 @@ async function handleSubmit() {
             className="border rounded-md px-3 py-2 w-full"
             value={storeId}
             onChange={(e) => setStoreId(e.target.value)}
+            disabled={loadingStores}
           >
-            <option value="">Select a store…</option>
+            <option value="">
+              {loadingStores ? "Loading stores…" : "Select a store…"}
+            </option>
 
             {stores.map((s) => (
               <option key={s.id} value={s.id}>
@@ -222,58 +242,37 @@ async function handleSubmit() {
             ))}
           </select>
 
-          {stores.length === 0 && (
+          {!loadingStores && stores.length === 0 && (
             <p className="text-xs text-red-500 mt-1">
-              No stores loaded. Check API route.
+              No stores available.
             </p>
           )}
         </div>
 
-        {/* IMAGE UPLOADER */}
+        {/* IMAGE */}
         <div>
           <label className="block mb-1 text-sm font-medium">Event Image</label>
 
-          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition">
-            <div className="flex flex-col items-center pt-5 pb-6 text-gray-500">
-              <svg
-                aria-hidden="true"
-                className="w-8 h-8 mb-2"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 15a4 4 0 014-4h10a4 4 0 014 4v4H3v-4zM7 11l5-5m0 0l5 5m-5-5v12"
-                ></path>
-              </svg>
-
-              <p className="text-sm font-medium">Upload event image</p>
-              <p className="text-xs">PNG, JPG • under 5MB</p>
-            </div>
-
+          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
             <input
               type="file"
               className="hidden"
               accept="image/*"
               onChange={handleUpload}
             />
+            <span className="text-sm text-gray-500">Upload image</span>
           </label>
 
           {uploading && <p className="text-sm mt-2">Uploading…</p>}
 
           {imageUrl && (
-            <div className="mt-3">
-              <Image
-                src={imageUrl}
-                alt="Preview"
-                width={300}
-                height={300}
-                className="object-cover rounded-lg border shadow"
-              />
-            </div>
+            <Image
+              src={imageUrl}
+              alt="Preview"
+              width={300}
+              height={300}
+              className="mt-3 rounded border"
+            />
           )}
         </div>
 
@@ -282,8 +281,8 @@ async function handleSubmit() {
           <label className="block mb-1 text-sm font-medium">Capacity</label>
           <Input
             type="number"
-            value={capacity}
             min={1}
+            value={capacity}
             onChange={(e) => setCapacity(Number(e.target.value))}
           />
         </div>
@@ -314,7 +313,7 @@ async function handleSubmit() {
 
         {/* ACTIONS */}
         <div className="flex gap-4 pt-6">
-          <Button variant="primary" disabled={submitting} onClick={handleSubmit}>
+          <Button onClick={handleSubmit} disabled={submitting}>
             {submitting ? "Creating…" : "Create Event"}
           </Button>
 
