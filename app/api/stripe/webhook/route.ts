@@ -141,13 +141,24 @@ export async function POST(req: Request) {
     });
   }
 
-  if (existingOrder?.inventory_processed) {
-    logWebhook("Order already processed, exiting", orderId);
+  /* -----------------------------------------------------
+     🔒 ATOMIC CLAIM (HARDENING)
+  ----------------------------------------------------- */
+  const { data: claim } = await supabase
+    .from("orders")
+    .update({ inventory_processed: true })
+    .eq("id", orderId)
+    .eq("inventory_processed", false)
+    .select("id")
+    .maybeSingle();
+
+  if (!claim) {
+    logWebhook("Order already claimed, exiting", orderId);
     return NextResponse.json({ received: true });
   }
 
   /* =====================================================
-     EVENT FLOW (RESTORED – AUTHORITATIVE)
+     EVENT FLOW (AUTHORITATIVE)
   ===================================================== */
   if (md.kind === "event") {
     logWebhook("Processing EVENT checkout");
@@ -171,8 +182,8 @@ export async function POST(req: Request) {
       id: orderItemId,
       order_id: orderId,
       product_id: eventRow.product_id,
-      event_id: eventRow.id,      // 🔥 REQUIRED
-      kind: "event",              // 🔥 REQUIRED
+      event_id: eventRow.id,
+      kind: "event",
       quantity,
       price: (session.amount_total ?? 0) / 100 / quantity,
       name: eventRow.title,
@@ -191,11 +202,6 @@ export async function POST(req: Request) {
     }));
 
     await supabase.from("event_bookings").insert(seats);
-
-    await supabase
-      .from("orders")
-      .update({ inventory_processed: true })
-      .eq("id", orderId);
 
     const { data: emailLock } = await supabase
       .from("orders")
@@ -286,11 +292,6 @@ export async function POST(req: Request) {
       p_user_id: user.id,
     });
   }
-
-  await supabase
-    .from("orders")
-    .update({ inventory_processed: true })
-    .eq("id", orderId);
 
   const { data: emailLock } = await supabase
     .from("orders")
