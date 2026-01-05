@@ -14,19 +14,13 @@ const TABLE_MAP = {
 type ClassificationType = keyof typeof TABLE_MAP;
 
 export async function POST(req: NextRequest) {
-  console.log("🟢 CREATE CLASSIFICATION ROUTE HIT");
-
   try {
     const supabase = await supabaseServer();
 
     /* -------------------------
        AUTH
     ------------------------- */
-    const { data: auth, error: authErr } =
-      await supabase.auth.getUser();
-
-    console.log("👤 AUTH:", auth?.user?.id, authErr);
-
+    const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
       return NextResponse.json(
         { error: "Not authenticated" },
@@ -34,14 +28,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { data: profile, error: profileErr } =
-      await supabase
-        .from("users")
-        .select("role")
-        .eq("auth_user_id", auth.user.id)
-        .single();
-
-    console.log("🛂 PROFILE:", profile, profileErr);
+    const { data: profile } = await supabase
+      .from("users")
+      .select("role")
+      .eq("auth_user_id", auth.user.id)
+      .single();
 
     if (!profile || profile.role !== "admin") {
       return NextResponse.json(
@@ -54,12 +45,16 @@ export async function POST(req: NextRequest) {
        BODY
     ------------------------- */
     const body = await req.json();
-    console.log("📦 BODY RECEIVED:", body);
 
-    const { type, name } = body as {
+    const {
+      type,
+      name,
+      description,
+    }: {
       type?: ClassificationType;
       name?: string;
-    };
+      description?: string | null;
+    } = body;
 
     if (!type || !name) {
       return NextResponse.json(
@@ -84,32 +79,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("📌 TABLE:", table, "NAME:", cleanName);
+    const normalized = cleanName.toLowerCase();
 
     /* -------------------------
-       CHECK EXISTING (case-insensitive)
+       CHECK EXISTING (STRICT)
     ------------------------- */
-    const { data: existing, error: existingErr } =
-      await supabase
-        .from(table)
-        .select("id, name")
-        .ilike("name", cleanName)
-        .maybeSingle();
+    const { data: existing } = await supabase
+      .from(table)
+      .select("id, name, description")
+      .ilike("name", normalized)
+      .maybeSingle();
 
-    console.log("🔎 EXISTING CHECK:", existing, existingErr);
-
+    // ✅ If it already exists, RETURN IT — DO NOT MUTATE
     if (existing) {
       return NextResponse.json(existing);
     }
 
     /* -------------------------
-       INSERT
+       INSERT (AI-SAFE)
     ------------------------- */
     const insertPayload: Record<string, unknown> = {
       name: cleanName,
     };
 
-    // genres.id is TEXT and required → slugify
+    // slug ID for genres
     if (type === "genre") {
       insertPayload.id = slugify(cleanName, {
         lower: true,
@@ -117,13 +110,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // AI suggestions MUST persist description
+    if (description && description.trim()) {
+      insertPayload.description = description.trim();
+    }
+
     const { data, error } = await supabase
       .from(table)
       .insert(insertPayload)
-      .select("id, name")
+      .select("id, name, description")
       .single();
-
-    console.log("📥 INSERT RESULT:", data, error);
 
     if (error) {
       return NextResponse.json(
@@ -134,7 +130,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(data);
   } catch (err) {
-    console.error("💥 CREATE CLASSIFICATION ERROR", err);
+    console.error("CREATE CLASSIFICATION ERROR", err);
     return NextResponse.json(
       { error: "Server error" },
       { status: 500 }
