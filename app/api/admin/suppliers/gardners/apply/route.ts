@@ -34,24 +34,41 @@ function normalizeNumber(value: unknown): number | null {
 ------------------------------------------- */
 
 export async function POST(req: Request) {
+  console.log("🟢 [GARDNERS APPLY] route hit");
+
   try {
     const supabaseUser = await supabaseServer();
+    console.log("🟢 [SUPABASE USER] client ready");
 
     /* -------------------------
        AUTH
     ------------------------- */
-    const { data: auth } = await supabaseUser.auth.getUser();
+    const { data: auth, error: authError } =
+      await supabaseUser.auth.getUser();
+
+    console.log("🟢 [AUTH]", {
+      userId: auth?.user?.id ?? null,
+      error: authError ?? null,
+    });
+
     if (!auth?.user) {
+      console.error("❌ [AUTH] missing user");
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { data: profile } = await supabaseUser
+    const { data: profile, error: profileError } = await supabaseUser
       .from("users")
       .select("role")
       .eq("auth_user_id", auth.user.id)
       .single();
 
+    console.log("🟢 [PROFILE]", {
+      profile,
+      error: profileError ?? null,
+    });
+
     if (!profile || profile.role !== "admin") {
+      console.error("❌ [AUTHZ] admin denied");
       return NextResponse.json({ error: "Admins only" }, { status: 403 });
     }
 
@@ -64,6 +81,8 @@ export async function POST(req: Request) {
       { auth: { persistSession: false } }
     );
 
+    console.log("🟢 [SUPABASE ADMIN] service role client ready");
+
     /* -------------------------
        FORM DATA
     ------------------------- */
@@ -71,7 +90,14 @@ export async function POST(req: Request) {
     const file = formData.get("file") as File | null;
     const batchId = formData.get("batch_id") as string | null;
 
+    console.log("🟢 [FORM]", {
+      hasFile: Boolean(file),
+      filename: file?.name ?? null,
+      batchId,
+    });
+
     if (!file || !batchId) {
+      console.error("❌ [FORM] missing file or batch_id");
       return NextResponse.json(
         { error: "file and batch_id are required" },
         { status: 400 }
@@ -81,13 +107,19 @@ export async function POST(req: Request) {
     /* -------------------------
        VERIFY BATCH
     ------------------------- */
-    const { data: batch } = await supabaseAdmin
+    const { data: batch, error: batchError } = await supabaseAdmin
       .from("supplier_import_batches")
       .select("uploaded_at, status")
       .eq("id", batchId)
       .single();
 
+    console.log("🟢 [BATCH]", {
+      batch,
+      error: batchError ?? null,
+    });
+
     if (!batch || batch.status !== "diffed") {
+      console.error("❌ [BATCH] invalid status");
       return NextResponse.json(
         { error: "Batch must be diffed before apply" },
         { status: 400 }
@@ -99,15 +131,23 @@ export async function POST(req: Request) {
     ------------------------- */
     const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(buffer, { type: "buffer" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+    console.log("🟢 [XLS]", { sheetName });
 
     const rows = XLSX.utils.sheet_to_json(sheet, {
       raw: false,
       defval: null,
     }) as Record<string, unknown>[];
 
+    console.log("🟢 [XLS] rows parsed:", rows.length);
+    console.log("🟢 [XLS] sample row:", rows[0] ?? null);
+
     const importMonth =
       new Date(batch.uploaded_at).toISOString().slice(0, 7) + "-01";
+
+    console.log("🟢 [IMPORT MONTH]", importMonth);
 
     /* -------------------------
        NORMALISE
@@ -130,55 +170,65 @@ export async function POST(req: Request) {
           rank_prev_pos: normalizeNumber(r["POSITION -1Wk"]),
         };
       })
-      .filter(Boolean) as {
-      supplier_ref: string;
-      title: string;
-      display_title: string;
-      author: string | null;
-      supplier_price: number;
-      binding: string | null;
-      rank_pos: number | null;
-      rank_prev_pos: number | null;
-    }[];
+      .filter(Boolean) as any[];
+
+    console.log("🟢 [NORMALIZED] count:", normalized.length);
+    console.log("🟢 [NORMALIZED] sample:", normalized[0] ?? null);
 
     /* -------------------------
        UPSERT supplier_products
     ------------------------- */
-    await supabaseAdmin.from("supplier_products").upsert(
-      normalized.map((n) => ({
-        supplier: "gardners",
-        supplier_ref: n.supplier_ref,
-        title: n.title,
-        display_title: n.display_title,
-        author: n.author,
-        supplier_price: n.supplier_price,
-        binding: n.binding,
-        rank_pos: n.rank_pos,
-        rank_prev_pos: n.rank_prev_pos,
-        import_batch_id: batchId,
-        import_month: importMonth,
-        snapshot_month: importMonth,
-        supplier_last_updated: new Date().toISOString(),
-      })),
-      { onConflict: "supplier,supplier_ref" }
-    );
+    console.log("🟡 [UPSERT] supplier_products");
+
+    const upsertResult = await supabaseAdmin
+      .from("supplier_products")
+      .upsert(
+        normalized.map((n) => ({
+          supplier: "gardners",
+          supplier_ref: n.supplier_ref,
+          title: n.title,
+          display_title: n.display_title,
+          author: n.author,
+          supplier_price: n.supplier_price,
+          binding: n.binding,
+          rank_pos: n.rank_pos,
+          rank_prev_pos: n.rank_prev_pos,
+          import_batch_id: batchId,
+          import_month: importMonth,
+          snapshot_month: importMonth,
+          supplier_last_updated: new Date().toISOString(),
+        })),
+        { onConflict: "supplier,supplier_ref" }
+      );
+
+    console.log("🟡 [UPSERT RESULT]", upsertResult);
 
     /* -------------------------
        FETCH LINKED PRODUCTS
     ------------------------- */
-    const { data: links } = await supabaseAdmin
+    const { data: links, error: linksError } = await supabaseAdmin
       .from("product_supplier_links")
       .select("product_id, supplier_ref")
       .eq("supplier", "gardners");
+
+    console.log("🟢 [LINKS]", {
+      count: links?.length ?? 0,
+      error: linksError ?? null,
+    });
 
     const linkMap = new Map(
       links?.map((l) => [l.supplier_ref, l.product_id]) ?? []
     );
 
-    const { data: products } = await supabaseAdmin
+    const { data: products, error: productsError } = await supabaseAdmin
       .from("products")
       .select("id, isbn_13, supplier_price")
       .eq("supplier_name", "gardners");
+
+    console.log("🟢 [PRODUCTS]", {
+      count: products?.length ?? 0,
+      error: productsError ?? null,
+    });
 
     const productMap = new Map<string, any>();
     for (const p of products ?? []) {
@@ -186,14 +236,19 @@ export async function POST(req: Request) {
     }
 
     /* -------------------------
-       UPDATE PRODUCT SUPPLIER SNAPSHOT
+       UPDATE PRODUCT SNAPSHOT
        + DETECT CHANGES
     ------------------------- */
     for (const n of normalized) {
       const product = productMap.get(n.supplier_ref);
       if (!product) continue;
 
-      // Always update supplier snapshot
+      console.log("🟡 [PRODUCT UPDATE]", {
+        productId: product.id,
+        oldPrice: product.supplier_price,
+        newPrice: n.supplier_price,
+      });
+
       await supabaseAdmin
         .from("products")
         .update({
@@ -202,7 +257,6 @@ export async function POST(req: Request) {
         })
         .eq("id", product.id);
 
-      // Detect price change
       if (Number(product.supplier_price) !== Number(n.supplier_price)) {
         const { data: existing } = await supabaseAdmin
           .from("supplier_changes")
@@ -212,20 +266,29 @@ export async function POST(req: Request) {
           .eq("status", "pending")
           .maybeSingle();
 
+        console.log("🟡 [SUPPLIER CHANGE CHECK]", {
+          productId: product.id,
+          existing,
+        });
+
         if (!existing) {
-          await supabaseAdmin.from("supplier_changes").insert({
-            product_id: product.id,
-            supplier: "gardners",
-            field: "supplier_price",
-            old_value: String(product.supplier_price),
-            new_value: String(n.supplier_price),
-          });
+          const insertResult = await supabaseAdmin
+            .from("supplier_changes")
+            .insert({
+              product_id: product.id,
+              supplier: "gardners",
+              field: "supplier_price",
+              old_value: String(product.supplier_price),
+              new_value: String(n.supplier_price),
+            });
+
+          console.log("🟡 [SUPPLIER CHANGE INSERT]", insertResult);
         }
       }
     }
 
     /* -------------------------
-       UPDATE PRODUCT RANKINGS (MONTHLY SNAPSHOT)
+       PRODUCT RANKINGS
     ------------------------- */
     const rankingRows = normalized
       .map((n) => {
@@ -242,20 +305,30 @@ export async function POST(req: Request) {
       })
       .filter(Boolean);
 
+    console.log("🟢 [RANKINGS] rows:", rankingRows.length);
+
     if (rankingRows.length) {
-      await supabaseAdmin
+      console.log("🟡 [RANKINGS] deleting existing");
+
+      const delResult = await supabaseAdmin
         .from("product_rankings")
         .delete()
         .eq("supplier_name", "gardners")
         .eq("import_month", importMonth);
 
-      await supabaseAdmin.from("product_rankings").insert(rankingRows);
+      console.log("🟡 [RANKINGS DELETE]", delResult);
+
+      const insResult = await supabaseAdmin
+        .from("product_rankings")
+        .insert(rankingRows);
+
+      console.log("🟡 [RANKINGS INSERT]", insResult);
     }
 
     /* -------------------------
        FINALISE BATCH
     ------------------------- */
-    await supabaseAdmin
+    const finaliseResult = await supabaseAdmin
       .from("supplier_import_batches")
       .update({
         status: "applied",
@@ -263,12 +336,16 @@ export async function POST(req: Request) {
       })
       .eq("id", batchId);
 
+    console.log("🟢 [BATCH FINALISE]", finaliseResult);
+
+    console.log("✅ [GARDNERS APPLY] completed");
+
     return NextResponse.json({
       batch_id: batchId,
       rankings_updated: rankingRows.length,
     });
   } catch (err) {
-    console.error("❌ GARDNERS APPLY FAILED:", err);
+    console.error("❌ [GARDNERS APPLY] FAILED", err);
     return NextResponse.json(
       { error: "Failed to apply Gardners import" },
       { status: 500 }
