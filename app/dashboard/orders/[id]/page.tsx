@@ -144,50 +144,52 @@ export default function StoreOrderReceiptPage() {
         )}
 
         {/* ITEMS */}
-        <div className="mt-6 rounded-xl border p-4 bg-white">
-          <p className="text-sm font-semibold mb-3">Items</p>
+<div className="mt-6 rounded-xl border p-4 bg-white">
+  <p className="text-sm font-semibold mb-3">Items</p>
 
-          {order.items.map((item, idx) => {
-            const refundedQty = item.refunded_quantity ?? 0;
-            const remainingQty = item.quantity - refundedQty;
+  {order.items.map((item, idx) => {
+    const refundedQty = item.refunded_quantity ?? 0;
+    const purchasedQty = item.quantity;
+    const netQty = purchasedQty - refundedQty;
 
-            return (
-              <div
-                key={idx}
-                className="py-3 border-b last:border-b-0 space-y-1"
-              >
-                <div className="flex justify-between">
-                  <p className="text-sm font-medium">
-                    {item.productName || "Item"}
-                  </p>
-                  <p className="text-sm">
-                    £{(item.price * item.quantity).toFixed(2)}
-                  </p>
-                </div>
+    const lineTotal = item.price * purchasedQty;
+    const refundedValue = refundedQty * item.price;
 
-                <p className="text-xs opacity-70">
-                  Purchased: {item.quantity}
-                  {refundedQty > 0 && (
-                    <>
-                      {" · "}
-                      <span className="text-red-600">
-                        Refunded: {refundedQty}
-                      </span>
-                      {" · "}
-                      Remaining: {remainingQty}
-                    </>
-                  )}
-                </p>
+    return (
+      <div
+        key={idx}
+        className="py-3 border-b last:border-b-0 space-y-1"
+      >
+        {/* LINE ITEM */}
+        <div className="flex justify-between items-start gap-4">
+          <p className="text-sm font-medium leading-snug">
+            {item.productName || "Item"}{" "}
+            <span className="opacity-70">× {purchasedQty}</span>
+          </p>
 
-                {refundedQty > 0 && (
-                  <p className="text-xs text-red-600">
-                    Refunded value: £{(refundedQty * item.price).toFixed(2)}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+          <p className="text-sm font-medium whitespace-nowrap">
+            £{lineTotal.toFixed(2)}
+          </p>
         </div>
+
+        {/* REFUND DETAILS */}
+        {refundedQty > 0 && (
+          <div className="text-xs text-red-600 space-y-0.5">
+            <p>
+              Refunded: {refundedQty} × £{item.price.toFixed(2)} = −£
+              {refundedValue.toFixed(2)}
+            </p>
+            <p>
+              Remaining: {netQty} × £{item.price.toFixed(2)} = £
+              {(netQty * item.price).toFixed(2)}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  })}
+</div>
+
 
         {/* TOTALS */}
         <div className="mt-4 space-y-1 text-sm">

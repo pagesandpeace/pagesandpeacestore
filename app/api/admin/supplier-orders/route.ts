@@ -22,7 +22,7 @@ type BackorderRow = {
   products: {
     name: string;
     product_type: string;
-  }[] | null;
+  }[] | null; // ✅ FIX: array, not single object
 };
 
 type LineItem = {
@@ -70,6 +70,10 @@ export async function GET() {
   try {
     const supabase = await supabaseServer();
 
+    /* -------------------------
+       AUTH
+    ------------------------- */
+
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
       return NextResponse.json(
@@ -90,6 +94,10 @@ export async function GET() {
         { status: 403 }
       );
     }
+
+    /* -------------------------
+       QUERY
+    ------------------------- */
 
     const { data, error } = await supabase
       .from("customer_backorders")
@@ -119,6 +127,10 @@ export async function GET() {
         { status: 500 }
       );
     }
+
+    /* -------------------------
+       GROUPING
+    ------------------------- */
 
     const grouped = new Map<string, SupplierOrderGroup>();
 
@@ -153,10 +165,15 @@ export async function GET() {
 
       customer.items.push({
         backorder_id: row.id,
-        product_name: row.products?.[0]?.name ?? "Unknown",
+        product_name:
+          row.products?.[0]?.name ?? "[Missing product]",
         quantity: row.quantity,
       });
     });
+
+    /* -------------------------
+       RESPONSE
+    ------------------------- */
 
     return NextResponse.json(Array.from(grouped.values()));
   } catch (err) {

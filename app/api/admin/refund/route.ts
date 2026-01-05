@@ -29,7 +29,7 @@ type Body =
   | { bookingId: string };
 
 /* --------------------------------------------------
-   🔧 HELPER — RECALCULATE ORDER STATUS (NEW)
+   🔧 HELPER — RECALCULATE ORDER STATUS (FIXED)
 -------------------------------------------------- */
 async function recalcOrderStatus(orderId: string) {
   const { data: items } = await supabaseAdmin
@@ -37,19 +37,40 @@ async function recalcOrderStatus(orderId: string) {
     .select("quantity, refunded_quantity, price")
     .eq("order_id", orderId);
 
-  if (!items) return;
+  if (!items || items.length === 0) return;
 
-  const remainingAmount = items.reduce((sum, item) => {
-    const remainingQty = item.quantity - (item.refunded_quantity ?? 0);
-    return sum + remainingQty * Number(item.price);
-  }, 0);
+  const total = items.reduce(
+    (sum, i) => sum + i.quantity * Number(i.price),
+    0
+  );
 
-  const status =
-    remainingAmount <= 0 ? "refunded" : "partially_refunded";
+  const refunded = items.reduce(
+    (sum, i) =>
+      sum + (i.refunded_quantity ?? 0) * Number(i.price),
+    0
+  );
+
+  let status: "completed" | "partially_refunded" | "refunded";
+  let refund_status: "none" | "partial" | "full";
+
+  if (refunded <= 0) {
+    status = "completed";
+    refund_status = "none";
+  } else if (refunded >= total) {
+    status = "refunded";
+    refund_status = "full";
+  } else {
+    status = "partially_refunded";
+    refund_status = "partial";
+  }
 
   await supabaseAdmin
     .from("orders")
-    .update({ status })
+    .update({
+      status,
+      refund_status,
+      refunded_total: refunded,
+    })
     .eq("id", orderId);
 }
 
@@ -104,7 +125,10 @@ export async function POST(req: Request) {
       .single();
 
     if (!order || !["completed", "partially_refunded"].includes(order.status)) {
-      return NextResponse.json({ error: "Order not refundable" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Order not refundable" },
+        { status: 400 }
+      );
     }
 
     const { data: items } = await supabaseAdmin
@@ -113,7 +137,10 @@ export async function POST(req: Request) {
       .eq("order_id", order.id);
 
     if (!items || items.length === 0) {
-      return NextResponse.json({ error: "No refundable items" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No refundable items" },
+        { status: 400 }
+      );
     }
 
     const refundableAmount = items.reduce((sum, item) => {
@@ -122,7 +149,10 @@ export async function POST(req: Request) {
     }, 0);
 
     if (refundableAmount <= 0) {
-      return NextResponse.json({ error: "Nothing left to refund" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Nothing left to refund" },
+        { status: 400 }
+      );
     }
 
     const refund = await stripe.refunds.create({
@@ -152,6 +182,7 @@ export async function POST(req: Request) {
           .update({
             refunded: true,
             cancelled: true,
+            paid: false,
             refund_processed_at: new Date().toISOString(),
             stripe_refund_id: refund.id,
           })
@@ -177,12 +208,18 @@ export async function POST(req: Request) {
       .single();
 
     if (!item || item.kind !== "product") {
-      return NextResponse.json({ error: "Product item not refundable" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Product item not refundable" },
+        { status: 400 }
+      );
     }
 
     const remaining = item.quantity - (item.refunded_quantity ?? 0);
     if (remaining <= 0) {
-      return NextResponse.json({ error: "Nothing left to refund" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Nothing left to refund" },
+        { status: 400 }
+      );
     }
 
     const { data: order } = await supabaseAdmin
@@ -192,7 +229,10 @@ export async function POST(req: Request) {
       .single();
 
     if (!order || !["completed", "partially_refunded"].includes(order.status)) {
-      return NextResponse.json({ error: "Order not refundable" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Order not refundable" },
+        { status: 400 }
+      );
     }
 
     const refund = await stripe.refunds.create({
@@ -228,22 +268,33 @@ export async function POST(req: Request) {
       .single();
 
     if (!booking || booking.refunded) {
-      return NextResponse.json({ error: "Booking not refundable" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Booking not refundable" },
+        { status: 400 }
+      );
     }
 
     const { data: item } = await supabaseAdmin
       .from("order_items")
-      .select("id, product_id, kind, order_id, price, quantity, refunded_quantity")
+      .select(
+        "id, product_id, kind, order_id, price, quantity, refunded_quantity"
+      )
       .eq("id", booking.order_item_id)
       .single();
 
     if (!item || item.kind !== "event") {
-      return NextResponse.json({ error: "Event order item not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Event order item not found" },
+        { status: 404 }
+      );
     }
 
     const remaining = item.quantity - (item.refunded_quantity ?? 0);
     if (remaining <= 0) {
-      return NextResponse.json({ error: "No refundable seats remaining" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No refundable seats remaining" },
+        { status: 400 }
+      );
     }
 
     const { data: order } = await supabaseAdmin
@@ -253,7 +304,10 @@ export async function POST(req: Request) {
       .single();
 
     if (!order || !["completed", "partially_refunded"].includes(order.status)) {
-      return NextResponse.json({ error: "Order not refundable" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Order not refundable" },
+        { status: 400 }
+      );
     }
 
     const refund = await stripe.refunds.create({
@@ -276,6 +330,7 @@ export async function POST(req: Request) {
       .update({
         refunded: true,
         cancelled: true,
+        paid: false,
         refund_processed_at: new Date().toISOString(),
         stripe_refund_id: refund.id,
       })

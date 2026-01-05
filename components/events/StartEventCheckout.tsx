@@ -1,33 +1,68 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+
+type TicketType = {
+  id: string;
+  name: string;
+  price_pence: number;
+  is_default: boolean;
+};
 
 export default function StartEventCheckout({
   eventId,
+  ticketTypes,
   maxQuantity,
 }: {
   eventId: string;
+  ticketTypes: TicketType[];
   maxQuantity: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const [quantity, setQuantity] = useState(1);
 
-  function decrement() {
-    setQuantity((q) => Math.max(1, q - 1));
-  }
+  /* ----------------------------------------
+     PER-TICKET QUANTITIES
+  ---------------------------------------- */
+  const [quantities, setQuantities] = useState<Record<string, number>>(
+    () =>
+      Object.fromEntries(
+        ticketTypes.map((t) => [t.id, 0])
+      )
+  );
 
-  function increment() {
-    setQuantity((q) => Math.min(maxQuantity, q + 1));
-  }
+  /* ----------------------------------------
+     DERIVED TOTALS
+  ---------------------------------------- */
+  const totalSelected = Object.values(quantities).reduce(
+    (sum, q) => sum + q,
+    0
+  );
 
+  const totalPricePence = ticketTypes.reduce((sum, t) => {
+    const q = quantities[t.id] ?? 0;
+    return sum + q * t.price_pence;
+  }, 0);
+
+  /* ----------------------------------------
+     CHECKOUT
+  ---------------------------------------- */
   async function handleCheckout() {
+    if (totalSelected === 0) {
+      setError("Please select at least one ticket.");
+      return;
+    }
+
+    if (totalSelected > maxQuantity) {
+      setError("Not enough seats remaining.");
+      return;
+    }
+
     setError("");
 
     startTransition(async () => {
-      // 1. Check login status
       const meRes = await fetch("/api/me", {
         cache: "no-store",
         credentials: "include",
@@ -36,18 +71,24 @@ export default function StartEventCheckout({
       const me = await meRes.json();
 
       if (!me?.id) {
-        router.push(`/sign-in?callbackURL=/dashboard/events/${eventId}`);
+        router.push(`/sign-in?callbackURL=/events/${eventId}`);
         return;
       }
 
-      // 2. Start checkout with quantity
+      const items = Object.entries(quantities)
+        .filter(([_, q]) => q > 0)
+        .map(([ticketTypeId, quantity]) => ({
+          ticketTypeId,
+          quantity,
+        }));
+
       const res = await fetch("/api/events/start-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           eventId,
-          quantity,
+          items,
         }),
       });
 
@@ -62,45 +103,80 @@ export default function StartEventCheckout({
     });
   }
 
+  /* ----------------------------------------
+     RENDER
+  ---------------------------------------- */
   return (
     <div className="space-y-6">
-      {/* QUANTITY SELECTOR */}
-      <div className="flex items-center justify-center gap-4">
-        <button
-          onClick={decrement}
-          disabled={quantity <= 1}
-          className="w-10 h-10 rounded-full border text-xl font-semibold disabled:opacity-40"
-          aria-label="Decrease quantity"
-        >
-          −
-        </button>
+      {/* TICKET TYPES */}
+      <div className="space-y-4">
+        {ticketTypes.map((t) => {
+          const qty = quantities[t.id] ?? 0;
 
-        <div className="min-w-[40px] text-center text-lg font-semibold">
-          {quantity}
-        </div>
+          return (
+            <div
+              key={t.id}
+              className="flex items-center justify-between border rounded-lg px-4 py-3"
+            >
+              <div>
+                <div className="font-medium">{t.name}</div>
+                <div className="text-sm text-neutral-500">
+                  £{(t.price_pence / 100).toFixed(2)}
+                </div>
+              </div>
 
-        <button
-          onClick={increment}
-          disabled={quantity >= maxQuantity}
-          className="w-10 h-10 rounded-full border text-xl font-semibold disabled:opacity-40"
-          aria-label="Increase quantity"
-        >
-          +
-        </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantities((prev) => ({
+                      ...prev,
+                      [t.id]: Math.max(0, qty - 1),
+                    }))
+                  }
+                  disabled={qty === 0}
+                  className="w-8 h-8 rounded-full border text-lg disabled:opacity-40"
+                >
+                  −
+                </button>
+
+                <span className="min-w-[2ch] text-center font-semibold">
+                  {qty}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantities((prev) => ({
+                      ...prev,
+                      [t.id]: Math.min(maxQuantity, qty + 1),
+                    }))
+                  }
+                  disabled={totalSelected >= maxQuantity}
+                  className="w-8 h-8 rounded-full border text-lg disabled:opacity-40"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <p className="text-sm text-neutral-500 text-center">
-        {maxQuantity} seats remaining
-      </p>
+      {/* SUMMARY */}
+      <div className="text-sm text-neutral-600 text-center">
+        {totalSelected} ticket{totalSelected !== 1 ? "s" : ""} selected · £
+        {(totalPricePence / 100).toFixed(2)}
+      </div>
 
-      {/* CHECKOUT BUTTON */}
+      {/* CTA */}
       <button
-  onClick={handleCheckout}
-  disabled={isPending}
-  className="bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition w-full disabled:opacity-60"
->
-  {isPending ? "Starting Checkout…" : "Proceed to Checkout"}
-</button>
+        onClick={handleCheckout}
+        disabled={isPending || totalSelected === 0}
+        className="bg-accent text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition w-full disabled:opacity-60"
+      >
+        {isPending ? "Starting Checkout…" : "Proceed to Checkout"}
+      </button>
 
       {error && (
         <p className="text-sm text-red-600 text-center">{error}</p>

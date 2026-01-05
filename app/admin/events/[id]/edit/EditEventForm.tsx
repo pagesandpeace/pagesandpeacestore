@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
 import { Input } from "@/components/ui/Input";
@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 
 import Image from "next/image";
+import TicketEditor from "@/components/admin/events/TicketEditor";
 
 /* ----------------------------------------------
-   TYPES MATCHING PAGE.TSX
+   TYPES
 ---------------------------------------------- */
 
 type EventItem = {
@@ -22,7 +23,6 @@ type EventItem = {
   description?: string | null;
   date: string;
   capacity: number;
-  price_pence: number;
   image_url?: string | null;
   store_id: string;
   published: boolean;
@@ -48,11 +48,12 @@ export default function EditEventForm({
 
   const [title, setTitle] = useState(event.title);
   const [subtitle, setSubtitle] = useState(event.subtitle || "");
-  const [shortDescription, setShortDescription] = useState(event.short_description || "");
+  const [shortDescription, setShortDescription] = useState(
+    event.short_description || ""
+  );
   const [description, setDescription] = useState(event.description || "");
   const [date, setDate] = useState(event.date.slice(0, 16));
   const [capacity, setCapacity] = useState(event.capacity);
-  const [price, setPrice] = useState(event.price_pence / 100);
   const [published, setPublished] = useState(event.published);
   const [storeId, setStoreId] = useState(event.store_id);
 
@@ -61,11 +62,19 @@ export default function EditEventForm({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  /* ----------------------------------------------
+     🔒 STABILISE TICKET EDITOR
+  ---------------------------------------------- */
+  const ticketEditor = useMemo(() => {
+    return <TicketEditor eventId={event.id} />;
+  }, [event.id]);
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
+    setErrorMsg(null);
 
     const form = new FormData();
     form.append("file", file);
@@ -89,6 +98,7 @@ export default function EditEventForm({
 
   async function handleSubmit() {
     setSubmitting(true);
+    setErrorMsg(null);
 
     const payload = {
       id: event.id,
@@ -98,7 +108,6 @@ export default function EditEventForm({
       description,
       date,
       capacity,
-      price_pence: Math.round(price * 100),
       image_url: imageUrl,
       store_id: storeId,
       published,
@@ -110,8 +119,7 @@ export default function EditEventForm({
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      console.error("UPDATE FAILED:", errText);
+      console.error(await res.text());
       setErrorMsg("Failed to update event.");
       setSubmitting(false);
       return;
@@ -141,7 +149,9 @@ export default function EditEventForm({
 
         {/* SHORT DESCRIPTION */}
         <div>
-          <label className="block mb-1 text-sm font-medium">Short Description</label>
+          <label className="block mb-1 text-sm font-medium">
+            Short Description
+          </label>
           <TextArea
             rows={3}
             value={shortDescription}
@@ -152,13 +162,23 @@ export default function EditEventForm({
         {/* DESCRIPTION */}
         <div>
           <label className="block mb-1 text-sm font-medium">Description</label>
-          <TextArea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <TextArea
+            rows={5}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </div>
 
         {/* DATE */}
         <div>
-          <label className="block mb-1 text-sm font-medium">Event Date *</label>
-          <Input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} />
+          <label className="block mb-1 text-sm font-medium">
+            Event Date *
+          </label>
+          <Input
+            type="datetime-local"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
         </div>
 
         {/* STORE */}
@@ -169,7 +189,7 @@ export default function EditEventForm({
             value={storeId}
             onChange={(e) => setStoreId(e.target.value)}
           >
-            {stores.map((s: StoreItem) => (
+            {stores.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -182,23 +202,26 @@ export default function EditEventForm({
           <label className="block mb-1 text-sm font-medium">Event Image</label>
 
           {imageUrl && (
-            <div className="mb-3">
-              <Image
-                src={imageUrl}
-                alt="Current image"
-                width={300}
-                height={300}
-                className="object-cover rounded-lg border shadow"
-              />
-            </div>
+            <Image
+              src={imageUrl}
+              alt="Event image"
+              width={300}
+              height={300}
+              className="mb-3 rounded-lg border"
+            />
           )}
 
-          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition">
-            <input type="file" className="hidden" accept="image/*" onChange={handleUpload} />
-            <p className="text-sm font-medium">Replace image</p>
+          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-50">
+            <input
+              type="file"
+              className="hidden"
+              accept="image/*"
+              onChange={handleUpload}
+            />
+            <span className="text-sm">Replace image</span>
           </label>
 
-          {uploading && <p>Uploading...</p>}
+          {uploading && <p className="text-sm mt-1">Uploading…</p>}
         </div>
 
         {/* CAPACITY */}
@@ -206,23 +229,14 @@ export default function EditEventForm({
           <label className="block mb-1 text-sm font-medium">Capacity</label>
           <Input
             type="number"
-            value={capacity}
             min={1}
+            value={capacity}
             onChange={(e) => setCapacity(Number(e.target.value))}
           />
         </div>
 
-        {/* PRICE */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">Price (£)</label>
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            value={price}
-            onChange={(e) => setPrice(Number(e.target.value))}
-          />
-        </div>
+        {/* 🎟️ TICKET EDITOR (PRICING LIVES HERE) */}
+        {ticketEditor}
 
         {/* PUBLISHED */}
         <div className="flex items-center gap-3">
@@ -236,11 +250,14 @@ export default function EditEventForm({
 
         {/* ACTIONS */}
         <div className="flex gap-4 pt-6">
-          <Button variant="primary" disabled={submitting} onClick={handleSubmit}>
+          <Button disabled={submitting} onClick={handleSubmit}>
             {submitting ? "Saving…" : "Save Changes"}
           </Button>
 
-          <Button variant="neutral" onClick={() => router.push(`/admin/events/${event.id}`)}>
+          <Button
+            variant="neutral"
+            onClick={() => router.push(`/admin/events/${event.id}`)}
+          >
             Cancel
           </Button>
         </div>

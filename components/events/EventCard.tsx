@@ -9,13 +9,12 @@ export type EventCardType = {
   slug: string;
   title: string;
   date: string;
-  pricePence: number;
+  defaultPricePence: number; // ✅ default ticket price
   imageUrl?: string | null;
   remaining: number;
 };
 
 export default function EventCard({ event }: { event: EventCardType }) {
-  // ✅ Hydration-safe formatting (no locale punctuation differences)
   const dateFormatted = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "2-digit",
@@ -25,7 +24,7 @@ export default function EventCard({ event }: { event: EventCardType }) {
     hour12: false,
   }).format(new Date(event.date));
 
-  const price = (event.pricePence / 100).toFixed(2);
+  const price = (event.defaultPricePence / 100).toFixed(2);
 
   return (
     <Link
@@ -52,20 +51,22 @@ export default function EventCard({ event }: { event: EventCardType }) {
           {event.title}
         </h3>
 
-        {/* HYDRATION SAFE DATE */}
-        <p className="text-sm text-[var(--foreground)]/70">{dateFormatted}</p>
-
-        <p className="text-lg font-semibold text-[var(--accent)]">
-          £{price}
+        <p className="text-sm text-[var(--foreground)]/70">
+          {dateFormatted}
         </p>
 
-        {/* BADGE */}
+        <p className="text-lg font-semibold text-[var(--accent)]">
+          From £{price}
+        </p>
+
         {event.remaining > 0 ? (
           <Badge
             color={event.remaining <= 3 ? "yellow" : "green"}
             className="w-max px-3 py-1"
           >
-            {event.remaining <= 3 ? "Only a few seats left" : "Seats available"}
+            {event.remaining <= 3
+              ? "Only a few seats left"
+              : "Seats available"}
           </Badge>
         ) : (
           <Badge color="red" className="w-max px-3 py-1">

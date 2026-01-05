@@ -39,26 +39,22 @@ export async function POST(req: Request) {
       "-" +
       Date.now().toString().slice(-6);
 
-    console.log("📝 Slug:", slug);
-
-    // Convert pence → "12.50"
+    // Convert pence → decimal string for products table
     const priceString = (price_pence / 100).toFixed(2);
-    console.log("💷 Product price string:", priceString);
 
-    // -------------------------------
-    // 1️⃣ CREATE PRODUCT — sync capacity → inventory_count
-    // -------------------------------
+    /* -------------------------------------------------
+       1️⃣ CREATE EVENT PRODUCT (DEFAULT TICKET PRODUCT)
+    ------------------------------------------------- */
+
     const productPayload = {
-      name: title,
-      slug,
+      name: `${title} – General Admission`,
+      slug: `${slug}-general`,
       description: subtitle || short_description || "",
-      price: priceString, // TEXT column
+      price: priceString,
       image_url,
       product_type: "event",
-      inventory_count: capacity, // ⭐ NEW — FIXES OUT OF STOCK
+      inventory_count: capacity,
     };
-
-    console.log("🛍 Creating product:", productPayload);
 
     const { data: product, error: productError } = await supabase
       .from("products")
@@ -74,11 +70,10 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log("✅ Product created:", product);
+    /* -------------------------------------------------
+       2️⃣ CREATE EVENT
+    ------------------------------------------------- */
 
-    // -------------------------------
-    // 2️⃣ CREATE EVENT linked to product_id
-    // -------------------------------
     const eventPayload = {
       title,
       subtitle,
@@ -94,8 +89,6 @@ export async function POST(req: Request) {
       product_id: product.id,
     };
 
-    console.log("📦 Inserting event:", eventPayload);
-
     const { data: event, error: eventError } = await supabase
       .from("events")
       .insert(eventPayload)
@@ -110,7 +103,40 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log("🎉 Event successfully created:", event);
+    /* -------------------------------------------------
+       3️⃣ CREATE DEFAULT TICKET TYPE
+    ------------------------------------------------- */
+
+    const ticketPayload = {
+      event_id: event.id,
+      name: "General Admission",
+      description: null,
+      price_pence,
+      inventory_count: capacity,
+      product_id: product.id,
+      is_default: true,
+      is_active: true,
+    };
+
+    const { data: ticketRow, error: ticketError } = await supabase
+  .from("event_ticket_types")
+  .insert(ticketPayload)
+  .select()
+  .single();
+
+console.log("🎟 ticketRow:", ticketRow);
+console.log("🎟 ticketError:", ticketError);
+
+
+    if (ticketError) {
+      console.error("❌ TICKET TYPE ERROR:", ticketError);
+      return NextResponse.json(
+        { error: ticketError.message },
+        { status: 500 }
+      );
+    }
+
+    console.log("🎉 Event + default ticket created successfully");
 
     return NextResponse.json({ success: true, event });
   } catch (err) {

@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 import AuthPromptModal from "@/components/ui/AuthPromptModal";
 
+type TicketType = {
+  id: string;
+  name: string;
+  price_pence: number;
+  is_default: boolean;
+};
+
 export default function BookNowButton({
   eventId,
   slug,
@@ -15,14 +22,14 @@ export default function BookNowButton({
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
-  const [quantity, setQuantity] = useState(1);
+
+  const [tickets, setTickets] = useState<TicketType[]>([]);
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   /* -----------------------------
      CHECK LOGIN STATUS
   ----------------------------- */
   useEffect(() => {
-    let active = true;
-
     async function checkSession() {
       try {
         const res = await fetch("/api/me", {
@@ -30,7 +37,6 @@ export default function BookNowButton({
           credentials: "include",
         });
         const me = await res.json();
-        if (!active) return;
         setLoggedIn(Boolean(me?.id));
       } catch {
         setLoggedIn(false);
@@ -39,16 +45,60 @@ export default function BookNowButton({
 
     checkSession();
     window.addEventListener("pp:auth-updated", checkSession);
-    return () => {
-      active = false;
+    return () =>
       window.removeEventListener("pp:auth-updated", checkSession);
-    };
   }, []);
 
   /* -----------------------------
-     CLICK HANDLER
+     LOAD TICKET TYPES (PUBLIC)
+  ----------------------------- */
+  useEffect(() => {
+    async function loadTickets() {
+      const res = await fetch(`/api/events/${eventId}/tickets`, {
+        cache: "no-store",
+      });
+
+      if (!res.ok) return;
+
+      const data: TicketType[] = await res.json();
+      setTickets(data);
+
+      // initialise quantities
+      const initial: Record<string, number> = {};
+      for (const t of data) initial[t.id] = 0;
+      setQuantities(initial);
+    }
+
+    loadTickets();
+  }, [eventId]);
+
+  /* -----------------------------
+     DERIVED TOTALS
+  ----------------------------- */
+  const totalSelected = Object.values(quantities).reduce(
+    (sum, q) => sum + q,
+    0
+  );
+
+  const totalPrice = tickets.reduce((sum, t) => {
+    const q = quantities[t.id] ?? 0;
+    return sum + q * t.price_pence;
+  }, 0);
+
+  /* -----------------------------
+     CHECKOUT
   ----------------------------- */
   const handleBookNow = async () => {
+    if (totalSelected === 0) {
+      alert("Please select at least one ticket.");
+      return;
+    }
+
+    if (totalSelected > remainingSeats) {
+      alert("Not enough seats remaining.");
+      return;
+    }
+
     setLoading(true);
 
     const res = await fetch("/api/me", {
@@ -63,14 +113,20 @@ export default function BookNowButton({
       return;
     }
 
+    const items = Object.entries(quantities)
+      .filter(([_, q]) => q > 0)
+      .map(([ticketTypeId, quantity]) => ({
+        ticketTypeId,
+        quantity,
+      }));
+
     const checkoutRes = await fetch("/api/events/start-checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
         eventId,
-        slug,
-        quantity, // ✅ SEND QUANTITY
+        items,
       }),
     });
 
@@ -89,43 +145,77 @@ export default function BookNowButton({
   ----------------------------- */
   return (
     <>
-      {/* QUANTITY SELECTOR */}
-      <div className="flex items-center justify-center gap-4 mb-6">
-        <button
-          type="button"
-          onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-          disabled={quantity <= 1}
-          className="px-3 py-2 rounded-lg border text-lg disabled:opacity-40"
-        >
-          −
-        </button>
+      {/* TICKET TYPES */}
+      <div className="space-y-4 mb-6">
+        {tickets.map((t) => {
+          const qty = quantities[t.id] ?? 0;
 
-        <span className="text-lg font-semibold min-w-[2ch] text-center">
-          {quantity}
-        </span>
+          return (
+            <div
+              key={t.id}
+              className="flex items-center justify-between border rounded-lg px-4 py-3"
+            >
+              <div>
+                <div className="font-medium">{t.name}</div>
+                <div className="text-sm text-neutral-500">
+                  £{(t.price_pence / 100).toFixed(2)}
+                </div>
+              </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            setQuantity((q) => Math.min(remainingSeats, q + 1))
-          }
-          disabled={quantity >= remainingSeats}
-          className="px-3 py-2 rounded-lg border text-lg disabled:opacity-40"
-        >
-          +
-        </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantities((prev) => ({
+                      ...prev,
+                      [t.id]: Math.max(0, qty - 1),
+                    }))
+                  }
+                  disabled={qty === 0}
+                  className="w-8 h-8 rounded-full border text-lg disabled:opacity-40"
+                >
+                  −
+                </button>
+
+                <span className="min-w-[2ch] text-center font-semibold">
+                  {qty}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuantities((prev) => ({
+                      ...prev,
+                      [t.id]: Math.min(remainingSeats, qty + 1),
+                    }))
+                  }
+                  disabled={totalSelected >= remainingSeats}
+                  className="w-8 h-8 rounded-full border text-lg disabled:opacity-40"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* ACTION BUTTON */}
+      {/* SUMMARY */}
+      <div className="text-sm text-neutral-600 mb-4 text-center">
+        {totalSelected} ticket{totalSelected !== 1 ? "s" : ""} selected · £
+        {(totalPrice / 100).toFixed(2)}
+      </div>
+
+      {/* CTA */}
       <button
         onClick={handleBookNow}
-        disabled={loading || remainingSeats <= 0}
-        className="bg-[var(--accent)] text-white px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition w-full"
+        disabled={loading || remainingSeats <= 0 || totalSelected === 0}
+        className="bg-accent text-white px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition w-full disabled:opacity-50"
       >
         {loading
           ? "Loading…"
           : loggedIn
-          ? `Checkout (${quantity} ticket${quantity > 1 ? "s" : ""})`
+          ? "Proceed to Checkout"
           : "Book Now"}
       </button>
 

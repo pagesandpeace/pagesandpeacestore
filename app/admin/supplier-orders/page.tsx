@@ -49,7 +49,7 @@ export default function SupplierOrdersPage() {
     setLoading(true);
     const res = await fetch("/api/admin/supplier-orders");
     const json = await res.json();
-    setData(json);
+    setData(Array.isArray(json) ? json : []);
     setLoading(false);
   };
 

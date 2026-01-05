@@ -2,31 +2,38 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
+  console.log("📝 [EVENT UPDATE] route hit");
+
   try {
     const body = await req.json();
-
-    console.log("🚀 [UPDATE] RAW PAYLOAD RECEIVED:", body);
+    console.log("📝 [EVENT UPDATE] raw payload:", body);
 
     const { id, ...updates } = body;
 
     if (!id) {
-      console.error("❌ [UPDATE] Missing ID in request payload");
+      console.error("❌ [EVENT UPDATE] missing event id");
       return NextResponse.json(
         { error: "Missing event ID" },
         { status: 400 }
       );
     }
 
-    // Remove undefined or null values
+    if ("price_pence" in updates) {
+      console.warn(
+        "⚠️ [EVENT UPDATE] price_pence ignored (tickets own pricing)"
+      );
+      delete updates.price_pence;
+    }
+
     const clean = Object.fromEntries(
-      Object.entries(updates).filter(([_, v]) => v !== undefined && v !== null)
+      Object.entries(updates).filter(
+        ([_, v]) => v !== undefined && v !== null
+      )
     );
 
-    console.log("🧹 [UPDATE] CLEANED PAYLOAD (sent to Supabase):", clean);
+    console.log("📝 [EVENT UPDATE] cleaned payload:", clean);
 
     const supabase = await supabaseServer();
-
-    console.log(`📡 [UPDATE] Executing update for event ID: ${id}`);
 
     const { data, error } = await supabase
       .from("events")
@@ -35,33 +42,27 @@ export async function POST(req: Request) {
       .select()
       .maybeSingle();
 
-    console.log("📥 [UPDATE] SUPABASE RESPONSE DATA:", data);
-    console.log("⚠️ [UPDATE] SUPABASE RESPONSE ERROR:", error);
+    console.log("📝 [EVENT UPDATE] result:", data, error);
 
     if (error) {
-      console.error("❌ [UPDATE] Supabase returned an ERROR:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
     }
 
     if (!data) {
-      console.error("⚠️ [UPDATE] No rows were updated. Possible reason:");
-      console.error("  - ID does not match any row, OR");
-      console.error("  - A NOT NULL column failed validation, OR");
-      console.error("  - RLS is blocking the update");
-      console.error("  Clean payload was:", clean);
       return NextResponse.json(
-        { error: "No event updated. Invalid ID or constraint violation." },
+        { error: "No rows updated" },
         { status: 400 }
       );
     }
 
-    console.log("✅ [UPDATE] SUCCESS — Event updated:", data);
-
     return NextResponse.json({ success: true, event: data });
   } catch (err) {
-    console.error("💥 [UPDATE] UPDATE ROUTE FAILED:", err);
+    console.error("💥 [EVENT UPDATE] crashed:", err);
     return NextResponse.json(
-      { error: "Server error updating event." },
+      { error: "Server error updating event" },
       { status: 500 }
     );
   }

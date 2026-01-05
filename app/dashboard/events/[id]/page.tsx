@@ -5,23 +5,27 @@ import Image from "next/image";
 import Link from "next/link";
 import StartEventCheckout from "@/components/events/StartEventCheckout";
 
-export default async function EventDetailPage(props: { params: Promise<{ id: string }> }) {
+export default async function EventDetailPage(props: {
+  params: Promise<{ id: string }>;
+}) {
   const { id: eventId } = await props.params;
   const supabase = await supabaseServer();
 
-  /* --------------------------- GET USER --------------------------- */
+  /* --------------------------- AUTH --------------------------- */
   const { data: auth } = await supabase.auth.getUser();
   const user = auth?.user;
 
   if (!user) {
     return (
       <main className="min-h-screen p-8 text-center">
-        <p className="text-sm opacity-70">Please sign in to view this event.</p>
+        <p className="text-sm opacity-70">
+          Please sign in to view this event.
+        </p>
       </main>
     );
   }
 
-  /* ------------------------ FETCH EVENT ------------------------ */
+  /* ------------------------ EVENT ------------------------ */
   const { data: event } = await supabase
     .from("events")
     .select("*")
@@ -36,7 +40,31 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
     );
   }
 
-  /* ---------------------- FETCH BOOKINGS ---------------------- */
+  /* -------------------- TICKET TYPES -------------------- */
+  const { data: ticketTypes } = await supabase
+    .from("event_ticket_types")
+    .select(`
+      id,
+      name,
+      price_pence,
+      product_id,
+      is_default
+    `)
+    .eq("event_id", eventId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+
+  if (!ticketTypes || ticketTypes.length === 0) {
+    return (
+      <main className="min-h-screen p-8 text-center">
+        <p className="text-sm text-red-600">
+          No ticket types configured for this event.
+        </p>
+      </main>
+    );
+  }
+
+  /* ---------------------- BOOKINGS ---------------------- */
   const { data: allBookings } = await supabase
     .from("event_bookings")
     .select("cancelled")
@@ -74,16 +102,11 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
       </div>
 
       <div className="max-w-3xl mx-auto px-6 mt-10 space-y-10">
-
+        {/* INFO */}
         <section className="space-y-6 text-neutral-700 text-lg">
           <div>
             <strong>Date & Time</strong>
             <div>{formattedDate}</div>
-          </div>
-
-          <div>
-            <strong>Price</strong>
-            <div>£{(event.price_pence / 100).toFixed(2)} per ticket</div>
           </div>
 
           <div>
@@ -108,12 +131,15 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
         </section>
 
         {/* CHECKOUT */}
-        <section className="bg-white border rounded-xl p-6 shadow-sm text-center space-y-6">
-          <h2 className="text-xl font-semibold">Book Tickets</h2>
+        <section className="bg-white border rounded-xl p-6 shadow-sm space-y-6">
+          <h2 className="text-xl font-semibold text-center">
+            Choose your ticket
+          </h2>
 
           {!soldOut && (
             <StartEventCheckout
               eventId={eventId}
+              ticketTypes={ticketTypes}
               maxQuantity={remainingSeats}
             />
           )}
@@ -121,7 +147,7 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
           {soldOut && (
             <button
               disabled
-              className="bg-red-300 text-white px-8 py-3 rounded-lg font-semibold opacity-70"
+              className="bg-red-300 text-white px-8 py-3 rounded-lg font-semibold opacity-70 w-full"
             >
               Sold Out
             </button>
@@ -129,7 +155,7 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
 
           <Link
             href="/dashboard/legal/event-booking-terms"
-            className="underline text-sm text-[var(--accent)] block"
+            className="underline text-sm text-[var(--accent)] block text-center"
           >
             Booking Terms & Conditions
           </Link>

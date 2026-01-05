@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 
-type Attendee = {
+export type Attendee = {
   booking_id: string;
   order_item_id: string | null;
   price: number;
@@ -67,7 +67,9 @@ export default function EventAttendeesTable({
               <tr key={a.booking_id} className="border-t">
                 <td className="p-2">{a.name || `Guest ${i + 1}`}</td>
                 <td className="p-2">{a.email || "—"}</td>
-                <td className="p-2">£{a.price.toFixed(2)}</td>
+                <td className="p-2">
+                  £{Number(a.price).toFixed(2)}
+                </td>
                 <td className="p-2">{status}</td>
                 <td className="p-2 text-right">
                   <Button

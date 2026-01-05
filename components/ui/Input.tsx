@@ -9,10 +9,16 @@ export interface InputProps
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, invalid, ...props }, ref) => {
+  ({ className, invalid, type, ...props }, ref) => {
+    const inputRef = React.useRef<HTMLInputElement | null>(null);
+
+    // Merge forwarded ref + local ref
+    React.useImperativeHandle(ref, () => inputRef.current as HTMLInputElement);
+
     return (
       <input
-        ref={ref}
+        ref={inputRef}
+        type={type}
         aria-invalid={invalid ? "true" : undefined}
         className={cn(
           "w-full rounded-md bg-white px-4 py-3 text-[#111] placeholder:text-[#777] outline-none",
@@ -22,6 +28,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             : "border-[#ccc] focus:ring-2 focus:ring-[var(--accent)]/30",
           className
         )}
+        // 🚫 Prevent mouse wheel changing number inputs
+        onWheel={(e) => {
+          if (type === "number") {
+            e.currentTarget.blur();
+          }
+        }}
         {...props}
       />
     );

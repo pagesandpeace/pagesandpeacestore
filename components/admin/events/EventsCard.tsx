@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
@@ -10,9 +11,12 @@ type Event = {
   subtitle?: string | null;
   date: string;
   capacity: number;
-  price_pence: number;
   published: boolean;
   event_bookings?: { id: string }[] | null;
+};
+
+type TicketPrice = {
+  price_pence: number;
 };
 
 type EventCardProps = {
@@ -23,6 +27,52 @@ export default function EventCard({ event }: EventCardProps) {
   const seatsBooked = event.event_bookings?.length ?? 0;
   const seatsLeft = event.capacity - seatsBooked;
 
+  /* -----------------------------
+     TICKET PRICE RANGE
+  ----------------------------- */
+  const [priceLabel, setPriceLabel] = useState<string>("—");
+
+  useEffect(() => {
+    async function loadPrices() {
+      const res = await fetch(
+        `/api/admin/events/${event.id}/tickets`,
+        { cache: "no-store" }
+      );
+
+      if (!res.ok) {
+        setPriceLabel("—");
+        return;
+      }
+
+      const tickets: TicketPrice[] = await res.json();
+
+      const prices = tickets
+        .map((t) => t.price_pence)
+        .filter((p) => typeof p === "number");
+
+      if (prices.length === 0) {
+        setPriceLabel("—");
+        return;
+      }
+
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+
+      if (min === max) {
+        setPriceLabel(`£${(min / 100).toFixed(2)}`);
+      } else {
+        setPriceLabel(
+          `£${(min / 100).toFixed(2)} – £${(max / 100).toFixed(2)}`
+        );
+      }
+    }
+
+    loadPrices();
+  }, [event.id]);
+
+  /* -----------------------------
+     RENDER
+  ----------------------------- */
   return (
     <Card className="w-full">
       <CardHeader>
@@ -31,7 +81,9 @@ export default function EventCard({ event }: EventCardProps) {
             <h3 className="text-lg font-semibold">{event.title}</h3>
 
             {event.subtitle && (
-              <p className="text-sm text-neutral-600">{event.subtitle}</p>
+              <p className="text-sm text-neutral-600">
+                {event.subtitle}
+              </p>
             )}
           </div>
 
@@ -58,18 +110,22 @@ export default function EventCard({ event }: EventCardProps) {
           })}
         </p>
 
+        {/* ✅ PRICE RANGE */}
         <p className="text-sm text-neutral-800">
-          Price:{" "}
-          <strong>£{(event.price_pence / 100).toFixed(2)}</strong>
+          Price: <strong>{priceLabel}</strong>
         </p>
 
         <p className="text-sm text-neutral-800">
           Capacity: {seatsBooked}/{event.capacity}{" "}
           {seatsLeft <= 2 && seatsLeft > 0 && (
-            <span className="text-orange-600 font-medium">(Low)</span>
+            <span className="text-orange-600 font-medium">
+              (Low)
+            </span>
           )}
           {seatsLeft <= 0 && (
-            <span className="text-red-600 font-medium">(Full)</span>
+            <span className="text-red-600 font-medium">
+              (Full)
+            </span>
           )}
         </p>
 
@@ -77,8 +133,6 @@ export default function EventCard({ event }: EventCardProps) {
           <Link href={`/admin/events/${event.id}`}>
             <Button variant="primary">View / Edit</Button>
           </Link>
-
-        
         </div>
       </CardBody>
     </Card>

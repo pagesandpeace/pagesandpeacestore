@@ -287,19 +287,27 @@ export default function CreateEventPage() {
           />
         </div>
 
-        {/* PRICE */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">
-            Price (£) — leave 0 for free
-          </label>
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            value={price}
-            onChange={(e) => setPrice(Number(e.target.value))}
-          />
-        </div>
+        {/* DEFAULT TICKET PRICE */}
+<div>
+  <label className="block mb-1 text-sm font-medium">
+    Default Ticket Price (£)
+  </label>
+
+  <Input
+    type="number"
+    min={0}
+    step="0.01"
+    value={price}
+    onChange={(e) => setPrice(Number(e.target.value))}
+  />
+
+  <p className="text-xs text-gray-500 mt-1">
+    This creates the default “General Admission” ticket.
+    You can add more ticket options (e.g. drinks, snacks, VIP)
+    after creating the event.
+  </p>
+</div>
+
 
         {/* PUBLISHED */}
         <div className="flex items-center gap-3">

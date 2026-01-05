@@ -66,6 +66,18 @@ export async function sendOrderConfirmationEmail(orderId: string) {
   console.log("📧 Email resolved from auth.users:", userEmail);
 
   const items = order.order_items ?? [];
+  
+  console.log("📨 EMAIL DEBUG — order_items payload", {
+  orderId,
+  rawItems: items,
+  mapped: items.map((i) => ({
+    kind: i.kind,
+    name: i.name,
+    quantity: i.quantity,
+    price: i.price,
+    lineTotal: Number(i.price) * i.quantity,
+  })),
+});
 
   /* -----------------------------------------------------
      Formatting

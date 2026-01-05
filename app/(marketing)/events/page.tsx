@@ -9,12 +9,25 @@ export default async function EventsPage() {
   const now = new Date();
 
   /* -----------------------------
-     FETCH EVENTS (LIVE ONLY)
+     FETCH EVENTS + DEFAULT TICKET
   ----------------------------- */
   const { data: events, error: eventErr } = await supabase
     .from("events")
-    .select("*")
-    .eq("is_test", false) // ✅ hide test events
+    .select(`
+      id,
+      slug,
+      title,
+      date,
+      capacity,
+      image_url,
+      is_test,
+      event_ticket_types!inner (
+        price_pence,
+        is_default
+      )
+    `)
+    .eq("is_test", false)
+    .eq("event_ticket_types.is_default", true)
     .order("date", { ascending: true });
 
   if (eventErr) {
@@ -46,9 +59,16 @@ export default async function EventsPage() {
       (b) => b.event_id === evt.id && !b.cancelled
     ).length;
 
+    const defaultTicket = evt.event_ticket_types?.[0];
+
     return {
-      ...evt,
+      id: evt.id,
+      slug: evt.slug,
+      title: evt.title,
+      date: evt.date,
+      imageUrl: evt.image_url,
       remaining: evt.capacity - active,
+      defaultPricePence: defaultTicket?.price_pence ?? 0,
     };
   });
 
@@ -78,9 +98,9 @@ export default async function EventsPage() {
                 slug: evt.slug,
                 title: evt.title,
                 date: evt.date,
-                pricePence: evt.price_pence,
-                imageUrl: evt.image_url,
+                imageUrl: evt.imageUrl,
                 remaining: evt.remaining,
+                defaultPricePence: evt.defaultPricePence,
               };
 
               return <EventCard key={evt.id} event={cardEvent} />;

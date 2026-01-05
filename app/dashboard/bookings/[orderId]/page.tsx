@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /* -----------------------------
-   HARD FAIL HELPER (KEEP)
+   HARD FAIL HELPER
 ----------------------------- */
 function fail(where: string): never {
   throw new Error("BOOKING PAGE FAIL → " + where);
@@ -17,7 +17,7 @@ export default async function BookingDetailPage({
   const supabase = await supabaseServer();
 
   /* -----------------------------
-     AUTH USER
+     AUTH
   ----------------------------- */
   const {
     data: { user },
@@ -36,26 +36,48 @@ export default async function BookingDetailPage({
   ----------------------------- */
   const { data: order } = await supabase
     .from("orders")
-    .select("id, total, status, stripe_checkout_session_id")
+    .select("id, total, status")
     .eq("id", orderId)
     .single();
 
   if (!order) fail("NO ORDER");
 
   /* -----------------------------
-     EVENT ORDER ITEM
+     EVENT ORDER ITEMS
+     🔑 THIS IS REQUIRED
   ----------------------------- */
-  const { data: eventItems } = await supabase
+  const { data: orderItems } = await supabase
     .from("order_items")
-    .select("id, event_id, quantity")
+    .select("id, event_id")
     .eq("order_id", orderId)
     .eq("kind", "event");
 
-  if (!eventItems || eventItems.length === 0) {
-    fail("NO EVENT ITEM");
+  if (!orderItems || orderItems.length === 0) {
+    fail("NO EVENT ORDER ITEMS");
   }
 
-  const eventItem = eventItems[0];
+  const orderItemIds = orderItems.map((i) => i.id);
+  const eventId = orderItems[0].event_id;
+
+  /* -----------------------------
+     LOAD SEATS (CORRECT)
+  ----------------------------- */
+  const { data: seats } = await supabase
+    .from("event_bookings")
+    .select(`
+      id,
+      name,
+      refunded,
+      cancelled,
+      created_at,
+      user_id_uuid
+    `)
+    .in("order_item_id", orderItemIds)
+    .order("created_at", { ascending: true });
+
+  if (!seats || seats.length === 0) {
+    fail("NO SEATS");
+  }
 
   /* -----------------------------
      EVENT
@@ -66,35 +88,19 @@ export default async function BookingDetailPage({
       id,
       title,
       subtitle,
-      short_description,
       description,
       date,
       capacity,
-      price_pence,
-      image_url,
-      published
+      image_url
     `)
-    .eq("id", eventItem.event_id)
+    .eq("id", eventId)
     .single();
 
   if (!event) fail("NO EVENT");
 
   /* -----------------------------
-     LOAD SEATS
-  ----------------------------- */
-  const { data: seats } = await supabase
-    .from("event_bookings")
-    .select("id, name, refunded, cancelled, created_at, user_id_uuid")
-    .eq("order_item_id", eventItem.id)
-    .order("created_at", { ascending: true });
-
-  if (!seats || seats.length === 0) {
-    fail("NO SEATS");
-  }
-
-  /* -----------------------------
-     ✅ ADDITIVE FIX:
-     Force booker seat to index 0
+     SORT SEATS
+     Booker first
   ----------------------------- */
   const sortedSeats = [...seats].sort((a, b) => {
     const aIsBooker = a.user_id_uuid === user.id;
@@ -103,7 +109,6 @@ export default async function BookingDetailPage({
     if (aIsBooker && !bIsBooker) return -1;
     if (!aIsBooker && bIsBooker) return 1;
 
-    // stable fallback
     return (
       new Date(a.created_at).getTime() -
       new Date(b.created_at).getTime()
@@ -111,9 +116,9 @@ export default async function BookingDetailPage({
   });
 
   /* -----------------------------
-     DERIVED COUNTS
+     COUNTS
   ----------------------------- */
-  const totalTickets = eventItem.quantity;
+  const totalTickets = sortedSeats.length;
   const activeTickets = sortedSeats.filter(
     (s) => !s.refunded && !s.cancelled
   ).length;
@@ -151,21 +156,16 @@ export default async function BookingDetailPage({
           </p>
 
           <div className="flex flex-wrap gap-4 text-sm opacity-90">
-            {event.capacity && <span>👥 Capacity: {event.capacity}</span>}
-            {event.price_pence && (
-              <span>💷 £{(event.price_pence / 100).toFixed(2)}</span>
-            )}
+            <span>👥 Capacity: {event.capacity}</span>
           </div>
 
           <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-sm">
             🎟️{" "}
             {activeTickets === 0
               ? "All tickets refunded"
-              : activeTickets === totalTickets
-              ? `${totalTickets} ${
-                  totalTickets === 1 ? "ticket" : "tickets"
-                } booked`
-              : `${activeTickets} of ${totalTickets} tickets active`}
+              : `${activeTickets} ${
+                  activeTickets === 1 ? "ticket" : "tickets"
+                } booked`}
           </div>
         </div>
       </section>
@@ -177,12 +177,11 @@ export default async function BookingDetailPage({
         <div className="grid gap-4 sm:grid-cols-2">
           {sortedSeats.map((seat, idx) => {
             const isBooker = idx === 0;
+            const refunded = seat.refunded || seat.cancelled;
 
             const displayName =
               seat.name ||
               (isBooker ? bookerName : `Guest ${idx + 1}`);
-
-            const refunded = seat.refunded || seat.cancelled;
 
             return (
               <div
@@ -195,7 +194,9 @@ export default async function BookingDetailPage({
                   Ticket {idx + 1}
                   {isBooker && " • Booker"}
                 </p>
+
                 <p className="font-medium">{displayName}</p>
+
                 <p className="text-xs mt-1">
                   {refunded ? "Refunded" : "Active"}
                 </p>
@@ -208,9 +209,11 @@ export default async function BookingDetailPage({
       {/* PAYMENT */}
       <section className="rounded-xl border bg-white p-6 text-sm text-neutral-700 shadow-sm">
         <h3 className="mb-2 font-medium">Payment summary</h3>
+
         <p>
           <strong>Total paid:</strong> £{order.total}
         </p>
+
         <p>
           <strong>Status:</strong>{" "}
           <span className="capitalize">{order.status}</span>

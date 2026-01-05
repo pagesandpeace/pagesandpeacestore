@@ -153,10 +153,7 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
             {formattedDate}
           </div>
 
-          <div className="border-b border-muted pb-4">
-            <strong>Price</strong>
-            £{(event.price_pence / 100).toFixed(2)}
-          </div>
+        
 
           <div className="border-b border-muted pb-4">
             <strong>Availability</strong>
