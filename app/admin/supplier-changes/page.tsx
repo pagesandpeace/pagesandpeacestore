@@ -17,6 +17,7 @@ export default async function SupplierChangesPage() {
       new_value,
       detected_at,
       product_id,
+      status,
       products (
         id,
         name,
@@ -27,7 +28,11 @@ export default async function SupplierChangesPage() {
     .order("detected_at", { ascending: false });
 
   if (error) {
-    return <p className="p-6 text-red-600">Failed to load supplier changes.</p>;
+    return (
+      <p className="p-6 text-red-600">
+        Failed to load supplier changes.
+      </p>
+    );
   }
 
   return (
@@ -39,8 +44,9 @@ export default async function SupplierChangesPage() {
 
         <CardBody className="space-y-4 text-sm text-muted-foreground">
           <p>
-            Supplier-detected changes that require admin approval before
-            affecting live catalogue products.
+            Supplier-detected changes for admin review.
+            Supplier costs update automatically; retail pricing decisions
+            should be reviewed on the product page.
           </p>
         </CardBody>
       </Card>
@@ -61,7 +67,10 @@ export default async function SupplierChangesPage() {
           <tbody>
             {changes?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-neutral-500">
+                <td
+                  colSpan={6}
+                  className="px-4 py-6 text-center text-neutral-500"
+                >
                   No pending supplier changes.
                 </td>
               </tr>
@@ -77,27 +86,25 @@ export default async function SupplierChangesPage() {
                   <Badge>{c.field}</Badge>
                 </td>
 
-                <td className="px-4 py-3">{c.old_value ?? "—"}</td>
-                <td className="px-4 py-3 font-semibold">{c.new_value}</td>
+                <td className="px-4 py-3">
+                  {c.old_value ?? "—"}
+                </td>
+
+                <td className="px-4 py-3 font-semibold">
+                  {c.new_value}
+                </td>
 
                 <td className="px-4 py-3 text-xs text-neutral-500">
                   {new Date(c.detected_at).toLocaleString()}
                 </td>
 
-                <td className="px-4 py-3 text-right space-x-2">
+                <td className="px-4 py-3 text-right">
                   <form
-                    action={`/api/admin/supplier-changes/${c.id}/accept`}
+                    action={`/api/admin/supplier-changes/${c.id}/view`}
                     method="post"
                   >
-                    <Button size="sm">Accept</Button>
-                  </form>
-
-                  <form
-                    action={`/api/admin/supplier-changes/${c.id}/reject`}
-                    method="post"
-                  >
-                    <Button size="sm" variant="neutral">
-                      Reject
+                    <Button size="sm">
+                      View product
                     </Button>
                   </form>
                 </td>
