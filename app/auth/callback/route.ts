@@ -30,9 +30,9 @@ export async function GET(request: Request) {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
-        setAll: (cookies) => {
-          cookies.forEach((cookie) =>
-            cookieStore.set(cookie.name, cookie.value, cookie.options)
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach((c) =>
+            cookieStore.set(c.name, c.value, c.options)
           );
         },
       },
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   );
 
   /* --------------------------------------------------
-     Supabase SERVICE ROLE client (bypass RLS)
+     Supabase SERVICE ROLE (bypass RLS)
   -------------------------------------------------- */
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,46 +60,77 @@ export async function GET(request: Request) {
   }
 
   /* --------------------------------------------------
-     Get authenticated user
+     Get authenticated auth user
   -------------------------------------------------- */
   const {
     data: { user },
     error: userErr,
   } = await supabase.auth.getUser();
 
-  if (userErr || !user) {
+  if (userErr || !user || !user.email) {
     console.error("❌ getUser failed:", userErr);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
-  /* --------------------------------------------------
-     UPSERT PROFILE (IDEMPOTENT, RACE-SAFE)
-  -------------------------------------------------- */
+  const email = user.email.toLowerCase();
   const meta = (user.user_metadata as GoogleMetadata) || {};
 
-  const { error: upsertErr } = await supabaseAdmin
+  /* --------------------------------------------------
+     EMAIL-FIRST USER LOOKUP (CANONICAL STEP)
+  -------------------------------------------------- */
+  const { data: existingUser, error: lookupErr } = await supabaseAdmin
     .from("users")
-    .upsert(
-      {
-        auth_user_id: user.id,
-        email: user.email,
-        name: meta.full_name || meta.name || user.email,
-        image: meta.avatar_url || meta.picture || null,
-        role: "customer",
-        auth_provider: "google",
-      },
-      {
-        onConflict: "auth_user_id",
-      }
-    );
+    .select("id, auth_user_id")
+    .eq("email", email)
+    .maybeSingle();
 
-  if (upsertErr) {
-    console.error("❌ Failed to upsert user profile:", upsertErr);
+  if (lookupErr) {
+    console.error("❌ users email lookup failed:", lookupErr);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
   /* --------------------------------------------------
-     Done
+     CASE 1: User exists → reattach auth_user_id
   -------------------------------------------------- */
+  if (existingUser) {
+    if (existingUser.auth_user_id !== user.id) {
+      const { error: updateErr } = await supabaseAdmin
+        .from("users")
+        .update({
+          auth_user_id: user.id,
+          auth_provider: "google",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingUser.id);
+
+      if (updateErr) {
+        console.error("❌ Failed to reattach auth_user_id:", updateErr);
+        return NextResponse.redirect(new URL("/sign-in", url));
+      }
+    }
+
+    return NextResponse.redirect(new URL(callbackURL, url));
+  }
+
+  /* --------------------------------------------------
+     CASE 2: No user → create new canonical user
+  -------------------------------------------------- */
+  const { error: insertErr } = await supabaseAdmin.from("users").insert({
+    id: crypto.randomUUID(),
+    email,
+    auth_user_id: user.id,
+    name: meta.full_name || meta.name || email,
+    image: meta.avatar_url || meta.picture || null,
+    role: "customer",
+    auth_provider: "google",
+    email_verified: true,
+    created_at: new Date().toISOString(),
+  });
+
+  if (insertErr) {
+    console.error("❌ Failed to create user profile:", insertErr);
+    return NextResponse.redirect(new URL("/sign-in", url));
+  }
+
   return NextResponse.redirect(new URL(callbackURL, url));
 }
