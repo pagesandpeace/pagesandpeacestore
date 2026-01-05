@@ -73,39 +73,29 @@ export async function GET(request: Request) {
   }
 
   /* --------------------------------------------------
-     Check for existing profile
+     UPSERT PROFILE (IDEMPOTENT, RACE-SAFE)
   -------------------------------------------------- */
-  const { data: existing, error: lookupErr } = await supabase
+  const meta = (user.user_metadata as GoogleMetadata) || {};
+
+  const { error: upsertErr } = await supabaseAdmin
     .from("users")
-    .select("id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
+    .upsert(
+      {
+        auth_user_id: user.id,
+        email: user.email,
+        name: meta.full_name || meta.name || user.email,
+        image: meta.avatar_url || meta.picture || null,
+        role: "customer",
+        auth_provider: "google",
+      },
+      {
+        onConflict: "auth_user_id",
+      }
+    );
 
-  if (lookupErr) {
-    console.error("❌ users lookup failed:", lookupErr);
+  if (upsertErr) {
+    console.error("❌ Failed to upsert user profile:", upsertErr);
     return NextResponse.redirect(new URL("/sign-in", url));
-  }
-
-  /* --------------------------------------------------
-     CREATE PROFILE (REQUIRED id PROVIDED)
-  -------------------------------------------------- */
-  if (!existing) {
-    const meta = (user.user_metadata as GoogleMetadata) || {};
-
-    const { error: insertErr } = await supabaseAdmin.from("users").insert({
-      id: crypto.randomUUID(),              // ✅ REQUIRED
-      auth_user_id: user.id,                // ✅ LINK TO AUTH
-      email: user.email,
-      name: meta.full_name || meta.name || user.email,
-      image: meta.avatar_url || meta.picture || null,
-      role: "customer",
-      auth_provider: "google",
-    });
-
-    if (insertErr) {
-      console.error("❌ Failed to create user profile:", insertErr);
-      return NextResponse.redirect(new URL("/sign-in", url));
-    }
   }
 
   /* --------------------------------------------------
