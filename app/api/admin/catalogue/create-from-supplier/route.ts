@@ -152,6 +152,8 @@ export async function POST(req: Request) {
         supplier_name: supplier,
         isbn_13: supplier_ref,
         supplier_import_batch_id: sp.import_batch_id,
+        image_url:
+      "https://res.cloudinary.com/dadinnds6/image/upload/v1766977366/Coming_soon_nllsa4.svg",
       })
       .select("id")
       .single();

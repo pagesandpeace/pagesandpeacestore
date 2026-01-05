@@ -21,12 +21,10 @@ type Props = {
   vibes: Option[];
   themes: Option[];
 
-  // parent-controlled selections
   genreId: string | null;
   vibeId: string | null;
   themeId: string | null;
 
-  // callbacks to parent
   onSelect: (
     type: "genre" | "vibe" | "theme",
     id: string
@@ -68,14 +66,19 @@ export default function ClassificationSuggestions({
     try {
       const res = await fetch(
         `/api/admin/products/${productId}/suggest-classification`,
-        { method: "POST", credentials: "include" }
+        {
+          method: "POST",
+          credentials: "include",
+        }
       );
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "AI failed");
+      if (!res.ok) {
+        throw new Error(json.error || "AI failed");
+      }
 
       setSuggestions(json);
-    } catch {
+    } catch (err) {
       setError("Failed to generate classification suggestions.");
     } finally {
       setLoading(false);
@@ -83,7 +86,7 @@ export default function ClassificationSuggestions({
   }
 
   /* -------------------------------
-     APPLY OR CREATE
+     APPLY / CREATE VIA API
   -------------------------------- */
   async function applySuggestion(
     type: "genre" | "vibe" | "theme",
@@ -98,24 +101,18 @@ export default function ClassificationSuggestions({
         ? vibes
         : themes;
 
-    const normalized = value.toLowerCase().trim();
+    const normalized = value.trim().toLowerCase();
 
-    const match = list.find((i) => {
-      const name = i.name.toLowerCase().trim();
-      return (
-        name === normalized ||
-        name.includes(normalized) ||
-        normalized.includes(name)
-      );
-    });
+    // ✅ exact match only (DB is canonical)
+    const existing = list.find(
+      (i) => i.name.trim().toLowerCase() === normalized
+    );
 
-    // ✅ exists → select
-    if (match) {
-      onSelect(type, match.id);
+    if (existing) {
+      onSelect(type, existing.id);
       return;
     }
 
-    // ❌ missing → create
     const confirmCreate = confirm(
       `"${value}" does not exist.\n\nCreate new ${type}?`
     );
@@ -128,16 +125,27 @@ export default function ClassificationSuggestions({
         {
           method: "POST",
           credentials: "include",
-          body: JSON.stringify({ type, name: value }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type,
+            name: value,
+          }),
         }
       );
 
-      const created: Option = await res.json();
-      if (!res.ok) throw new Error();
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || "Create failed");
+      }
+
+      const created = json as Option;
 
       onCreated(type, created);
       onSelect(type, created.id);
-    } catch {
+    } catch (err) {
       setError(`Failed to create ${type}.`);
     }
   }
@@ -185,7 +193,6 @@ export default function ClassificationSuggestions({
           );
         })}
 
-      {/* READ-ONLY FEEDBACK */}
       <div className="text-xs text-neutral-600 pt-2 border-t">
         <p>Selected genre: {genreId || "—"}</p>
         <p>Selected vibe: {vibeId || "—"}</p>

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import slugify from "slugify";
 
 const TABLE_MAP = {
   genre: "genres",
@@ -67,18 +68,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!TABLE_MAP[type]) {
+    const table = TABLE_MAP[type];
+    if (!table) {
       return NextResponse.json(
         { error: "Invalid classification type" },
         { status: 400 }
       );
     }
 
-    const table = TABLE_MAP[type];
     const cleanName = name.trim();
-
-    console.log("📌 INSERT INTO:", table, "NAME:", cleanName);
-
     if (!cleanName) {
       return NextResponse.json(
         { error: "Empty name" },
@@ -86,35 +84,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log("📌 TABLE:", table, "NAME:", cleanName);
+
+    /* -------------------------
+       CHECK EXISTING (case-insensitive)
+    ------------------------- */
+    const { data: existing, error: existingErr } =
+      await supabase
+        .from(table)
+        .select("id, name")
+        .ilike("name", cleanName)
+        .maybeSingle();
+
+    console.log("🔎 EXISTING CHECK:", existing, existingErr);
+
+    if (existing) {
+      return NextResponse.json(existing);
+    }
+
     /* -------------------------
        INSERT
     ------------------------- */
+    const insertPayload: Record<string, unknown> = {
+      name: cleanName,
+    };
+
+    // genres.id is TEXT and required → slugify
+    if (type === "genre") {
+      insertPayload.id = slugify(cleanName, {
+        lower: true,
+        strict: true,
+      });
+    }
+
     const { data, error } = await supabase
       .from(table)
-      .insert({ name: cleanName })
+      .insert(insertPayload)
       .select("id, name")
       .single();
 
     console.log("📥 INSERT RESULT:", data, error);
 
     if (error) {
-      if (error.code === "23505") {
-        console.log("♻️ DUPLICATE — fetching existing");
-
-        const { data: existing, error: fetchErr } =
-          await supabase
-            .from(table)
-            .select("id, name")
-            .ilike("name", cleanName)
-            .single();
-
-        console.log("📦 EXISTING:", existing, fetchErr);
-
-        if (existing) {
-          return NextResponse.json(existing);
-        }
-      }
-
       return NextResponse.json(
         { error: error.message },
         { status: 500 }
