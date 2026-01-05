@@ -6,16 +6,6 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 /* -------------------------------------------
-   TYPES
-------------------------------------------- */
-
-type ProductRow = {
-  id: string;
-  isbn_13: string | null;
-  supplier_price: number | null;
-};
-
-/* -------------------------------------------
    HELPERS
 ------------------------------------------- */
 
@@ -126,6 +116,7 @@ export async function POST(req: Request) {
       .map((r) => {
         const isbn = normalizeISBN(r["ISBN"]);
         const price = Number(r["PRICE"]);
+
         if (!isbn || !Number.isFinite(price) || price <= 0) return null;
 
         return {
@@ -175,27 +166,43 @@ export async function POST(req: Request) {
     /* -------------------------
        FETCH LINKED PRODUCTS
     ------------------------- */
+    const { data: links } = await supabaseAdmin
+      .from("product_supplier_links")
+      .select("product_id, supplier_ref")
+      .eq("supplier", "gardners");
+
+    const linkMap = new Map(
+      links?.map((l) => [l.supplier_ref, l.product_id]) ?? []
+    );
+
     const { data: products } = await supabaseAdmin
       .from("products")
       .select("id, isbn_13, supplier_price")
-      .eq("supplier_name", "gardners")
-      .in(
-        "isbn_13",
-        normalized.map((n) => n.supplier_ref)
-      );
+      .eq("supplier_name", "gardners");
 
-    const productMap = new Map<string, ProductRow>();
-    for (const p of (products ?? []) as ProductRow[]) {
+    const productMap = new Map<string, any>();
+    for (const p of products ?? []) {
       if (p.isbn_13) productMap.set(p.isbn_13, p);
     }
 
     /* -------------------------
-       DETECT SUPPLIER CHANGES
+       UPDATE PRODUCT SUPPLIER SNAPSHOT
+       + DETECT CHANGES
     ------------------------- */
     for (const n of normalized) {
       const product = productMap.get(n.supplier_ref);
       if (!product) continue;
 
+      // Always update supplier snapshot
+      await supabaseAdmin
+        .from("products")
+        .update({
+          supplier_price: n.supplier_price,
+          supplier_last_updated: new Date().toISOString(),
+        })
+        .eq("id", product.id);
+
+      // Detect price change
       if (Number(product.supplier_price) !== Number(n.supplier_price)) {
         const { data: existing } = await supabaseAdmin
           .from("supplier_changes")
@@ -218,7 +225,35 @@ export async function POST(req: Request) {
     }
 
     /* -------------------------
-       FINALISE
+       UPDATE PRODUCT RANKINGS (MONTHLY SNAPSHOT)
+    ------------------------- */
+    const rankingRows = normalized
+      .map((n) => {
+        const productId = linkMap.get(n.supplier_ref);
+        if (!productId || !n.rank_pos) return null;
+
+        return {
+          product_id: productId,
+          isbn_13: n.supplier_ref,
+          supplier_name: "gardners",
+          rank: n.rank_pos,
+          import_month: importMonth,
+        };
+      })
+      .filter(Boolean);
+
+    if (rankingRows.length) {
+      await supabaseAdmin
+        .from("product_rankings")
+        .delete()
+        .eq("supplier_name", "gardners")
+        .eq("import_month", importMonth);
+
+      await supabaseAdmin.from("product_rankings").insert(rankingRows);
+    }
+
+    /* -------------------------
+       FINALISE BATCH
     ------------------------- */
     await supabaseAdmin
       .from("supplier_import_batches")
@@ -230,7 +265,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       batch_id: batchId,
-      supplier_changes_detected: true,
+      rankings_updated: rankingRows.length,
     });
   } catch (err) {
     console.error("❌ GARDNERS APPLY FAILED:", err);
