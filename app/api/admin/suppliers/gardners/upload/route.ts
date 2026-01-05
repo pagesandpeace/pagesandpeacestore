@@ -9,10 +9,14 @@ export async function POST(req: Request) {
   try {
     const supabase = await supabaseServer();
 
+    console.log("🟡 [UPLOAD] route hit");
+
     /* -------------------------
        AUTH
     ------------------------- */
-    const { data: auth } = await supabase.auth.getUser();
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    console.log("🟡 [UPLOAD] auth", auth, authError);
+
     if (!auth?.user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
@@ -22,6 +26,8 @@ export async function POST(req: Request) {
       .select("id, role")
       .eq("auth_user_id", auth.user.id)
       .single();
+
+    console.log("🟡 [UPLOAD] profile", profile, profileError);
 
     if (profileError || !profile || profile.role !== "admin") {
       return NextResponse.json({ error: "Admins only" }, { status: 403 });
@@ -39,11 +45,12 @@ export async function POST(req: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Stable fingerprint for this spreadsheet
     const fileHash = crypto
       .createHash("sha256")
       .update(buffer)
       .digest("hex");
+
+    console.log("🟡 [UPLOAD] file hash", fileHash);
 
     /* -------------------------
        PARSE XLS
@@ -55,6 +62,8 @@ export async function POST(req: Request) {
       raw: false,
       defval: null,
     });
+
+    console.log("🟡 [UPLOAD] rows parsed", rows.length);
 
     /* -------------------------
        CREATE IMPORT BATCH
@@ -73,23 +82,21 @@ export async function POST(req: Request) {
       .single();
 
     if (batchError) {
-      console.error("❌ Failed to create import batch:", batchError);
+      console.error("❌ [UPLOAD] batch insert failed", batchError);
       return NextResponse.json(
-        { error: "Failed to create import batch" },
+        { error: batchError.message },
         { status: 500 }
       );
     }
 
-    /* -------------------------
-       RESPONSE
-    ------------------------- */
+    console.log("🟢 [UPLOAD] batch created", batch.id);
+
     return NextResponse.json({
       batch_id: batch.id,
       rows_count: rows.length,
-      sample: rows.slice(0, 5),
     });
   } catch (err) {
-    console.error("GARDNERS UPLOAD FAILED:", err);
+    console.error("❌ [UPLOAD] fatal error", err);
     return NextResponse.json(
       { error: "Failed to parse Gardners file" },
       { status: 500 }
