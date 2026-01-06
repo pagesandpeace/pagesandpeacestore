@@ -14,7 +14,7 @@ export default function AboutPage() {
         </p>
 
         <p className="text-[#111]/70 leading-relaxed">
-          Founded by siblings, our Rossington space brings together
+          Founded by two siblings, our Rossington space brings together
           thoughtfully chosen books, good coffee, and a calm place to spend
           time. Everything here is curated with care — from local authors and
           blind-date books to small-batch blends and community events.
