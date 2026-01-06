@@ -206,49 +206,71 @@ export async function POST(req: Request) {
     /* -------------------------
        FETCH LINKED PRODUCTS
     ------------------------- */
+<<<<<<< HEAD
     const { data: links, error: linksError } = await supabaseAdmin
+=======
+    const { data: links } = await supabaseAdmin
+>>>>>>> staging
       .from("product_supplier_links")
       .select("product_id, supplier_ref")
       .eq("supplier", "gardners");
 
+<<<<<<< HEAD
     console.log("🟢 [LINKS]", {
       count: links?.length ?? 0,
       error: linksError ?? null,
     });
 
+=======
+>>>>>>> staging
     const linkMap = new Map(
       links?.map((l) => [l.supplier_ref, l.product_id]) ?? []
     );
 
+<<<<<<< HEAD
     const { data: products, error: productsError } = await supabaseAdmin
+=======
+    const { data: products } = await supabaseAdmin
+>>>>>>> staging
       .from("products")
       .select("id, isbn_13, supplier_price")
       .eq("supplier_name", "gardners");
 
+<<<<<<< HEAD
     console.log("🟢 [PRODUCTS]", {
       count: products?.length ?? 0,
       error: productsError ?? null,
     });
 
+=======
+>>>>>>> staging
     const productMap = new Map<string, any>();
     for (const p of products ?? []) {
       if (p.isbn_13) productMap.set(p.isbn_13, p);
     }
 
     /* -------------------------
+<<<<<<< HEAD
        UPDATE PRODUCT SNAPSHOT
+=======
+       UPDATE PRODUCT SUPPLIER SNAPSHOT
+>>>>>>> staging
        + DETECT CHANGES
     ------------------------- */
     for (const n of normalized) {
       const product = productMap.get(n.supplier_ref);
       if (!product) continue;
 
+<<<<<<< HEAD
       console.log("🟡 [PRODUCT UPDATE]", {
         productId: product.id,
         oldPrice: product.supplier_price,
         newPrice: n.supplier_price,
       });
 
+=======
+      // Always update supplier snapshot
+>>>>>>> staging
       await supabaseAdmin
         .from("products")
         .update({
@@ -257,6 +279,10 @@ export async function POST(req: Request) {
         })
         .eq("id", product.id);
 
+<<<<<<< HEAD
+=======
+      // Detect price change
+>>>>>>> staging
       if (Number(product.supplier_price) !== Number(n.supplier_price)) {
         const { data: existing } = await supabaseAdmin
           .from("supplier_changes")
@@ -288,7 +314,39 @@ export async function POST(req: Request) {
     }
 
     /* -------------------------
+<<<<<<< HEAD
        PRODUCT RANKINGS
+=======
+       UPDATE PRODUCT RANKINGS (MONTHLY SNAPSHOT)
+    ------------------------- */
+    const rankingRows = normalized
+      .map((n) => {
+        const productId = linkMap.get(n.supplier_ref);
+        if (!productId || !n.rank_pos) return null;
+
+        return {
+          product_id: productId,
+          isbn_13: n.supplier_ref,
+          supplier_name: "gardners",
+          rank: n.rank_pos,
+          import_month: importMonth,
+        };
+      })
+      .filter(Boolean);
+
+    if (rankingRows.length) {
+      await supabaseAdmin
+        .from("product_rankings")
+        .delete()
+        .eq("supplier_name", "gardners")
+        .eq("import_month", importMonth);
+
+      await supabaseAdmin.from("product_rankings").insert(rankingRows);
+    }
+
+    /* -------------------------
+       FINALISE BATCH
+>>>>>>> staging
     ------------------------- */
     const rankingRows = normalized
       .map((n) => {
