@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 
@@ -57,6 +57,35 @@ export default function ClassificationSuggestions({
   } | null>(null);
 
   /* -------------------------------
+     HELPERS
+  -------------------------------- */
+
+  function getList(type: "genre" | "vibe" | "theme") {
+    return type === "genre"
+      ? genres
+      : type === "vibe"
+      ? vibes
+      : themes;
+  }
+
+  function resolveName(
+    list: Option[],
+    id: string | null
+  ): string {
+    if (!id) return "—";
+    const found = list.find((o) => o.id === id);
+    return found ? found.name : "—";
+  }
+
+  const selectedNames = useMemo(() => {
+    return {
+      genre: resolveName(genres, genreId),
+      vibe: resolveName(vibes, vibeId),
+      theme: resolveName(themes, themeId),
+    };
+  }, [genres, vibes, themes, genreId, vibeId, themeId]);
+
+  /* -------------------------------
      LOAD AI SUGGESTIONS
   -------------------------------- */
   async function loadSuggestions() {
@@ -66,27 +95,28 @@ export default function ClassificationSuggestions({
     try {
       const res = await fetch(
         `/api/admin/products/${productId}/suggest-classification`,
-        {
-          method: "POST",
-          credentials: "include",
-        }
+        { method: "POST", credentials: "include" }
       );
 
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error || "AI failed");
+        throw new Error(json.error || "AI request failed");
       }
 
       setSuggestions(json);
     } catch (err) {
-      setError("Failed to generate classification suggestions.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to generate classification suggestions."
+      );
     } finally {
       setLoading(false);
     }
   }
 
   /* -------------------------------
-     APPLY / CREATE VIA API
+     APPLY OR CREATE
   -------------------------------- */
   async function applySuggestion(
     type: "genre" | "vibe" | "theme",
@@ -94,30 +124,33 @@ export default function ClassificationSuggestions({
   ) {
     setError(null);
 
-    const list =
-      type === "genre"
-        ? genres
-        : type === "vibe"
-        ? vibes
-        : themes;
+    const list = getList(type);
+    const normalized = value.toLowerCase().trim();
 
-    const normalized = value.trim().toLowerCase();
-
-    // ✅ exact match only (DB is canonical)
     const existing = list.find(
-      (i) => i.name.trim().toLowerCase() === normalized
+      (o) => o.name.toLowerCase().trim() === normalized
     );
 
+    // ✅ Exists → select
     if (existing) {
       onSelect(type, existing.id);
       return;
     }
 
+    // ❌ Missing → create
     const confirmCreate = confirm(
       `"${value}" does not exist.\n\nCreate new ${type}?`
     );
 
     if (!confirmCreate) return;
+
+    const reason = suggestions?.[type]?.reason;
+    if (!reason) {
+      setError(
+        "AI did not provide a description. Cannot create classification."
+      );
+      return;
+    }
 
     try {
       const res = await fetch(
@@ -125,12 +158,11 @@ export default function ClassificationSuggestions({
         {
           method: "POST",
           credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             type,
             name: value,
+            description: reason,
           }),
         }
       );
@@ -141,12 +173,16 @@ export default function ClassificationSuggestions({
         throw new Error(json.error || "Create failed");
       }
 
-      const created = json as Option;
+      const created: Option = json;
 
       onCreated(type, created);
       onSelect(type, created.id);
     } catch (err) {
-      setError(`Failed to create ${type}.`);
+      setError(
+        err instanceof Error
+          ? err.message
+          : `Failed to create ${type}.`
+      );
     }
   }
 
@@ -193,10 +229,11 @@ export default function ClassificationSuggestions({
           );
         })}
 
-      <div className="text-xs text-neutral-600 pt-2 border-t">
-        <p>Selected genre: {genreId || "—"}</p>
-        <p>Selected vibe: {vibeId || "—"}</p>
-        <p>Selected theme: {themeId || "—"}</p>
+      {/* READ-ONLY FEEDBACK */}
+      <div className="text-xs text-neutral-600 pt-2 border-t space-y-1">
+        <p>Selected genre: {selectedNames.genre}</p>
+        <p>Selected vibe: {selectedNames.vibe}</p>
+        <p>Selected theme: {selectedNames.theme}</p>
       </div>
     </div>
   );
