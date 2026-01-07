@@ -23,10 +23,7 @@ export async function POST(req: Request) {
 
     if (!id) {
       console.error("❌ [TICKET UPDATE] missing ticket id");
-      return NextResponse.json(
-        { error: "Missing ticket id" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing ticket id" }, { status: 400 });
     }
 
     /* -----------------------------------------
@@ -47,46 +44,45 @@ export async function POST(req: Request) {
 
     if (ticketError || !ticket) {
       console.error("❌ [TICKET UPDATE] ticket not found");
-      return NextResponse.json(
-        { error: "Ticket not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-    /* -----------------------------------------
-       🔒 Guard: lock DEFAULT ticket after bookings
-    ----------------------------------------- */
-    if (ticket.is_default) {
-      console.log("🔐 Ticket is DEFAULT — checking bookings…");
+   /* -----------------------------------------
+   🔒 Guard: lock ALL ticket prices once
+       ANY booking exists for the event
+----------------------------------------- */
+if (price_pence !== undefined) {
+  console.log("🔐 Price edit requested — checking event bookings…");
 
-      const { count, error: bookingError } = await supabase
-        .from("event_bookings")
-        .select("*", { count: "exact", head: true })
-        .eq("event_id", ticket.event_id);
+  const { count, error: bookingError } = await supabase
+    .from("event_bookings")
+    .select("*", { count: "exact", head: true })
+    .eq("event_id", ticket.event_id);
 
-      console.log("📊 Booking check result:", {
-        event_id: ticket.event_id,
-        count,
-        bookingError,
-      });
+  console.log("📊 Booking check result:", {
+    event_id: ticket.event_id,
+    count,
+    bookingError,
+  });
 
-      if ((count ?? 0) > 0) {
-        console.warn(
-          "⛔ Price update blocked — bookings exist:",
-          count
-        );
+  if ((count ?? 0) > 0) {
+    console.warn(
+      "⛔ Price update blocked — event has bookings:",
+      count
+    );
 
-        return NextResponse.json(
-          {
-            error:
-              "Default ticket price cannot be edited after bookings exist",
-          },
-          { status: 400 }
-        );
-      }
+    return NextResponse.json(
+      {
+        error:
+          "Ticket prices cannot be changed once bookings exist for this event",
+      },
+      { status: 400 }
+    );
+  }
 
-      console.log("✅ No bookings — default ticket edit allowed");
-    }
+  console.log("✅ No bookings — price edit allowed");
+}
+
 
     /* -----------------------------------------
        Build update payload
@@ -94,10 +90,8 @@ export async function POST(req: Request) {
     const ticketUpdates: Record<string, unknown> = {};
 
     if (name !== undefined) ticketUpdates.name = name;
-    if (price_pence !== undefined)
-      ticketUpdates.price_pence = price_pence;
-    if (is_active !== undefined)
-      ticketUpdates.is_active = is_active;
+    if (price_pence !== undefined) ticketUpdates.price_pence = price_pence;
+    if (is_active !== undefined) ticketUpdates.is_active = is_active;
 
     console.log("🧱 Ticket update payload:", ticketUpdates);
 
@@ -121,19 +115,15 @@ export async function POST(req: Request) {
 
       if (error) {
         console.error("❌ Ticket update failed:", error);
-        return NextResponse.json(
-          { error: error.message },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: error.message }, { status: 500 });
       }
     } else {
-      console.warn(
-        "⚠️ No ticket fields changed — skipping ticket update"
-      );
+      console.warn("⚠️ No ticket fields changed — skipping ticket update");
     }
 
     /* -----------------------------------------
        🔑 Sync product price
+       (only when price_pence is being updated)
     ----------------------------------------- */
     if (price_pence !== undefined) {
       const priceString = (price_pence / 100).toFixed(2);
@@ -144,13 +134,12 @@ export async function POST(req: Request) {
         priceString,
       });
 
-      const { data: productUpdate, error: productError } =
-        await supabase
-          .from("products")
-          .update({ price: priceString })
-          .eq("id", ticket.product_id)
-          .select()
-          .single();
+      const { data: productUpdate, error: productError } = await supabase
+        .from("products")
+        .update({ price: priceString })
+        .eq("id", ticket.product_id)
+        .select()
+        .single();
 
       console.log("🧾 Product update result:", {
         productUpdate,
@@ -159,10 +148,7 @@ export async function POST(req: Request) {
 
       if (productError) {
         console.error("❌ Product price sync failed:", productError);
-        return NextResponse.json(
-          { error: productError.message },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: productError.message }, { status: 500 });
       }
     } else {
       console.log("ℹ️ price_pence not provided — skipping product sync");
@@ -174,9 +160,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("💥 [TICKET UPDATE] route crashed:", err);
-    return NextResponse.json(
-      { error: "Failed to update ticket" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to update ticket" }, { status: 500 });
   }
 }

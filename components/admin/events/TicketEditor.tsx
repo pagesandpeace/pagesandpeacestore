@@ -19,67 +19,120 @@ type DraftTicket = {
 export default function TicketEditor({ eventId }: { eventId: string }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [drafts, setDrafts] = useState<Record<string, DraftTicket>>({});
+  const [hasBookings, setHasBookings] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // new ticket draft
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newIsActive, setNewIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  /* -----------------------------------------
+     LOAD TICKETS + BOOKING STATE
+  ----------------------------------------- */
   const loadTickets = useCallback(async () => {
+    console.log("🎟️ Loading tickets…");
     setLoading(true);
 
-    const res = await fetch(
+    const ticketsRes = await fetch(
       `/api/admin/events/${eventId}/tickets`,
       { cache: "no-store" }
     );
 
-    const data: Ticket[] = await res.json();
+    const ticketsJson = await ticketsRes.json();
+    const ticketData: Ticket[] = Array.isArray(ticketsJson)
+      ? ticketsJson
+      : ticketsJson.tickets ?? [];
 
-    setTickets(data);
+    setTickets(ticketData);
 
-    // initialise drafts once per load
     const nextDrafts: Record<string, DraftTicket> = {};
-    data.forEach((t) => {
+    ticketData.forEach((t) => {
       nextDrafts[t.id] = {
         name: t.name,
         price: (t.price_pence / 100).toFixed(2),
         is_active: t.is_active,
       };
     });
-
     setDrafts(nextDrafts);
+
+    const bookingRes = await fetch(
+      `/api/admin/events/${eventId}/has-bookings`,
+      { cache: "no-store" }
+    );
+
+    const bookingJson = await bookingRes.json();
+    console.log("🔒 hasBookings:", bookingJson?.hasBookings);
+    setHasBookings(Boolean(bookingJson?.hasBookings));
+
     setLoading(false);
   }, [eventId]);
 
   useEffect(() => {
-  void Promise.resolve().then(loadTickets);
-}, [loadTickets]);
+    (async () => {
+      await loadTickets();
+    })();
+  }, [loadTickets]);
 
-
+  /* -----------------------------------------
+     PERSIST EXISTING TICKET
+  ----------------------------------------- */
   async function persistTicket(id: string) {
-    const draft = drafts[id];
-    if (!draft) return;
+    console.log("💾 Persist ticket:", id);
 
-    await fetch("/api/admin/tickets/update", {
+    const draft = drafts[id];
+    const original = tickets.find((t) => t.id === id);
+    if (!draft || !original) return;
+
+    if (
+      hasBookings &&
+      Math.round(Number(draft.price) * 100) !== original.price_pence
+    ) {
+      console.log("⛔ Price change blocked (bookings exist)");
+      return;
+    }
+
+    const payload: {
+      id: string;
+      name?: string;
+      price_pence?: number;
+      is_active?: boolean;
+    } = {
+      id,
+      name: draft.name,
+      is_active: draft.is_active,
+    };
+
+    if (!hasBookings) {
+      const newPricePence = Math.round(Number(draft.price) * 100);
+      if (newPricePence !== original.price_pence) {
+        payload.price_pence = newPricePence;
+      }
+    }
+
+    const res = await fetch("/api/admin/tickets/update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id,
-        name: draft.name,
-        price_pence: Math.round(Number(draft.price) * 100),
-        is_active: draft.is_active,
-      }),
+      body: JSON.stringify(payload),
     });
+
+    if (!res.ok) {
+      console.warn("⚠️ Ticket update blocked by backend");
+      return;
+    }
   }
 
+  /* -----------------------------------------
+     CREATE NEW TICKET
+  ----------------------------------------- */
   async function createTicket() {
     if (!newName || !newPrice) {
       setError("Name and price required");
       return;
     }
+
+    if (hasBookings) return;
 
     setSubmitting(true);
     setError("");
@@ -92,6 +145,7 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
         body: JSON.stringify({
           name: newName,
           price_pence: Math.round(Number(newPrice) * 100),
+          is_active: newIsActive,
         }),
       }
     );
@@ -105,7 +159,6 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
     setNewName("");
     setNewPrice("");
     setNewIsActive(true);
-
     await loadTickets();
     setSubmitting(false);
   }
@@ -116,7 +169,12 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
     <div className="mt-10 space-y-8">
       <h2 className="text-xl font-semibold">Ticket Types & Pricing</h2>
 
-      {/* EXISTING */}
+      {hasBookings && (
+        <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+          <strong>Prices locked.</strong> This event already has bookings.
+        </div>
+      )}
+
       {tickets.map((t) => {
         const draft = drafts[t.id];
         if (!draft) return null;
@@ -132,14 +190,13 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
           >
             {t.is_default && (
               <div className="text-xs font-medium text-blue-700">
-                Base ticket (General Admission)
+                Base ticket (capacity & pricing anchor)
               </div>
             )}
 
             <input
               className="border rounded px-3 py-2 w-full"
               value={draft.name}
-              disabled={t.is_default}
               onChange={(e) =>
                 setDrafts((d) => ({
                   ...d,
@@ -155,19 +212,21 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
             <input
               type="number"
               step="0.01"
-              className="border rounded px-3 py-2 w-full"
               value={draft.price}
-              onChange={(e) =>
-                setDrafts((d) => ({
-                  ...d,
-                  [t.id]: {
-                    ...d[t.id],
-                    price: e.target.value,
-                  },
-                }))
-              }
-              onBlur={() => persistTicket(t.id)}
+              readOnly={hasBookings}
+              disabled={hasBookings}
+              className={`border rounded px-3 py-2 w-full ${
+                hasBookings
+                  ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                  : ""
+              }`}
             />
+
+            {hasBookings && (
+              <p className="text-xs text-red-600">
+                Price locked because this event already has bookings.
+              </p>
+            )}
 
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -190,13 +249,12 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
         );
       })}
 
-      {/* CREATE NEW */}
       <div className="border rounded-lg p-4 space-y-3 bg-gray-50">
         <h3 className="font-medium">Add ticket type</h3>
 
         <input
           className="border rounded px-3 py-2 w-full"
-          placeholder="Ticket name (e.g. Wine + Drink)"
+          placeholder="Ticket name"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
         />
@@ -204,11 +262,25 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
         <input
           type="number"
           step="0.01"
-          className="border rounded px-3 py-2 w-full"
           placeholder="Price (£)"
           value={newPrice}
-          onChange={(e) => setNewPrice(e.target.value)}
+          disabled={hasBookings}
+          readOnly={hasBookings}
+          className={`border rounded px-3 py-2 w-full ${
+            hasBookings
+              ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+              : ""
+          }`}
+          onChange={(e) => {
+            if (!hasBookings) setNewPrice(e.target.value);
+          }}
         />
+
+        {hasBookings && (
+          <p className="text-xs text-red-600">
+            Price locked because this event already has bookings.
+          </p>
+        )}
 
         <label className="flex items-center gap-2 text-sm">
           <input
