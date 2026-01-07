@@ -184,7 +184,7 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
           )}
 
           <Link
-            href="/dashboard/legal/event-booking-terms"
+            href="/legal/event-booking-terms"
             className="mt-4 block text-accent underline text-sm"
           >
             Booking Terms & Conditions

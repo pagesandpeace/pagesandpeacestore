@@ -1,9 +1,33 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function Home() {
+  const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const supabase = supabaseBrowser(); // ✅ CALL THE FUNCTION
+
+    // Initial session check
+    supabase.auth.getSession().then(({ data }) => {
+      setIsSignedIn(!!data.session);
+    });
+
+    // Listen for auth changes
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setIsSignedIn(!!session);
+      }
+    );
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
   return (
     <>
       {/* Fill visible viewport minus footer */}
@@ -59,30 +83,34 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Auth Prompt */}
-        <div className="mt-6 text-center">
-          <p className="text-[var(--foreground)]/70 mb-3">
-            Ready to make it personal?
-          </p>
+        {/* Auth Prompt — ONLY when signed out */}
+        {isSignedIn === false && (
+          <div className="mt-6 text-center">
+            <p className="text-[var(--foreground)]/70 mb-3">
+              Ready to make it personal?
+            </p>
 
-          <div className="flex gap-4 justify-center">
-            <Link
-              href="/sign-in"
-              className="text-[var(--accent)] font-semibold hover:text-[var(--secondary)] transition"
-            >
-              Sign In
-            </Link>
+            <div className="flex gap-4 justify-center">
+              <Link
+                href="/sign-in"
+                className="text-[var(--accent)] font-semibold hover:text-[var(--secondary)] transition"
+              >
+                Sign In
+              </Link>
 
-            <span className="text-[var(--accent)]/50">|</span>
+              <span className="text-[var(--accent)]/50">|</span>
 
-            <Link
-              href="/sign-up"
-              className="text-[var(--accent)] font-semibold hover:text-[var(--secondary)] transition"
-            >
-              Create Account
-            </Link>
+              <Link
+                href="/sign-up"
+                className="text-[var(--accent)] font-semibold hover:text-[var(--secondary)] transition"
+              >
+                Create Account
+              </Link>
+            </div>
           </div>
-        </div>
+        )}
+
+        
       </main>
     </>
   );

@@ -154,7 +154,7 @@ export default async function EventDetailPage(props: {
           )}
 
           <Link
-            href="/dashboard/legal/event-booking-terms"
+            href="/legal/event-booking-terms"
             className="underline text-sm text-[var(--accent)] block text-center"
           >
             Booking Terms & Conditions

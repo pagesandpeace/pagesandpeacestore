@@ -57,9 +57,13 @@ export default function ContactPage() {
             <li className="pt-2">
               <strong>Opening Hours:</strong>
               <ul className="mt-2 space-y-1">
-                <li>Tue – Sat: 9am – 9pm</li>
-                <li>Sun: 9am – 4pm</li>
-                <li>Mon: Closed</li>
+                <li>Monday: 9am – 9pm</li>
+                <li>Tuesday: 9am – 9pm</li>
+                <li>Wednesday: 9am – 5pm</li>
+                <li>Thursday: 9am – 5pm</li>
+                <li>Friday: 9am – 5pm</li>
+                <li>Saturday: 9am – 5pm</li>
+                <li>Sunday: 10am – 4pm</li>
               </ul>
             </li>
           </ul>
