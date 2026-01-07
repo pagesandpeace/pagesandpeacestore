@@ -153,7 +153,7 @@ export async function POST(req: Request) {
         isbn_13: supplier_ref,
         supplier_import_batch_id: sp.import_batch_id,
         image_url:
-      "https://res.cloudinary.com/dadinnds6/image/upload/v1766977366/Coming_soon_nllsa4.svg",
+      "https://res.cloudinary.com/dadinnds6/image/upload/v1767755489/Fallback_image_cxsiwb.png",
       })
       .select("id")
       .single();
