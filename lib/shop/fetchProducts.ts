@@ -38,18 +38,25 @@ type ProductRow = {
   }[] | null;
 };
 
+/* --------------------------------------------------------
+   SEARCH NORMALISATION (POSTGREST-SAFE)
+-------------------------------------------------------- */
+function normalizeSearch(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[(),]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 /* --------------------------------------------------------
-   POSTGREST SAFE ESCAPES (SURGICAL)
+   POSTGREST ESCAPE (NOT USED FOR .or SEARCH)
 -------------------------------------------------------- */
 function escapePostgrestLike(value: string) {
   return value
     .replace(/\\/g, "\\\\")
     .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_")
-    .replace(/,/g, "\\,")
-    .replace(/\(/g, "\\(")
-    .replace(/\)/g, "\\)");
+    .replace(/_/g, "\\_");
 }
 
 export async function fetchProducts(params: ProductQueryParams) {
@@ -147,10 +154,10 @@ export async function fetchProducts(params: ProductQueryParams) {
   }
 
   /* --------------------------------------------------------
-     GLOBAL SEARCH (ROBUST, SAME LOGIC)
+     GLOBAL SEARCH (FIXED)
   -------------------------------------------------------- */
   if (rawSearch) {
-    const safeSearch = escapePostgrestLike(rawSearch);
+    const safeSearch = normalizeSearch(rawSearch);
 
     const { data: matchingAuthors } = await supabase
       .from("authors")
@@ -235,15 +242,13 @@ export async function fetchProducts(params: ProductQueryParams) {
      NORMALISE AUTHOR FOR SHOP UI
   -------------------------------------------------------- */
   const products =
-  (data ?? []).map((p: ProductRow) => ({
-    ...p,
-    author:
-      p.author_rel?.[0]?.name ??
-      p.author ??
-      null,
-  }));
-
-
+    (data ?? []).map((p: ProductRow) => ({
+      ...p,
+      author:
+        p.author_rel?.[0]?.name ??
+        p.author ??
+        null,
+    }));
 
   return {
     products,
