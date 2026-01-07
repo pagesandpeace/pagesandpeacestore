@@ -14,6 +14,44 @@ export type ProductQueryParams = {
   sort?: string;
 };
 
+type ProductRow = {
+  id: string;
+  name: string;
+  display_title: string | null;
+  slug: string;
+  description: string | null;
+  price: number;
+  image_url: string | null;
+  inventory_count: number | null;
+  fulfilment_mode: string | null;
+  product_type: string;
+  format: string | null;
+  language: string | null;
+  author_id: string | null;
+  author: string | null;
+  genre_id: string | null;
+  vibe_id: string | null;
+  theme_id: string | null;
+  author_rel?: {
+    id: string;
+    name: string | null;
+  }[] | null;
+};
+
+
+/* --------------------------------------------------------
+   POSTGREST SAFE ESCAPES (SURGICAL)
+-------------------------------------------------------- */
+function escapePostgrestLike(value: string) {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .replace(/,/g, "\\,")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+}
+
 export async function fetchProducts(params: ProductQueryParams) {
   const supabase = supabaseService();
 
@@ -21,7 +59,7 @@ export async function fetchProducts(params: ProductQueryParams) {
 
   const page = Number(safe.page ?? 1);
   const type = safe.type ?? "all";
-  const search = safe.search?.trim() ?? "";
+  const rawSearch = safe.search?.trim() ?? "";
   const sort = safe.sort ?? "newest";
   const inStock = safe.inStock === "1";
 
@@ -68,7 +106,6 @@ export async function fetchProducts(params: ProductQueryParams) {
 
   /* --------------------------------------------------------
      BASE QUERY
-     (supplier author + canonical author relation)
   -------------------------------------------------------- */
   let query = supabase
     .from("products")
@@ -110,20 +147,22 @@ export async function fetchProducts(params: ProductQueryParams) {
   }
 
   /* --------------------------------------------------------
-     GLOBAL SEARCH
+     GLOBAL SEARCH (ROBUST, SAME LOGIC)
   -------------------------------------------------------- */
-  if (search) {
+  if (rawSearch) {
+    const safeSearch = escapePostgrestLike(rawSearch);
+
     const { data: matchingAuthors } = await supabase
       .from("authors")
       .select("id")
-      .ilike("name", `%${search}%`);
+      .ilike("name", `%${safeSearch}%`);
 
     const authorIds = (matchingAuthors ?? []).map((a) => a.id);
 
     const clauses = [
-      `display_title.ilike.%${search}%`,
-      `name.ilike.%${search}%`,
-      `description.ilike.%${search}%`,
+      `display_title.ilike.%${safeSearch}%`,
+      `name.ilike.%${safeSearch}%`,
+      `description.ilike.%${safeSearch}%`,
     ];
 
     if (authorIds.length > 0) {
@@ -194,16 +233,17 @@ export async function fetchProducts(params: ProductQueryParams) {
 
   /* --------------------------------------------------------
      NORMALISE AUTHOR FOR SHOP UI
-     (canonical > supplier > null)
   -------------------------------------------------------- */
   const products =
-    (data ?? []).map((p: any) => ({
-      ...p,
-      author:
-        p.author_rel?.name ??
-        p.author ??
-        null,
-    }));
+  (data ?? []).map((p: ProductRow) => ({
+    ...p,
+    author:
+      p.author_rel?.[0]?.name ??
+      p.author ??
+      null,
+  }));
+
+
 
   return {
     products,
