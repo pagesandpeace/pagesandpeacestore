@@ -259,48 +259,70 @@ export default function AccountPage() {
           </div>
         )}
 
-        {/* ---------------------------------------
-            SECURITY TAB
-        ---------------------------------------- */}
-        {tab === "security" && (
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold">
-                Change Password
-              </h2>
-            </CardHeader>
-            <CardBody>
-              <form
-                className="space-y-4"
-                onSubmit={updatePassword}
-              >
-                <Input
-                  type="password"
-                  placeholder="New password"
-                  required
-                  value={newPassword}
-                  onChange={(e) =>
-                    setNewPassword(e.target.value)
-                  }
-                />
+        
 
-                {passwordMessage && (
-                  <p className="text-sm text-green-700">
-                    {passwordMessage}
-                  </p>
-                )}
+{tab === "security" && (
+  <Card>
+    <CardHeader>
+      <h2 className="text-lg font-semibold">
+        Password & Security
+      </h2>
+    </CardHeader>
 
-                <Button
-                  type="submit"
-                  size="md"
-                  className="w-full"
-                >
-                  Update Password
-                </Button>
-              </form>
-            </CardBody>
-          </Card>
-        )}
+    <CardBody className="space-y-4">
+      {/* Password display (masked, non-editable) */}
+      <div>
+        <p className="text-xs uppercase tracking-wide text-[#777]">
+          Password
+        </p>
+
+        <Input
+          type="password"
+          value="••••••••••••"
+          disabled
+          className="mt-1 bg-[#f3f3f3] cursor-not-allowed"
+        />
+      </div>
+
+      {/* Action */}
+      <Button
+        size="md"
+        className="w-full"
+        onClick={async () => {
+          if (!user?.email) return;
+
+          const { error } =
+            await supabase.auth.resetPasswordForEmail(
+              user.email,
+              {
+                redirectTo: `${window.location.origin}/reset-password`,
+              }
+            );
+
+          if (error) {
+            setPasswordMessage(error.message);
+          } else {
+            setPasswordMessage(
+              "We’ve sent you an email with a secure link to reset your password."
+            );
+          }
+
+          setTimeout(() => setPasswordMessage(""), 5000);
+        }}
+      >
+        Send password reset email
+      </Button>
+
+      {/* Feedback */}
+      {passwordMessage && (
+        <p className="text-sm text-green-700">
+          {passwordMessage}
+        </p>
+      )}
+    </CardBody>
+  </Card>
+)}
+
       </div>
     </main>
   );
