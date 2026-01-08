@@ -11,27 +11,30 @@ export default function UpdatePasswordPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [checkingSession, setCheckingSession] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
-    async function checkSession() {
+    async function verifyRecoverySession() {
       const { data, error } = await supabase.auth.getSession();
 
       if (!mounted) return;
 
       if (error || !data.session) {
-        setErrorMsg("This password reset link is invalid or has expired.");
+        setErrorMsg(
+          "This password reset link is invalid or has expired."
+        );
         setCheckingSession(false);
         return;
       }
 
-      // Session exists → user is authenticated → allow password change
+      // Valid recovery session
       setCheckingSession(false);
     }
 
-    checkSession();
+    verifyRecoverySession();
 
     return () => {
       mounted = false;
@@ -46,28 +49,39 @@ export default function UpdatePasswordPage() {
       return;
     }
 
-    setErrorMsg("");
+    setSaving(true);
+    setErrorMsg(null);
 
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
       setErrorMsg(error.message);
+      setSaving(false);
       return;
     }
 
-    // Password updated successfully
-    window.location.href = "/dashboard";
+    // Optional: sign out to force re-login with new password
+    await supabase.auth.signOut();
+
+window.location.href = "/sign-in?reset=success";
   }
 
   if (checkingSession) {
-    return <p className="text-center">Verifying reset link…</p>;
+    return (
+      <p className="text-center">
+        Verifying reset link…
+      </p>
+    );
   }
 
-  if (errorMsg && !password) {
+  if (errorMsg && !saving && password.length === 0) {
     return (
       <div className="text-center space-y-4">
         <p className="text-red-600">{errorMsg}</p>
-        <a href="/auth/reset-password" className="underline">
+        <a
+          href="/auth/reset-password"
+          className="underline font-semibold"
+        >
           Request a new reset link
         </a>
       </div>
@@ -76,7 +90,9 @@ export default function UpdatePasswordPage() {
 
   return (
     <div className="w-full space-y-8">
-      <h1 className="text-3xl font-semibold">Set New Password</h1>
+      <h1 className="text-3xl font-semibold">
+        Set a new password
+      </h1>
 
       <form className="space-y-4" onSubmit={handleUpdate}>
         <Input
@@ -95,10 +111,18 @@ export default function UpdatePasswordPage() {
           onChange={(e) => setConfirm(e.target.value)}
         />
 
-        {errorMsg && <p className="text-red-600 text-sm">{errorMsg}</p>}
+        {errorMsg && (
+          <p className="text-red-600 text-sm">
+            {errorMsg}
+          </p>
+        )}
 
-        <Button type="submit" className="w-full">
-          Save New Password
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save new password"}
         </Button>
       </form>
     </div>

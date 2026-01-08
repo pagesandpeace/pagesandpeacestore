@@ -9,24 +9,35 @@ export default function Home() {
   const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const supabase = supabaseBrowser(); // ✅ CALL THE FUNCTION
+  const supabase = supabaseBrowser();
 
-    // Initial session check
-    supabase.auth.getSession().then(({ data }) => {
+  let mounted = true;
+
+  async function syncSession() {
+    const { data } = await supabase.auth.getSession();
+    if (mounted) {
       setIsSignedIn(!!data.session);
-    });
+    }
+  }
 
-    // Listen for auth changes
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setIsSignedIn(!!session);
-      }
-    );
+  // 1️⃣ Initial check
+  syncSession();
 
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
+  // 2️⃣ Listen for ALL auth events (including INITIAL_SESSION)
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (mounted) {
+      setIsSignedIn(!!session);
+    }
+  });
+
+  return () => {
+    mounted = false;
+    subscription.unsubscribe();
+  };
+}, []);
+
 
   return (
     <>

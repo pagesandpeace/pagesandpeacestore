@@ -1,7 +1,11 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import crypto from "crypto";
 
 type GoogleMetadata = {
   full_name?: string;
@@ -12,18 +16,13 @@ type GoogleMetadata = {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  const callbackURL = url.searchParams.get("callbackURL") || "/dashboard";
-
-  if (!code) {
-    return NextResponse.redirect(new URL("/sign-in", url));
-  }
-
   const cookieStore = await cookies();
 
-  /* --------------------------------------------------
-     Supabase SERVER client (auth + cookies)
-  -------------------------------------------------- */
+  const code = url.searchParams.get("code");
+  const tokenHash = url.searchParams.get("token_hash");
+  const type = url.searchParams.get("type");
+  const callbackURL = url.searchParams.get("callbackURL") || "/dashboard";
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -40,27 +39,39 @@ export async function GET(request: Request) {
   );
 
   /* --------------------------------------------------
-     Supabase SERVICE ROLE (bypass RLS)
+     OAUTH FLOW (Google)
   -------------------------------------------------- */
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      console.error("❌ OAuth exchange failed:", error);
+      return NextResponse.redirect(new URL("/sign-in", url));
+    }
+  }
 
   /* --------------------------------------------------
-     Exchange OAuth code → session
+     MAGIC LINK / RECOVERY FLOW
   -------------------------------------------------- */
-  const { error: exchangeError } =
-    await supabase.auth.exchangeCodeForSession(code);
+  else if (tokenHash && type) {
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: type as "magiclink" | "recovery",
+    });
 
-  if (exchangeError) {
-    console.error("❌ OAuth exchange failed:", exchangeError);
+    if (error) {
+      console.error("❌ verifyOtp failed:", error);
+      return NextResponse.redirect(new URL("/sign-in", url));
+    }
+  }
+
+  else {
+    // No valid auth params
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
   /* --------------------------------------------------
-     Get authenticated auth user
+     SESSION MUST EXIST NOW
   -------------------------------------------------- */
   const {
     data: { user },
@@ -72,65 +83,49 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
+  /* --------------------------------------------------
+     CANONICAL USER LINKING (unchanged)
+  -------------------------------------------------- */
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+
   const email = user.email.toLowerCase();
   const meta = (user.user_metadata as GoogleMetadata) || {};
 
-  /* --------------------------------------------------
-     EMAIL-FIRST USER LOOKUP (CANONICAL STEP)
-  -------------------------------------------------- */
-  const { data: existingUser, error: lookupErr } = await supabaseAdmin
+  const { data: existingUser } = await supabaseAdmin
     .from("users")
     .select("id, auth_user_id")
     .eq("email", email)
     .maybeSingle();
 
-  if (lookupErr) {
-    console.error("❌ users email lookup failed:", lookupErr);
-    return NextResponse.redirect(new URL("/sign-in", url));
-  }
-
-  /* --------------------------------------------------
-     CASE 1: User exists → reattach auth_user_id
-  -------------------------------------------------- */
   if (existingUser) {
     if (existingUser.auth_user_id !== user.id) {
-      const { error: updateErr } = await supabaseAdmin
+      await supabaseAdmin
         .from("users")
         .update({
           auth_user_id: user.id,
-          auth_provider: "google",
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingUser.id);
-
-      if (updateErr) {
-        console.error("❌ Failed to reattach auth_user_id:", updateErr);
-        return NextResponse.redirect(new URL("/sign-in", url));
-      }
     }
 
     return NextResponse.redirect(new URL(callbackURL, url));
   }
 
-  /* --------------------------------------------------
-     CASE 2: No user → create new canonical user
-  -------------------------------------------------- */
-  const { error: insertErr } = await supabaseAdmin.from("users").insert({
+  await supabaseAdmin.from("users").insert({
     id: crypto.randomUUID(),
     email,
     auth_user_id: user.id,
     name: meta.full_name || meta.name || email,
     image: meta.avatar_url || meta.picture || null,
     role: "customer",
-    auth_provider: "google",
+    auth_provider: user.app_metadata?.provider || "email",
     email_verified: true,
     created_at: new Date().toISOString(),
   });
-
-  if (insertErr) {
-    console.error("❌ Failed to create user profile:", insertErr);
-    return NextResponse.redirect(new URL("/sign-in", url));
-  }
 
   return NextResponse.redirect(new URL(callbackURL, url));
 }

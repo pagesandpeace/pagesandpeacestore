@@ -1,7 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
-export async function updateSession(request: NextRequest) {
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // 🔒 Absolutely never touch auth during callbacks
+  if (pathname.startsWith("/auth/callback")) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -26,8 +33,10 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Forces Supabase to refresh the session if needed
-  await supabase.auth.getUser();
+  // ✅ Do NOTHING auth-related here
+  // No getUser
+  // No getSession
+  // No refresh
 
   return response;
 }

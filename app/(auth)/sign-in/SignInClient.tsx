@@ -41,7 +41,7 @@ export default function SignInClient() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
+"Idempotency-Key": self.crypto?.randomUUID?.() ?? String(Date.now()),
         },
         body: JSON.stringify({
           termsVersion: "v1.0",
@@ -62,20 +62,7 @@ export default function SignInClient() {
     e.preventDefault();
     setLoading(true);
 
-    /* Prevent email sign-in for Google-only accounts */
-    const { data: userRow } = await supabase
-      .from("users")
-      .select("auth_provider")
-      .eq("email", email)
-      .maybeSingle();
-
-    if (userRow?.auth_provider === "google") {
-      showError(
-        "This account was created using Google. Please sign in with Google."
-      );
-      setLoading(false);
-      return;
-    }
+    
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
