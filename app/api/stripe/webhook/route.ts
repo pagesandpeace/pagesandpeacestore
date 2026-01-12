@@ -291,7 +291,8 @@ await supabase
   }
 
   logWebhook("Order claimed for processing", orderId);
-  /* -----------------------------------------------------
+
+/* -----------------------------------------------------
    PRODUCT ORDER ITEM CREATION (NEW)
 ----------------------------------------------------- */
 if (md.kind === "product") {
@@ -335,18 +336,16 @@ if (md.kind === "product") {
     price,
   });
 
-  const { error: itemErr } = await supabase
-    .from("order_items")
-    .insert({
-      id: crypto.randomUUID(),
-      order_id: orderId,
-      product_id: productId,
-      kind: "product",
-      quantity,
-      price,
-      name,
-      stripe_checkout_session_id: session?.id,
-    });
+  const { error: itemErr } = await supabase.from("order_items").insert({
+    id: crypto.randomUUID(),
+    order_id: orderId,
+    product_id: productId,
+    kind: "product",
+    quantity,
+    price,
+    name,
+    stripe_checkout_session_id: session?.id,
+  });
 
   if (itemErr) {
     logWebhook("❌ Failed to insert product order_item", {
@@ -357,11 +356,75 @@ if (md.kind === "product") {
   }
 }
 
+
+/* -----------------------------------------------------
+   CART ORDER ITEM CREATION (NEW)
+----------------------------------------------------- */
+if (md.kind === "cart") {
+  if (!md.items) {
+    logWebhook("❌ Cart checkout missing items metadata", {
+      orderId,
+      metadata: md,
+    });
+    throw new Error("Cart checkout missing items metadata");
+  }
+
+  let items: {
+    productId: string;
+    name: string;
+    qty: number;
+    price: number;
+    fulfilmentMode: string;
+  }[];
+
+  try {
+    items = JSON.parse(md.items);
+  } catch (err) {
+    logWebhook("❌ Failed to parse cart items JSON", {
+      raw: md.items,
+      err,
+    });
+    throw err;
+  }
+
+  for (const item of items) {
+    if (!item.productId || item.qty <= 0 || item.price <= 0) {
+      logWebhook("❌ Invalid cart item", { item, orderId });
+      throw new Error("Invalid cart item");
+    }
+
+    logWebhook("🛒 Creating cart order_item", {
+      orderId,
+      productId: item.productId,
+      quantity: item.qty,
+    });
+
+    const { error } = await supabase.from("order_items").insert({
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      product_id: item.productId,
+      kind: "product", // IMPORTANT: still product downstream
+      quantity: item.qty,
+      price: item.price / 100,
+      name: item.name,
+      stripe_checkout_session_id: session?.id,
+    });
+
+    if (error) {
+      logWebhook("❌ Failed to insert cart order_item", {
+        orderId,
+        error,
+      });
+      throw error;
+    }
+  }
+}
+
+
 /* -----------------------------------------------------
    PRODUCT IDEMPOTENCY GUARD
 ----------------------------------------------------- */
-if (md.kind === "product") {
-  const { data: existingItems } = await supabase
+if (md.kind === "product" || md.kind === "cart") {  const { data: existingItems } = await supabase
     .from("order_items")
     .select("id")
     .eq("order_id", orderId)
@@ -378,8 +441,7 @@ if (md.kind === "product") {
 /* -----------------------------------------------------
    HARD INVARIANT: PRODUCT MUST HAVE ORDER ITEMS
 ----------------------------------------------------- */
-if (md.kind === "product") {
-  const { count } = await supabase
+if (md.kind === "product" || md.kind === "cart") {  const { count } = await supabase
     .from("order_items")
     .select("*", { count: "exact", head: true })
     .eq("order_id", orderId)
@@ -401,8 +463,7 @@ if (md.kind === "product") {
    BACKORDER CREATION (PRODUCT → SUPPLIER PIPELINE)
 ----------------------------------------------------- */
 
-if (md.kind === "product") {
-  const { data: items } = await supabase
+if (md.kind === "product" || md.kind === "cart") {  const { data: items } = await supabase
     .from("order_items")
     .select("product_id, quantity")
     .eq("order_id", orderId)
@@ -471,8 +532,7 @@ if (md.kind === "product") {
 /* -----------------------------------------------------
    PRODUCT INVENTORY PROCESSING (SAFE + IDEMPOTENT)
 ----------------------------------------------------- */
-if (md.kind === "product") {
-  const { data: items } = await supabase
+if (md.kind === "product" || md.kind === "cart") {  const { data: items } = await supabase
     .from("order_items")
     .select("product_id, quantity")
     .eq("order_id", orderId)
@@ -533,8 +593,7 @@ if (md.kind === "product") {
   /* -----------------------------------------------------
    PRODUCT FLOW COMPLETE
 ----------------------------------------------------- */
-if (md.kind === "product") {
-
+if (md.kind === "product" || md.kind === "cart") {
   /* -----------------------------------------------------
      PRODUCT CONFIRMATION EMAIL (IDEMPOTENT)
   ----------------------------------------------------- */
@@ -764,10 +823,8 @@ if (emailLock) {
     return NextResponse.json({ received: true });
   }
 
-  logWebhook("⚠️ Webhook reached fallback return", {
-    kind: md.kind,
-    sessionId: session?.id,
-  });
+ throw new Error(`Unhandled checkout kind: ${md.kind}`);
+
 
   return NextResponse.json({ received: true });
 }
