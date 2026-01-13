@@ -66,8 +66,8 @@ export default function EditEventForm({
      🔒 STABILISE TICKET EDITOR
   ---------------------------------------------- */
   const ticketEditor = useMemo(() => {
-    return <TicketEditor eventId={event.id} />;
-  }, [event.id]);
+  return <TicketEditor eventId={event.id} isAdmin />;
+}, [event.id]);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

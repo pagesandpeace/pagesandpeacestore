@@ -16,7 +16,13 @@ type DraftTicket = {
   is_active: boolean;
 };
 
-export default function TicketEditor({ eventId }: { eventId: string }) {
+export default function TicketEditor({
+  eventId,
+  isAdmin,
+}: {
+  eventId: string;
+  isAdmin: boolean;
+}) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [drafts, setDrafts] = useState<Record<string, DraftTicket>>({});
   const [hasBookings, setHasBookings] = useState(false);
@@ -28,11 +34,13 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // 🔑 SINGLE SOURCE OF TRUTH
+  const priceLocked = hasBookings && !isAdmin;
+
   /* -----------------------------------------
      LOAD TICKETS + BOOKING STATE
   ----------------------------------------- */
   const loadTickets = useCallback(async () => {
-    console.log("🎟️ Loading tickets…");
     setLoading(true);
 
     const ticketsRes = await fetch(
@@ -63,35 +71,31 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
     );
 
     const bookingJson = await bookingRes.json();
-    console.log("🔒 hasBookings:", bookingJson?.hasBookings);
     setHasBookings(Boolean(bookingJson?.hasBookings));
 
     setLoading(false);
   }, [eventId]);
 
   useEffect(() => {
-    (async () => {
-      await loadTickets();
-    })();
+    loadTickets();
   }, [loadTickets]);
 
   /* -----------------------------------------
      PERSIST EXISTING TICKET
   ----------------------------------------- */
   async function persistTicket(id: string) {
-    console.log("💾 Persist ticket:", id);
-
     const draft = drafts[id];
     const original = tickets.find((t) => t.id === id);
     if (!draft || !original) return;
 
     if (
-      hasBookings &&
-      Math.round(Number(draft.price) * 100) !== original.price_pence
-    ) {
-      console.log("⛔ Price change blocked (bookings exist)");
-      return;
-    }
+  !isAdmin &&
+  hasBookings &&
+  Math.round(Number(draft.price) * 100) !== original.price_pence
+) {
+  return;
+}
+
 
     const payload: {
       id: string;
@@ -104,12 +108,13 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
       is_active: draft.is_active,
     };
 
-    if (!hasBookings) {
-      const newPricePence = Math.round(Number(draft.price) * 100);
-      if (newPricePence !== original.price_pence) {
-        payload.price_pence = newPricePence;
-      }
-    }
+    const newPricePence = Math.round(Number(draft.price) * 100);
+    if (
+  newPricePence !== original.price_pence &&
+  (isAdmin || !hasBookings)
+) {
+  payload.price_pence = newPricePence;
+}
 
     const res = await fetch("/api/admin/tickets/update", {
       method: "POST",
@@ -117,10 +122,7 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
       body: JSON.stringify(payload),
     });
 
-    if (!res.ok) {
-      console.warn("⚠️ Ticket update blocked by backend");
-      return;
-    }
+    if (!res.ok) return;
   }
 
   /* -----------------------------------------
@@ -132,7 +134,7 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
       return;
     }
 
-    if (hasBookings) return;
+    if (priceLocked) return;
 
     setSubmitting(true);
     setError("");
@@ -169,9 +171,9 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
     <div className="mt-10 space-y-8">
       <h2 className="text-xl font-semibold">Ticket Types & Pricing</h2>
 
-      {hasBookings && (
+      {priceLocked && (
         <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800">
-          <strong>Prices locked.</strong> This event already has bookings.
+          <strong>Prices locked.</strong> Tickets have already been sold for this event.
         </div>
       )}
 
@@ -183,9 +185,7 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
           <div
             key={t.id}
             className={`border rounded-lg p-4 space-y-3 ${
-              t.is_default
-                ? "bg-blue-50 border-blue-300"
-                : "bg-white"
+              t.is_default ? "bg-blue-50 border-blue-300" : "bg-white"
             }`}
           >
             {t.is_default && (
@@ -210,19 +210,28 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
             />
 
             <input
-              type="number"
-              step="0.01"
-              value={draft.price}
-              readOnly={hasBookings}
-              disabled={hasBookings}
-              className={`border rounded px-3 py-2 w-full ${
-                hasBookings
-                  ? "bg-gray-100 text-gray-500 cursor-not-allowed"
-                  : ""
-              }`}
-            />
+  type="number"
+  step="0.01"
+  value={draft.price}
+  readOnly={priceLocked}
+  disabled={priceLocked}
+  className={`border rounded px-3 py-2 w-full ${
+    priceLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""
+  }`}
+  onChange={(e) =>
+    setDrafts((d) => ({
+      ...d,
+      [t.id]: {
+        ...d[t.id],
+        price: e.target.value,
+      },
+    }))
+  }
+  onBlur={() => persistTicket(t.id)}
+/>
 
-            {hasBookings && (
+
+            {priceLocked && (
               <p className="text-xs text-red-600">
                 Price locked because this event already has bookings.
               </p>
@@ -264,19 +273,17 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
           step="0.01"
           placeholder="Price (£)"
           value={newPrice}
-          disabled={hasBookings}
-          readOnly={hasBookings}
+          disabled={priceLocked}
+          readOnly={priceLocked}
           className={`border rounded px-3 py-2 w-full ${
-            hasBookings
-              ? "bg-gray-100 text-gray-500 cursor-not-allowed"
-              : ""
+            priceLocked ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""
           }`}
           onChange={(e) => {
-            if (!hasBookings) setNewPrice(e.target.value);
+            if (!priceLocked) setNewPrice(e.target.value);
           }}
         />
 
-        {hasBookings && (
+        {priceLocked && (
           <p className="text-xs text-red-600">
             Price locked because this event already has bookings.
           </p>
@@ -295,7 +302,7 @@ export default function TicketEditor({ eventId }: { eventId: string }) {
 
         <button
           onClick={createTicket}
-          disabled={submitting}
+          disabled={submitting || priceLocked}
           className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
         >
           {submitting ? "Adding…" : "Add ticket"}
