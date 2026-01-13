@@ -7,6 +7,41 @@ export async function POST(req: Request) {
 
   try {
     const supabase = await supabaseServer();
+
+    /* -----------------------------------------
+       AUTH + ROLE CHECK (SERVER-SIDE ONLY)
+    ----------------------------------------- */
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      console.error("❌ [TICKET UPDATE] unauthenticated");
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("id, role")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      console.error("❌ [TICKET UPDATE] failed to load user profile", profileError);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const isAdmin = profile.role === "admin";
+
+    console.log("👤 Authenticated user:", {
+      user_id: profile.id,
+      role: profile.role,
+      isAdmin,
+    });
+
+    /* -----------------------------------------
+       PARSE BODY
+    ----------------------------------------- */
     const body = await req.json();
 
     console.log("📥 [TICKET UPDATE] raw payload:", body);
@@ -27,7 +62,7 @@ export async function POST(req: Request) {
     }
 
     /* -----------------------------------------
-       Load ticket + linked product + event
+       LOAD TICKET
     ----------------------------------------- */
     console.log("📡 Loading ticket row…");
 
@@ -47,45 +82,50 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-   /* -----------------------------------------
-   🔒 Guard: lock ALL ticket prices once
-       ANY booking exists for the event
------------------------------------------ */
-if (price_pence !== undefined) {
-  console.log("🔐 Price edit requested — checking event bookings…");
+    /* -----------------------------------------
+       🔒 BOOKING GUARD (ADMIN AWARE)
+    ----------------------------------------- */
+    if (price_pence !== undefined) {
+      console.log("🔐 Price edit requested — checking event bookings…");
 
-  const { count, error: bookingError } = await supabase
-    .from("event_bookings")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", ticket.event_id);
+      const { count, error: bookingError } = await supabase
+        .from("event_bookings")
+        .select("*", { count: "exact", head: true })
+        .eq("event_id", ticket.event_id);
 
-  console.log("📊 Booking check result:", {
-    event_id: ticket.event_id,
-    count,
-    bookingError,
-  });
+      console.log("📊 Booking check result:", {
+        event_id: ticket.event_id,
+        count,
+        bookingError,
+      });
 
-  if ((count ?? 0) > 0) {
-    console.warn(
-      "⛔ Price update blocked — event has bookings:",
-      count
-    );
+      if ((count ?? 0) > 0 && !isAdmin) {
+        console.warn(
+          "⛔ Price update blocked — non-admin, event has bookings:",
+          count
+        );
 
-    return NextResponse.json(
-      {
-        error:
-          "Ticket prices cannot be changed once bookings exist for this event",
-      },
-      { status: 400 }
-    );
-  }
+        return NextResponse.json(
+          {
+            error:
+              "Ticket prices cannot be changed once bookings exist for this event",
+          },
+          { status: 400 }
+        );
+      }
 
-  console.log("✅ No bookings — price edit allowed");
-}
-
+      if ((count ?? 0) > 0 && isAdmin) {
+        console.log(
+          "⚠️ Admin price override — bookings exist:",
+          count
+        );
+      } else {
+        console.log("✅ No bookings — price edit allowed");
+      }
+    }
 
     /* -----------------------------------------
-       Build update payload
+       BUILD UPDATE PAYLOAD
     ----------------------------------------- */
     const ticketUpdates: Record<string, unknown> = {};
 
@@ -96,7 +136,7 @@ if (price_pence !== undefined) {
     console.log("🧱 Ticket update payload:", ticketUpdates);
 
     /* -----------------------------------------
-       Update ticket row
+       UPDATE TICKET
     ----------------------------------------- */
     if (Object.keys(ticketUpdates).length > 0) {
       console.log("🛠 Updating event_ticket_types…");
@@ -122,8 +162,7 @@ if (price_pence !== undefined) {
     }
 
     /* -----------------------------------------
-       🔑 Sync product price
-       (only when price_pence is being updated)
+       🔁 SYNC PRODUCT PRICE (FOR FUTURE SALES)
     ----------------------------------------- */
     if (price_pence !== undefined) {
       const priceString = (price_pence / 100).toFixed(2);
@@ -160,6 +199,9 @@ if (price_pence !== undefined) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("💥 [TICKET UPDATE] route crashed:", err);
-    return NextResponse.json({ error: "Failed to update ticket" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update ticket" },
+      { status: 500 }
+    );
   }
 }
