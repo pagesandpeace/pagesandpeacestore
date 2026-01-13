@@ -151,34 +151,24 @@ export async function POST(
       }
     }
 
-    if (body.fulfilment_mode === "made_to_order") {
-      await supabase
-        .from("products")
-        .update({ inventory_count: 0 })
-        .eq("id", productId);
-    }
+  
 
-    if (
-      body.fulfilment_mode === "physical" &&
-      typeof inventory_count === "number"
-    ) {
-      const { error } = await supabase.rpc(
-        "adjust_product_inventory",
-        {
-          p_product_id: productId,
-          p_new_quantity: inventory_count,
-          p_reason: "admin_adjustment",
-          p_user_id: auth.user.id,
-        }
-      );
+    if (typeof inventory_count === "number") {
+  const { error } = await supabase.rpc("adjust_product_inventory", {
+    p_product_id: productId,
+    p_new_quantity: inventory_count,
+    p_reason: "admin_adjustment",
+    p_user_id: auth.user.id,
+  });
 
-      if (error) {
-        return NextResponse.json(
-          { error: "Inventory update failed", detail: error },
-          { status: 500 }
-        );
-      }
-    }
+  if (error) {
+    return NextResponse.json(
+      { error: "Inventory update failed", detail: error },
+      { status: 500 }
+    );
+  }
+}
+
 
     await upsertProductSupplier({
       supabase,

@@ -7,22 +7,46 @@ import { supabaseServer } from "@/lib/supabase/server";
    TYPES
 --------------------------------------------- */
 
-type IncomingItem = {
+type ExistingItem = {
+  kind: "existing";
   product_id: string;
+  product_name: string;
   quantity: number;
-  notes?: string;
+  requested_quantity?: number;
+  notes: string;
 };
 
+type NewItem = {
+  kind: "new";
+  title: string;
+  author?: string;
+  supplier?: string;
+  isbn?: string;
+  quantity: number;
+  requested_quantity?: number;
+  notes: string;
+};
+
+type IncomingItem = ExistingItem | NewItem;
+
+type OrderIntent = "customer" | "stock";
+
 type IncomingPayload = {
-  order_date: string;
-  customer: {
-    name: string;
-    email: string;
+  order_intent?: OrderIntent;
+  order_date?: string;
+
+  supplier_name?: string;
+
+  customer?: {
+    name?: string;
+    email?: string;
     phone?: string;
   };
-  payment_status: "paid" | "unpaid";
+
+  payment_status?: "paid" | "unpaid";
   payment_reference?: string;
-  items: IncomingItem[];
+
+  items?: IncomingItem[];
 };
 
 /* ---------------------------------------------
@@ -57,44 +81,156 @@ export async function POST(req: Request) {
        BODY
     ------------------------- */
     const body: IncomingPayload = await req.json();
+    console.log("📦 RAW BODY:", JSON.stringify(body, null, 2));
 
+    /* -------------------------
+       VALIDATION
+    ------------------------- */
     if (
+      !body.order_intent ||
       !body.order_date ||
-      !body.customer?.name ||
-      !body.customer?.email ||
       !Array.isArray(body.items) ||
       body.items.length === 0
     ) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
+    if (body.order_intent === "customer") {
+      if (!body.customer?.name || !body.customer?.email) {
+        return NextResponse.json(
+          { error: "Customer name and email required" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (body.order_intent === "stock" && !body.supplier_name) {
+      return NextResponse.json(
+        { error: "Supplier name required for stock orders" },
+        { status: 400 }
+      );
+    }
+
     /* -------------------------
        NORMALISE ROWS
     ------------------------- */
-    const rows = body.items.map((item) => {
-      if (!item.product_id || item.quantity <= 0) {
-        throw new Error("Invalid product or quantity");
+    const rows = body.items.map((item, idx) => {
+      console.log(`➡️ processing item ${idx}`, item);
+
+      if (item.quantity <= 0) {
+        throw new Error("Invalid quantity");
       }
 
-      return {
-        product_id: item.product_id,
-        quantity: item.quantity,
+      const requestedQty = item.requested_quantity ?? item.quantity;
 
-        customer_name: body.customer.name,
-        customer_email: body.customer.email,
-        customer_phone: body.customer.phone ?? null,
+      if (item.kind === "existing") {
+        if (!item.product_id) {
+          throw new Error("Missing product_id for existing item");
+        }
 
-        payment_status: body.payment_status,
-        notes:
-          body.payment_status === "paid" && body.payment_reference
-            ? `Payment ref: ${body.payment_reference}${item.notes ? " | " + item.notes : ""}`
-            : item.notes ?? null,
+        return {
+          product_id: item.product_id,
 
-        order_date: body.order_date,
-        status: "awaiting_order",
-        created_by: profile.auth_user_id,
-      };
+          quantity: item.quantity,
+          requested_quantity: requestedQty, // ✅ GUARANTEED
+
+          temp_title: null,
+          temp_author: null,
+          temp_supplier: null,
+          temp_isbn: null,
+
+          supplier_name:
+            body.order_intent === "stock" ? body.supplier_name : null,
+
+          customer_name:
+            body.order_intent === "customer"
+              ? body.customer!.name
+              : body.supplier_name ?? null,
+
+          customer_email:
+            body.order_intent === "customer"
+              ? body.customer!.email
+              : null,
+
+          customer_phone:
+            body.order_intent === "customer"
+              ? body.customer?.phone ?? null
+              : null,
+
+          payment_status:
+            body.order_intent === "customer"
+              ? body.payment_status ?? "unpaid"
+              : "unpaid",
+
+          notes:
+            body.order_intent === "customer" &&
+            body.payment_status === "paid" &&
+            body.payment_reference
+              ? `Payment ref: ${body.payment_reference}${
+                  item.notes ? " | " + item.notes : ""
+                }`
+              : item.notes ?? null,
+
+          order_intent: body.order_intent,
+          order_date: body.order_date,
+          status: "awaiting_order",
+          created_by: profile.auth_user_id,
+        };
+      }
+
+      /* ---------- NEW TITLE ---------- */
+      if (item.kind === "new") {
+        if (!item.title?.trim()) {
+          throw new Error("Missing title for new item");
+        }
+
+        return {
+          product_id: null,
+
+          quantity: item.quantity,
+          requested_quantity: requestedQty, // ✅ GUARANTEED
+
+          temp_title: item.title,
+          temp_author: item.author ?? null,
+          temp_supplier: item.supplier ?? body.supplier_name ?? null,
+          temp_isbn: item.isbn ?? null,
+
+          supplier_name:
+            body.order_intent === "stock" ? body.supplier_name : null,
+
+          customer_name:
+            body.order_intent === "customer"
+              ? body.customer!.name
+              : body.supplier_name ?? null,
+
+          customer_email:
+            body.order_intent === "customer"
+              ? body.customer!.email
+              : null,
+
+          customer_phone:
+            body.order_intent === "customer"
+              ? body.customer?.phone ?? null
+              : null,
+
+          payment_status:
+            body.order_intent === "customer"
+              ? body.payment_status ?? "unpaid"
+              : "unpaid",
+
+          notes: item.notes ?? null,
+
+          order_intent: body.order_intent,
+          order_date: body.order_date,
+          status: "awaiting_order",
+          created_by: profile.auth_user_id,
+        };
+      }
+
+      throw new Error("Unknown item kind");
     });
+
+    console.log("🧾 INSERT ROWS:", rows);
 
     /* -------------------------
        INSERT
@@ -108,10 +244,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({
-      success: true,
-      count: rows.length,
-    });
+    return NextResponse.json({ success: true, count: rows.length });
   } catch (err) {
     console.error("🔥 crashed", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

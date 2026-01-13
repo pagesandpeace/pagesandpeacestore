@@ -1,35 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/Badge";
+import { useCallback, useEffect, useState } from "react";
+
+import OrderHeader from "@/components/admin/supplier-orders/OrderHeader";
+import ToBeOrderedTable from "@/components/admin/supplier-orders/tables/ToBeOrderedTable";
+import AwaitingDeliveryTable from "@/components/admin/supplier-orders/tables/AwaitingDeliveryTable";
+import DeliveredTable from "@/components/admin/supplier-orders/tables/DeliveredTable";
+import CreateSupplierPOModal from "@/components/admin/supplier-orders/CreateSupplierPOModal";
+
+import type { SupplierOrderGroup } from "@/components/admin/supplier-orders/types";
 
 /* ---------------------------------------------
-   TYPES
+   TAB KEYS
 --------------------------------------------- */
 
-type PaymentStatus = "unpaid" | "deposit_taken" | "paid";
+type TabKey = "to_order" | "awaiting_delivery" | "delivered";
 
-type LineItem = {
-  backorder_id: string;
-  product_name: string;
-  quantity: number;
-};
+/* ---------------------------------------------
+   GROUP VISIBILITY
+--------------------------------------------- */
 
-type CustomerGroup = {
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  payment_status: PaymentStatus;
-  items: LineItem[];
-};
+function groupHasRows(group: SupplierOrderGroup, tab: TabKey): boolean {
+  return group.customers.some((c) =>
+    c.items.some((item) => {
+      const received = item.received_quantity ?? 0;
+const remaining = item.quantity - received;
 
-type SupplierOrderGroup = {
-  order_date: string;
-  status: "awaiting_order" | "ordered" | "received" | "collected";
-  customers: CustomerGroup[];
-};
+      switch (tab) {
+        case "to_order":
+          return item.ordered_at == null && item.cancelled_at == null;
 
-type TabKey = SupplierOrderGroup["status"];
+        case "awaiting_delivery":
+          return (
+            item.ordered_at != null &&
+            remaining > 0 &&
+            item.cancelled_at == null
+          );
+
+        case "delivered":
+          return received > 0 && item.cancelled_at == null;
+
+        default:
+          return false;
+      }
+    })
+  );
+}
 
 /* ---------------------------------------------
    PAGE
@@ -37,49 +53,36 @@ type TabKey = SupplierOrderGroup["status"];
 
 export default function SupplierOrdersPage() {
   const [data, setData] = useState<SupplierOrderGroup[]>([]);
-  const [activeTab, setActiveTab] = useState<TabKey>("awaiting_order");
+  const [activeTab, setActiveTab] = useState<TabKey>("to_order");
   const [loading, setLoading] = useState(true);
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showCreatePO, setShowCreatePO] = useState(false);
 
   /* ---------------------------------------------
-     DATA LOAD
+     LOAD
   --------------------------------------------- */
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/admin/supplier-orders");
-    const json = await res.json();
-    setData(Array.isArray(json) ? json : []);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    (async () => {
-      await load();
-    })();
+    try {
+      const res = await fetch("/api/admin/supplier-orders", {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      setData(Array.isArray(json) ? json : []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  /* ---------------------------------------------
-     BULK ACTIONS
-  --------------------------------------------- */
-
-  const submitBulk = async (
-    action: "ordered" | "delivered" | "collected"
-  ) => {
-    if (selected.size === 0) return;
-
-    await fetch("/api/admin/backorders/bulk-update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ids: Array.from(selected),
-        action,
-      }),
-    });
-
-    setSelected(new Set());
+  useEffect(() => {
     load();
-  };
+  }, [load]);
+
+  /* ---------------------------------------------
+     SELECTION
+  --------------------------------------------- */
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -93,7 +96,47 @@ export default function SupplierOrdersPage() {
     });
   };
 
-  const filtered = data.filter((d) => d.status === activeTab);
+  const clearSelection = () => setSelected(new Set());
+
+  useEffect(() => {
+    clearSelection();
+  }, [activeTab]);
+
+  /* ---------------------------------------------
+     BULK ACTIONS
+  --------------------------------------------- */
+
+  const submitBulk = async () => {
+    if (selected.size === 0) return;
+
+    if (activeTab === "to_order") {
+      setShowCreatePO(true);
+      return;
+    }
+
+    if (activeTab === "awaiting_delivery") {
+      await fetch("/api/admin/backorders/bulk-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: Array.from(selected),
+          action: "received",
+        }),
+      });
+
+      clearSelection();
+      load();
+    }
+  };
+
+  const bulkButtonLabel =
+    activeTab === "to_order"
+      ? `Create supplier PO (${selected.size})`
+      : activeTab === "awaiting_delivery"
+      ? `Mark received (${selected.size})`
+      : "";
+
+  const showBulkButton = activeTab !== "delivered";
 
   /* ---------------------------------------------
      RENDER
@@ -101,189 +144,103 @@ export default function SupplierOrdersPage() {
 
   return (
     <div className="max-w-6xl mx-auto py-10 space-y-6">
-      <h1 className="text-3xl font-bold">Backorders</h1>
+      <h1 className="text-3xl font-bold">Supplier Orders</h1>
 
       <Tabs active={activeTab} onChange={setActiveTab} />
 
-      {loading && <p className="text-sm text-gray-500">Loading…</p>}
-
-      {!loading && filtered.length === 0 && (
-        <p className="text-sm text-gray-500">No backorders in this state.</p>
+      {loading && (
+        <p className="text-sm text-gray-500">Loading…</p>
       )}
 
-      {filtered.map((group) => (
-        <div
-          key={`${group.order_date}-${group.status}`}
-          className="border rounded-lg bg-white p-5 space-y-4"
-        >
-          <div className="flex justify-between items-center">
-            <p className="font-medium">To be ordered on: {group.order_date}</p>
-
-            {activeTab !== "collected" && (
-              <button
-                disabled={selected.size === 0}
-                onClick={() =>
-                  submitBulk(
-                    activeTab === "awaiting_order"
-                      ? "ordered"
-                      : activeTab === "ordered"
-                      ? "delivered"
-                      : "collected"
-                  )
-                }
-                className="px-4 py-2 text-sm bg-black text-white rounded disabled:opacity-40"
-              >
-                {activeTab === "awaiting_order" && "Mark selected as ordered"}
-                {activeTab === "ordered" && "Mark selected as delivered"}
-                {activeTab === "received" && "Mark selected as closed"} (
-                {selected.size})
-              </button>
-            )}
-          </div>
-
-          <BackordersTable
-            group={group}
-            selectable={activeTab !== "collected"}
-            selected={selected}
-            onToggle={toggleSelect}
-            paymentGate={activeTab === "received"}
-            onPaymentUpdated={load}
-            readOnly={activeTab === "collected"}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ---------------------------------------------
-   TABLE (REUSED EVERYWHERE)
---------------------------------------------- */
-
-function BackordersTable({
-  group,
-  selectable,
-  selected,
-  onToggle,
-  paymentGate,
-  onPaymentUpdated,
-  readOnly,
-}: {
-  group: SupplierOrderGroup;
-  selectable: boolean;
-  selected: Set<string>;
-  onToggle: (id: string) => void;
-  paymentGate?: boolean;
-  onPaymentUpdated: () => void;
-  readOnly?: boolean;
-}) {
-  return (
-    <table className="w-full text-sm border">
-      <thead className="bg-gray-100">
-        <tr>
-          {selectable && <th className="border p-2"></th>}
-          <th className="border p-2 text-left">Product</th>
-          <th className="border p-2">Qty</th>
-          <th className="border p-2">Customer</th>
-          <th className="border p-2">Payment</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {group.customers.flatMap((c) =>
-          c.items.map((item) => {
-            const checkboxDisabled =
-              !selectable ||
-              (paymentGate && c.payment_status !== "paid");
-
-            return (
-              <tr
-                key={`${group.order_date}-${c.customer_email}-${item.backorder_id}`}
-              >
-                {selectable && (
-                  <td className="border p-2 text-center">
-                    <input
-                      type="checkbox"
-                      disabled={checkboxDisabled}
-                      checked={selected.has(item.backorder_id)}
-                      onChange={() => onToggle(item.backorder_id)}
-                    />
-                  </td>
-                )}
-
-                <td className="border p-2">{item.product_name}</td>
-                <td className="border p-2 text-center">{item.quantity}</td>
-
-                <td className="border p-2">
-                  {c.customer_name}
-                  <div className="text-xs text-gray-500">
-                    {c.customer_email}
-                  </div>
-                </td>
-
-                <td className="border p-2 text-center">
-                  {readOnly ? (
-                    <Badge
-                      className={
-                        c.payment_status === "paid"
-                          ? "bg-green-100 text-green-700"
-                          : c.payment_status === "deposit_taken"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-red-100 text-red-700"
-                      }
-                    >
-                      {c.payment_status.replace("_", " ")}
-                    </Badge>
-                  ) : (
-                    <PaymentSelect
-                      value={c.payment_status}
-                      backorderId={item.backorder_id}
-                      onUpdated={onPaymentUpdated}
-                    />
-                  )}
-                </td>
-              </tr>
-            );
-          })
+      {!loading &&
+        data.filter((g) => groupHasRows(g, activeTab)).length === 0 && (
+          <p className="text-sm text-gray-500">
+            No orders in this state.
+          </p>
         )}
-      </tbody>
-    </table>
-  );
-}
 
-/* ---------------------------------------------
-   PAYMENT EDITOR
---------------------------------------------- */
+      {data
+        .filter((group) => groupHasRows(group, activeTab))
+        .map((group) => {
+          const allItems = group.customers.flatMap((c) => c.items);
 
-function PaymentSelect({
-  value,
-  backorderId,
-  onUpdated,
-}: {
-  value: PaymentStatus;
-  backorderId: string;
-  onUpdated: () => void;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={async (e) => {
-        await fetch("/api/admin/backorders/update-payment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: backorderId,
-            payment_status: e.target.value,
-          }),
-        });
-        onUpdated();
-      }}
-      className="text-sm border rounded px-2 py-1"
-    >
-      <option value="unpaid">Unpaid</option>
-      <option value="deposit_taken">Deposit taken</option>
-      <option value="paid">Paid</option>
-    </select>
+          const orderedAt =
+            group.ordered_at ??
+            allItems
+              .map((i) => i.ordered_at)
+              .filter(Boolean)
+              .sort()[0] ??
+            null;
+
+          const receivedAt =
+  allItems
+    .map((i) => i.received_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1) ?? null;
+
+
+          return (
+            <div
+              key={group.po_id ?? group.created_at}
+              className="border rounded-lg bg-white p-5 space-y-4"
+            >
+              <OrderHeader
+                orderDate={
+                  activeTab === "to_order"
+                    ? group.created_at
+                    : orderedAt ?? group.created_at
+                }
+                createdAt={activeTab === "to_order" ? null : group.created_at}
+                orderedAt={activeTab === "to_order" ? null : orderedAt}
+                receivedAt={activeTab === "delivered" ? receivedAt : null}
+                poNumber={activeTab === "to_order" ? null : group.po_number}
+                showBulkButton={showBulkButton}
+                bulkButtonLabel={bulkButtonLabel}
+                bulkDisabled={selected.size === 0}
+                onBulkClick={submitBulk}
+              />
+
+              {activeTab === "to_order" && (
+                <ToBeOrderedTable
+                  group={group}
+                  selected={selected}
+                  onToggle={toggleSelect}
+                  onRefresh={load}
+                />
+              )}
+
+              {activeTab === "awaiting_delivery" && (
+                <AwaitingDeliveryTable
+                  group={group}
+                  selected={selected}
+                  onToggle={toggleSelect}
+                  onRefresh={load}
+                />
+              )}
+
+              {activeTab === "delivered" && (
+                <DeliveredTable
+                  group={group}
+                  selected={selected}
+                  onToggle={toggleSelect}
+                />
+              )}
+            </div>
+          );
+        })}
+
+      <CreateSupplierPOModal
+        open={showCreatePO}
+        backorderIds={Array.from(selected)}
+        onClose={() => setShowCreatePO(false)}
+        onCreated={() => {
+          setShowCreatePO(false);
+          clearSelection();
+          load();
+        }}
+      />
+    </div>
   );
 }
 
@@ -300,10 +257,21 @@ function Tabs({
 }) {
   return (
     <div className="flex gap-2 border-b pb-2">
-      <Tab label="To be ordered" active={active === "awaiting_order"} onClick={() => onChange("awaiting_order")} />
-      <Tab label="Awaiting delivery" active={active === "ordered"} onClick={() => onChange("ordered")} />
-      <Tab label="Delivered" active={active === "received"} onClick={() => onChange("received")} />
-      <Tab label="Closed" active={active === "collected"} onClick={() => onChange("collected")} />
+      <Tab
+        label="To be ordered"
+        active={active === "to_order"}
+        onClick={() => onChange("to_order")}
+      />
+      <Tab
+        label="Awaiting delivery"
+        active={active === "awaiting_delivery"}
+        onClick={() => onChange("awaiting_delivery")}
+      />
+      <Tab
+        label="Delivered"
+        active={active === "delivered"}
+        onClick={() => onChange("delivered")}
+      />
     </div>
   );
 }

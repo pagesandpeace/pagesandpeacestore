@@ -1,78 +1,66 @@
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { resolveBackorderTitle } from "@/lib/backorders/resolveBackorderTitle";
+import type {
+  SupplierOrderGroup,
+  CustomerGroup,
+} from "@/components/admin/supplier-orders/types";
 
 /* ---------------------------------------------
-   TYPES (API INTERNAL)
+   ROW TYPE (DB)
 --------------------------------------------- */
 
-type BackorderRow = {
+type SupplierOrderRow = {
   id: string;
+  order_id: string | null;
+  payment_status: "paid" | "unpaid" | "deposit_taken" | null;
+
   order_date: string;
-  quantity: number;
-  payment_status: "paid" | "unpaid";
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  notes: string | null;
+  created_at: string;
   ordered_at: string | null;
+  cancelled_at: string | null;
   received_at: string | null;
   collected_at: string | null;
-  products: {
-    name: string;
-    product_type: string;
-  }[] | null; // ✅ FIX: array, not single object
-};
 
-type LineItem = {
-  backorder_id: string;
-  product_name: string;
   quantity: number;
-};
+  requested_quantity: number;
+  received_quantity: number | null;
+  cancelled_quantity: number | null;
 
-type CustomerGroup = {
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  payment_status: "paid" | "unpaid";
-  items: LineItem[];
-};
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
 
-type SupplierOrderGroup = {
-  order_date: string;
-  status:
-    | "awaiting_order"
-    | "ordered"
-    | "received"
-    | "collected";
-  customers: CustomerGroup[];
+  temp_title: string | null;
+
+  products: {
+    name: string | null;
+  }[] | null;
+
+  backorder_receipts: {
+    received_at: string;
+  }[] | null;
+
+  supplier_purchase_orders: {
+    id: string;
+    supplier_name: string;
+    po_number: string;
+    ordered_at: string | null;
+  }[] | null;
 };
 
 /* ---------------------------------------------
-   STATUS RESOLUTION
---------------------------------------------- */
-
-function resolveStatus(
-  row: BackorderRow
-): SupplierOrderGroup["status"] {
-  if (row.collected_at) return "collected";
-  if (row.received_at) return "received";
-  if (row.ordered_at) return "ordered";
-  return "awaiting_order";
-}
-
-/* ---------------------------------------------
-   HANDLER
+   GET
 --------------------------------------------- */
 
 export async function GET() {
   try {
     const supabase = await supabaseServer();
 
-    /* -------------------------
-       AUTH
-    ------------------------- */
+    /* ---------- AUTH ---------- */
 
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
@@ -88,96 +76,150 @@ export async function GET() {
       .eq("auth_user_id", auth.user.id)
       .single();
 
-    if (!profile || profile.role !== "admin") {
+    if (profile?.role !== "admin") {
       return NextResponse.json(
         { error: "Admins only" },
         { status: 403 }
       );
     }
 
-    /* -------------------------
-       QUERY
-    ------------------------- */
+    /* ---------- FETCH ---------- */
 
     const { data, error } = await supabase
       .from("customer_backorders")
-      .select(`
+      .select(
+        `
         id,
-        order_date,
-        quantity,
+        order_id,
         payment_status,
+
+        order_date,
+        created_at,
+        ordered_at,
+        cancelled_at,
+        received_at,
+        collected_at,
+
+        quantity,
+        requested_quantity,
+        received_quantity,
+        cancelled_quantity,
+
         customer_name,
         customer_email,
         customer_phone,
-        notes,
-        ordered_at,
-        received_at,
-        collected_at,
-        products (
-          name,
-          product_type
+
+        temp_title,
+
+        products ( name ),
+        backorder_receipts ( received_at ),
+        supplier_purchase_orders (
+          id,
+          supplier_name,
+          po_number,
+          ordered_at
         )
-      `)
-      .neq("status", "cancelled")
-      .order("order_date", { ascending: true });
+      `
+      )
+      .order("created_at", { ascending: true });
 
     if (error) {
+      console.error("❌ supplier-orders fetch failed", error);
       return NextResponse.json(
         { error: error.message },
         { status: 500 }
       );
     }
 
-    /* -------------------------
+    const rows = (data ?? []) as SupplierOrderRow[];
+
+    /* ---------------------------------------------
        GROUPING
-    ------------------------- */
+    --------------------------------------------- */
 
     const grouped = new Map<string, SupplierOrderGroup>();
 
-    (data ?? []).forEach((row: BackorderRow) => {
-      const status = resolveStatus(row);
-      const key = `${row.order_date}-${status}`;
+    for (const r of rows) {
+      const po = r.supplier_purchase_orders?.[0] ?? null;
+      const groupKey = po?.id ?? "NO_PO";
 
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          order_date: row.order_date,
-          status,
+      if (!grouped.has(groupKey)) {
+        grouped.set(groupKey, {
+          po_id: po?.id ?? null,
+          supplier_name: po?.supplier_name ?? "Unordered supplier items",
+          po_number: po?.po_number ?? null,
+          created_at: r.created_at,
+          ordered_at: r.ordered_at ?? null,
           customers: [],
         });
       }
 
-      const group = grouped.get(key)!;
+      const group = grouped.get(groupKey)!;
 
-      let customer = group.customers.find(
-        (c) => c.customer_email === row.customer_email
-      );
+      /* ---------- CUSTOMER ---------- */
 
-      if (!customer) {
-        customer = {
-          customer_name: row.customer_name,
-          customer_email: row.customer_email,
-          customer_phone: row.customer_phone,
-          payment_status: row.payment_status,
-          items: [],
-        };
-        group.customers.push(customer);
+      const customerName = r.customer_name ?? "Unknown";
+      const customerEmail = r.customer_email ?? null;
+
+      const customer: CustomerGroup =
+        group.customers.find(
+          (c) =>
+            c.customer_name === customerName &&
+            c.customer_email === customerEmail
+        ) ??
+        (() => {
+          const created: CustomerGroup = {
+            customer_name: customerName,
+            customer_email: customerEmail,
+            customer_phone: r.customer_phone ?? null,
+            payment_status: r.payment_status ?? "unpaid",
+            items: [],
+          };
+          group.customers.push(created);
+          return created;
+        })();
+
+      // Paid always wins
+      if (r.payment_status === "paid") {
+        customer.payment_status = "paid";
       }
 
-      customer.items.push({
-        backorder_id: row.id,
-        product_name:
-          row.products?.[0]?.name ?? "[Missing product]",
-        quantity: row.quantity,
+      /* ---------- PRODUCT NAME ---------- */
+
+      const productForTitle =
+        r.products && r.products.length > 0
+          ? r.products[0]
+          : null;
+
+      const productName = resolveBackorderTitle({
+        temp_title: r.temp_title,
+        products: productForTitle,
       });
-    });
 
-    /* -------------------------
-       RESPONSE
-    ------------------------- */
+      /* ---------- LINE ITEM ---------- */
 
-    return NextResponse.json(Array.from(grouped.values()));
+      customer.items.push({
+        backorder_id: r.id,
+        product_name: productName,
+
+        quantity: r.quantity,
+        requested_quantity: r.requested_quantity,
+
+        received_quantity: r.received_quantity ?? 0,
+
+        // ✅ REQUIRED lifecycle fields
+        received_at: r.received_at ?? null,
+        collected_at: r.collected_at ?? null,
+
+        supplier_po_id: po?.id ?? null,
+        ordered_at: r.ordered_at,
+        cancelled_at: r.cancelled_at,
+      });
+    }
+
+    return NextResponse.json([...grouped.values()]);
   } catch (err) {
-    console.error("🔥 supplier-orders failed", err);
+    console.error("🔥 supplier-orders crashed", err);
     return NextResponse.json(
       { error: "Server error" },
       { status: 500 }

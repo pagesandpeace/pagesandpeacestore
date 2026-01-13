@@ -180,7 +180,7 @@ export async function POST(req: Request) {
       commercial_model,
 
       // inventory + behaviour
-      inventory_count: normalisedInventory,
+      inventory_count: 0,
       out_of_stock_behavior,
 
       // consignment
@@ -220,6 +220,17 @@ export async function POST(req: Request) {
     }
 
     console.log("✅ Product created:", product.id);
+/* -------------------------------------------------
+   INITIAL STOCK (LEDGER-SAFE)
+------------------------------------------------- */
+if (normalisedInventory > 0) {
+  await supabaseAdmin.rpc("adjust_product_inventory", {
+    p_product_id: product.id,
+    p_new_quantity: normalisedInventory,
+    p_reason: "initial_stock",
+    p_user_id: auth.user.id,
+  });
+}
 
     /* -------------------------------------------------
        LINK SUPPLIER (OPTIONAL)

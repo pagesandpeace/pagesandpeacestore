@@ -141,6 +141,23 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
 
             </div>
           </div>
+                    {/* OPERATIONS */}
+          <div>
+            <span className="text-xs uppercase text-gray-500 tracking-wider">
+              Operations
+            </span>
+
+            <div className="mt-3 flex flex-col gap-3">
+              <button
+                onClick={() => handleNav("/admin/operations")}
+                className="text-left hover:text-[#5DA865] font-medium"
+              >
+                Operations Queue
+              </button>
+            </div>
+          </div>
+          
+
 
           {/* MARKETING */}
           <div>
@@ -190,9 +207,11 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
               >
                 Product Catalogue Changes
               </button>
+              
 
             </div>
           </div>
+          
 
         </nav>
       </div>

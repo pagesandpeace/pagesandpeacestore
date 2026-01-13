@@ -33,6 +33,7 @@ const supabase = createClient(
   }
 );
 
+
 /* -----------------------------------------------------
    RAW BODY (Stripe requirement)
 ----------------------------------------------------- */
@@ -285,12 +286,30 @@ await supabase
     .select("id")
     .maybeSingle();
 
-  if (!claim && md.kind !== "event") {
-    logWebhook("Order already claimed, exiting", orderId);
-    return NextResponse.json({ received: true });
-  }
+  if (!claim && md.kind === "event") {
+  logWebhook("Event order already claimed, exiting", orderId);
+  return NextResponse.json({ received: true });
+}
+
 
   logWebhook("Order claimed for processing", orderId);
+  /* -----------------------------------------------------
+   RESOLVE SYSTEM ADMIN (REQUIRED FOR BACKORDERS)
+----------------------------------------------------- */
+const { data: systemAdmin, error: systemAdminError } = await supabase
+  .from("users")
+  .select("auth_user_id")
+  .eq("role", "admin")
+  .order("created_at", { ascending: true })
+  .limit(1)
+  .single();
+
+if (systemAdminError || !systemAdmin?.auth_user_id) {
+  logWebhook("❌ No system admin auth_user_id found", systemAdminError);
+  throw new Error("No system admin auth_user_id found");
+}
+
+
 
 /* -----------------------------------------------------
    PRODUCT ORDER ITEM CREATION (NEW)
@@ -459,76 +478,80 @@ if (md.kind === "product" || md.kind === "cart") {  const { count } = await supa
     );
   }
 }
+
+
 /* -----------------------------------------------------
    BACKORDER CREATION (PRODUCT → SUPPLIER PIPELINE)
 ----------------------------------------------------- */
-
-if (md.kind === "product" || md.kind === "cart") {  const { data: items } = await supabase
+if (md.kind === "product" || md.kind === "cart") {
+  const { data: items } = await supabase
     .from("order_items")
-    .select("product_id, quantity")
+    .select("id, product_id, quantity")
     .eq("order_id", orderId)
     .eq("kind", "product");
 
   if (!items || items.length === 0) {
-    logWebhook("❌ No order_items found for backorder creation", {
-      orderId,
-    });
+    logWebhook("❌ No order_items found for backorder creation", { orderId });
   } else {
     for (const item of items) {
-      // HARD FK CHECK (THIS IS WHY YOU SAW 'Unknown')
       const { data: product } = await supabase
         .from("products")
-        .select("id, name")
+        .select("id, requires_procurement")
         .eq("id", item.product_id)
         .maybeSingle();
 
-      if (!product) {
-        logWebhook("🚨 BACKORDER BLOCKED: product_id does not exist", {
-          orderId,
-          product_id: item.product_id,
-        });
-        continue; // do NOT insert broken backorders
-      }
+      if (!product || !product.requires_procurement) continue;
 
-      // IDEMPOTENCY GUARD
       const { data: existing } = await supabase
         .from("customer_backorders")
         .select("id")
-        .eq("order_id", orderId)
-        .eq("product_id", item.product_id)
+        .eq("order_item_id", item.id)
         .limit(1);
 
-      if (existing && existing.length > 0) {
-        logWebhook("↩️ Backorder already exists, skipping", {
-          orderId,
-          product_id: item.product_id,
-        });
-        continue;
-      }
+      if (existing && existing.length > 0) continue;
 
-      await supabase.from("customer_backorders").insert({
-        id: crypto.randomUUID(),
-        order_id: orderId,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        customer_name:
-          session?.customer_details?.name ?? "Online customer",
-        customer_email: session?.customer_details?.email ?? null,
-        customer_phone: session?.customer_details?.phone ?? null,
-        payment_status: "paid",
-        status: "awaiting_order",
-        notes: "Created automatically from online order",
-        created_by: user!.id,
-        order_date: new Date().toISOString().slice(0, 10),
-      });
+      const { error } = await supabase
+        .from("customer_backorders")
+        .insert({
+          id: crypto.randomUUID(),
+          order_id: orderId,
+          order_item_id: item.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          requested_quantity: item.quantity,
+          status: "awaiting_order",
+          supplier_po_id: null,
+          customer_name:
+            session?.customer_details?.name ?? "Online customer",
+          customer_email: session?.customer_details?.email ?? null,
+          customer_phone: session?.customer_details?.phone ?? null,
+          payment_status: "paid",
+          order_intent: "customer",
+          notes: "Created automatically from online order",
+created_by: systemAdmin.auth_user_id,
+
+          order_date: new Date().toISOString().slice(0, 10),
+        });
+
+      if (error) {
+        logWebhook("❌ BACKORDER INSERT FAILED", {
+          orderId,
+          orderItemId: item.id,
+          error,
+        });
+        throw error; // Stripe retry
+      }
 
       logWebhook("📋 Backorder created", {
         orderId,
-        product_id: item.product_id,
+        orderItemId: item.id,
       });
     }
   }
 }
+
+
+
 /* -----------------------------------------------------
    PRODUCT INVENTORY PROCESSING (SAFE + IDEMPOTENT)
 ----------------------------------------------------- */

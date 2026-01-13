@@ -1,32 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import ProductSearchSelect from "@/components/admin/ProductSearchSelect";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Alert";
+import AddOrderItemModal from "@/components/admin/AddOrderItemModal";
 
 /* ---------------------------------------------
    TYPES
 --------------------------------------------- */
 
-type ProductResult = {
-  id: string;
-  name: string;
-  product_type: string;
-  supplier: string | null;
-  inventory_count: number;
-};
+type OrderIntent = "customer" | "stock";
 
-type BackorderLine = {
+type ExistingLine = {
   id: string;
+  kind: "existing";
   product_id: string;
   product_name: string;
-  product_type: "book" | "stock";
-  supplier: string | null;
   quantity: number;
   notes: string;
 };
+
+type NewLine = {
+  id: string;
+  kind: "new";
+  title: string;
+  author?: string;
+  supplier?: string;
+  isbn?: string;
+  quantity: number;
+  notes: string;
+};
+
+type BackorderLine = ExistingLine | NewLine;
 
 /* ---------------------------------------------
    HELPERS
@@ -38,11 +44,11 @@ function getDefaultOrderDate(): string {
   const next = new Date(today);
 
   if (day === 1 || day === 2) {
-    next.setDate(today.getDate() + (3 - day)); // Wed
+    next.setDate(today.getDate() + (3 - day));
   } else if (day === 3 || day === 4) {
-    next.setDate(today.getDate() + (8 - day)); // Next Mon
+    next.setDate(today.getDate() + (8 - day));
   } else {
-    next.setDate(today.getDate() + ((8 - day) % 7)); // Next Mon
+    next.setDate(today.getDate() + ((8 - day) % 7));
   }
 
   return next.toISOString().slice(0, 10);
@@ -53,10 +59,15 @@ function getDefaultOrderDate(): string {
 --------------------------------------------- */
 
 export default function BackordersPage() {
-  /* CUSTOMER */
+  const [orderIntent, setOrderIntent] =
+    useState<OrderIntent>("customer");
+
+  /* CUSTOMER / SUPPLIER */
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+
+  const [supplierName, setSupplierName] = useState("");
 
   /* PAYMENT */
   const [paymentStatus, setPaymentStatus] =
@@ -67,31 +78,21 @@ export default function BackordersPage() {
   const [orderDate, setOrderDate] = useState(getDefaultOrderDate());
   const [lines, setLines] = useState<BackorderLine[]>([]);
 
-  /* STATE */
+  /* UI */
+  const [showAddItem, setShowAddItem] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   /* ---------------------------------------------
-     ADD PRODUCT
+     LINE HELPERS
   --------------------------------------------- */
-  function handleAddProduct(product: ProductResult, quantity: number) {
-    setLines((prev) => [
-      {
-        id: crypto.randomUUID(),
-        product_id: product.id,
-        product_name: product.name,
-        product_type: product.product_type === "book" ? "book" : "stock",
-        supplier: product.supplier,
-        quantity,
-        notes: "",
-      },
-      ...prev,
-    ]);
-  }
 
-  function updateLine(id: string, patch: Partial<BackorderLine>) {
+  function updateLine(
+    id: string,
+    updater: (line: BackorderLine) => BackorderLine
+  ) {
     setLines((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, ...patch } : l))
+      prev.map((l) => (l.id === id ? updater(l) : l))
     );
   }
 
@@ -102,19 +103,29 @@ export default function BackordersPage() {
   /* ---------------------------------------------
      SUBMIT
   --------------------------------------------- */
+
   async function submitBackorder() {
-    if (!customerName || !customerEmail) {
-      setError("Customer name and email are required");
-      return;
+    if (orderIntent === "customer") {
+      if (!customerName || !customerEmail) {
+        setError("Customer name and email are required");
+        return;
+      }
+
+      if (paymentStatus === "paid" && !paymentReference) {
+        setError("Payment reference is required");
+        return;
+      }
     }
 
-    if (paymentStatus === "paid" && !paymentReference) {
-      setError("Payment reference is required when paid");
-      return;
+    if (orderIntent === "stock") {
+      if (!supplierName.trim()) {
+        setError("Supplier name is required for stock orders");
+        return;
+      }
     }
 
     if (lines.length === 0) {
-      setError("Add at least one product");
+      setError("Add at least one item");
       return;
     }
 
@@ -126,30 +137,59 @@ export default function BackordersPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          order_date: orderDate,
-          customer: {
-            name: customerName,
-            email: customerEmail,
-            phone: customerPhone,
-          },
-          payment_status: paymentStatus,
-          payment_reference:
-            paymentStatus === "paid" ? paymentReference : undefined,
-          items: lines.map((l) => ({
-            product_id: l.product_id,
-            quantity: l.quantity,
-            notes: l.notes,
-          })),
-        }),
+  order_intent: orderIntent,
+  order_date: orderDate,
+
+  supplier_name:
+    orderIntent === "stock" ? supplierName : undefined,
+
+  customer:
+    orderIntent === "customer"
+      ? {
+          name: customerName,
+          email: customerEmail,
+          phone: customerPhone,
+        }
+      : undefined,
+
+  payment_status:
+    orderIntent === "customer" ? paymentStatus : undefined,
+
+  payment_reference:
+    orderIntent === "customer" && paymentStatus === "paid"
+      ? paymentReference
+      : undefined,
+
+  items: lines.map((l) =>
+    l.kind === "existing"
+      ? {
+          kind: "existing",
+          product_id: l.product_id,
+          quantity: l.quantity,
+          notes: l.notes,
+        }
+      : {
+          kind: "new",
+          title: l.title,
+          author: l.author,
+          supplier: l.supplier,
+          isbn: l.isbn,
+          quantity: l.quantity,
+          notes: l.notes,
+        }
+  ),
+})
       });
 
       if (!res.ok) {
         throw new Error(await res.text());
       }
 
+      // reset
       setCustomerName("");
       setCustomerEmail("");
       setCustomerPhone("");
+      setSupplierName("");
       setPaymentStatus("unpaid");
       setPaymentReference("");
       setLines([]);
@@ -163,131 +203,191 @@ export default function BackordersPage() {
   /* ---------------------------------------------
      RENDER
   --------------------------------------------- */
+
   return (
     <div className="max-w-6xl mx-auto py-10 space-y-8">
-      <h1 className="text-3xl font-bold">Customer Backorders</h1>
+      <h1 className="text-3xl font-bold">Backorders</h1>
+
+      {/* ORDER INTENT */}
+      <div className="flex gap-2">
+        <Button
+          variant={orderIntent === "customer" ? "primary" : "neutral"}
+          onClick={() => setOrderIntent("customer")}
+        >
+          Customer request
+        </Button>
+        <Button
+          variant={orderIntent === "stock" ? "primary" : "neutral"}
+          onClick={() => setOrderIntent("stock")}
+        >
+          Stock order
+        </Button>
+      </div>
 
       {/* CUSTOMER */}
-      <div className="border rounded-lg p-4 bg-white space-y-3">
-        <h2 className="font-medium">Customer</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {orderIntent === "customer" && (
+        <div className="border rounded-lg p-4 bg-white space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Input
+              placeholder="Customer name"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+            />
+            <Input
+              placeholder="Customer email"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.target.value)}
+            />
+            <Input
+              placeholder="Customer phone"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* SUPPLIER */}
+      {orderIntent === "stock" && (
+        <div className="border rounded-lg p-4 bg-white">
           <Input
-            placeholder="Customer name"
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-          />
-          <Input
-            type="email"
-            placeholder="Customer email"
-            value={customerEmail}
-            onChange={(e) => setCustomerEmail(e.target.value)}
-          />
-          <Input
-            placeholder="Customer phone"
-            value={customerPhone}
-            onChange={(e) => setCustomerPhone(e.target.value)}
+            placeholder="Supplier name"
+            value={supplierName}
+            onChange={(e) => setSupplierName(e.target.value)}
           />
         </div>
-      </div>
+      )}
 
-      {/* ORDER */}
-      <div className="border rounded-lg p-4 bg-white space-y-3">
-        <h2 className="font-medium">Supplier order to be placed on (Mon & Wed)</h2>
-        <Input
-          type="date"
-          value={orderDate}
-          onChange={(e) => setOrderDate(e.target.value)}
-        />
-      </div>
+      {/* ORDER DATE */}
+      <Input
+        type="date"
+        value={orderDate}
+        onChange={(e) => setOrderDate(e.target.value)}
+      />
 
-      {/* PRODUCTS */}
-      <div className="border rounded-lg p-4 bg-white space-y-2">
-        <label className="text-sm font-medium">Add books</label>
-        <ProductSearchSelect onAdd={handleAddProduct} />
-      </div>
+      {/* ADD ITEM */}
+      <Button onClick={() => setShowAddItem(true)}>
+        + Add order item
+      </Button>
 
       {/* LINES */}
-      <div className="space-y-4">
-        {lines.map((line) => (
-          <div
-            key={line.id}
-            className="border rounded-lg p-4 bg-white space-y-3"
-          >
-            <div className="flex justify-between">
-              <div>
-                <p className="font-medium">{line.product_name}</p>
-                <p className="text-sm text-gray-500">
-                  {line.product_type}
-                  {line.supplier ? ` · ${line.supplier}` : ""}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="neutral"
-                onClick={() => removeLine(line.id)}
-              >
-                Remove
-              </Button>
-            </div>
+      {lines.map((line) => (
+        <div
+          key={line.id}
+          className="border p-4 rounded bg-white space-y-2"
+        >
+          <div className="flex justify-between">
+            <p className="font-medium">
+              {line.kind === "existing"
+                ? line.product_name
+                : line.title}
+            </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Input
-                type="number"
-                min={1}
-                value={line.quantity}
-                onChange={(e) =>
-                  updateLine(line.id, {
-                    quantity: Number(e.target.value),
-                  })
-                }
-              />
-              <Input
-                placeholder="Notes"
-                value={line.notes}
-                onChange={(e) =>
-                  updateLine(line.id, { notes: e.target.value })
-                }
-              />
-            </div>
+            <Button
+              variant="ghost"
+              onClick={() => removeLine(line.id)}
+            >
+              Remove
+            </Button>
           </div>
-        ))}
-      </div>
 
-      {/* PAYMENT */}
-      <div className="border rounded-lg p-4 bg-white space-y-3">
-        <h2 className="font-medium">Payment</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <select
-            className="border rounded px-3 py-2"
-            value={paymentStatus}
-            onChange={(e) =>
-              setPaymentStatus(
-                e.target.value === "paid" ? "paid" : "unpaid"
-              )
-            }
-          >
-            <option value="unpaid">Unpaid</option>
-            <option value="paid">Paid</option>
-          </select>
-
-          {paymentStatus === "paid" && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Input
-              placeholder="SumUp payment reference"
-              value={paymentReference}
-              onChange={(e) => setPaymentReference(e.target.value)}
+              type="number"
+              min={1}
+              value={line.quantity}
+              onChange={(e) =>
+                updateLine(line.id, (l) => ({
+                  ...l,
+                  quantity: Number(e.target.value),
+                }))
+              }
             />
-          )}
+
+            <Input
+              placeholder="Notes"
+              value={line.notes}
+              onChange={(e) =>
+                updateLine(line.id, (l) => ({
+                  ...l,
+                  notes: e.target.value,
+                }))
+              }
+            />
+          </div>
         </div>
-      </div>
+      ))}
 
       {error && <Alert type="error" message={error} />}
+{/* PAYMENT (CUSTOMER ONLY) */}
+{orderIntent === "customer" && lines.length > 0 && (
+  <div className="border rounded-lg p-4 bg-white space-y-3">
+    <h3 className="font-medium">Payment</h3>
 
-      {/* SUBMIT */}
+    <div className="flex gap-2">
+      <Button
+        variant={paymentStatus === "unpaid" ? "primary" : "neutral"}
+        onClick={() => setPaymentStatus("unpaid")}
+      >
+        Unpaid
+      </Button>
+
+      <Button
+        variant={paymentStatus === "paid" ? "primary" : "neutral"}
+        onClick={() => setPaymentStatus("paid")}
+      >
+        Paid
+      </Button>
+    </div>
+
+    {paymentStatus === "paid" && (
+      <Input
+        placeholder="Payment reference (receipt, till, Stripe, etc.)"
+        value={paymentReference}
+        onChange={(e) => setPaymentReference(e.target.value)}
+      />
+    )}
+  </div>
+)}
+
       {lines.length > 0 && (
         <Button onClick={submitBackorder} disabled={submitting}>
           {submitting ? "Submitting…" : "Submit backorder"}
         </Button>
       )}
+
+      
+
+      {/* MODAL */}
+      <AddOrderItemModal
+        open={showAddItem}
+        onClose={() => setShowAddItem(false)}
+        onAdd={(item) => {
+          if (item.kind === "existing") {
+            const line: ExistingLine = {
+              id: crypto.randomUUID(),
+              kind: "existing",
+              product_id: item.product_id,
+              product_name: item.product_name,
+              quantity: item.quantity,
+              notes: item.notes ?? "",
+            };
+            setLines((prev) => [line, ...prev]);
+          } else {
+            const line: NewLine = {
+              id: crypto.randomUUID(),
+              kind: "new",
+              title: item.title,
+              author: item.author,
+              supplier: item.supplier,
+              isbn: item.isbn,
+              quantity: item.quantity,
+              notes: item.notes ?? "",
+            };
+            setLines((prev) => [line, ...prev]);
+          }
+        }}
+      />
     </div>
   );
 }

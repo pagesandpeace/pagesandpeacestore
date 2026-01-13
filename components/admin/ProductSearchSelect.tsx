@@ -15,7 +15,7 @@ type ProductResult = {
 };
 
 type Props = {
-  onAdd: (product: ProductResult, quantity: number) => void;
+  onAdd: (product: ProductResult) => void;
 };
 
 /* ---------------------------------------------
@@ -27,12 +27,11 @@ export default function ProductSearchSelect({ onAdd }: Props) {
   const [results, setResults] = useState<ProductResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   const abortRef = useRef<AbortController | null>(null);
 
   /* ---------------------------------------------
-     AUTO-CLOSE WHEN INPUT CLEARED (KEY FIX)
+     AUTO-CLOSE WHEN INPUT CLEARED
   --------------------------------------------- */
   useEffect(() => {
     if (query.trim() === "") {
@@ -86,15 +85,12 @@ export default function ProductSearchSelect({ onAdd }: Props) {
      ADD
   --------------------------------------------- */
   function handleAdd(product: ProductResult) {
-    const quantity = quantities[product.id] ?? 1;
-
-    onAdd(product, quantity);
+    onAdd(product);
 
     // reset search UI
     setQuery("");
     setResults([]);
     setOpen(false);
-    setQuantities({});
   }
 
   /* ---------------------------------------------
@@ -131,19 +127,6 @@ export default function ProductSearchSelect({ onAdd }: Props) {
                   {` · stock ${p.inventory_count}`}
                 </div>
               </div>
-
-              <input
-                type="number"
-                min={1}
-                className="w-16 border rounded px-2 py-1 text-sm"
-                value={quantities[p.id] ?? 1}
-                onChange={(e) =>
-                  setQuantities((prev) => ({
-                    ...prev,
-                    [p.id]: Number(e.target.value),
-                  }))
-                }
-              />
 
               <button
                 type="button"

@@ -54,6 +54,12 @@ interface MetaItem {
   name: string;
 }
 
+interface StockMovement {
+  change: number;
+  reason: string;
+  created_at: string;
+}
+
 /* ---------------------------------------------------
    HELPERS
 --------------------------------------------------- */
@@ -81,6 +87,7 @@ export default function AdminProductEditPage({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [product, setProduct] = useState<Product | null>(null);
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
 
   /* GENERAL */
   const [name, setName] = useState("");
@@ -165,10 +172,21 @@ export default function AdminProductEditPage({
       const meta = await metaRes.json();
 
       setGenres(meta.genres);
-      setVibes(meta.vibes);
-      setThemes(meta.themes);
+setVibes(meta.vibes);
+setThemes(meta.themes);
 
-      setLoading(false);
+const stockRes = await fetch(
+  `/api/admin/products/${id}/stock-movements`,
+  { credentials: "include", cache: "no-store" }
+);
+
+if (stockRes.ok) {
+  const movements = await stockRes.json();
+  setStockMovements(movements);
+}
+
+setLoading(false);
+
     }
 
     load();
@@ -225,11 +243,9 @@ export default function AdminProductEditPage({
       markup_percent: markupPercent,
     };
 
-    if (fulfilmentMode === "made_to_order") {
-      payload.inventory_count = null;
-    } else {
-      payload.inventory_count = inventoryCount;
-    }
+    payload.inventory_count =
+  fulfilmentMode === "made_to_order" ? 0 : inventoryCount;
+
 
     if (isBook) {
       payload.author_id = authorId || null;
@@ -399,6 +415,31 @@ export default function AdminProductEditPage({
           </div>
         </div>
       )}
+<div className="border rounded p-4 bg-gray-50">
+  <h2 className="font-semibold mb-3">Stock history</h2>
+
+  {stockMovements.length === 0 ? (
+    <p className="text-sm text-gray-500">No stock movements yet.</p>
+  ) : (
+    <ul className="space-y-2 text-sm">
+      {stockMovements.map((m, idx) => (
+        <li key={idx} className="flex justify-between">
+          <span>
+            <strong
+              className={m.change > 0 ? "text-green-600" : "text-red-600"}
+            >
+              {m.change > 0 ? `+${m.change}` : m.change}
+            </strong>{" "}
+            {m.reason}
+          </span>
+          <span className="text-gray-400">
+            {new Date(m.created_at).toLocaleString()}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )}
+</div>
 
       <div className="flex gap-4">
         <Button disabled={saving} onClick={saveChanges}>
