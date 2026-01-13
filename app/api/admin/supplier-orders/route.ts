@@ -38,18 +38,19 @@ type SupplierOrderRow = {
 
   products: {
     name: string | null;
-  }[] | null;
+  } | null;
 
   backorder_receipts: {
     received_at: string;
   }[] | null;
 
+  // ✅ FIX 1: this is a SINGLE object, not an array
   supplier_purchase_orders: {
     id: string;
     supplier_name: string;
     po_number: string;
     ordered_at: string | null;
-  }[] | null;
+  } | null;
 };
 
 /* ---------------------------------------------
@@ -64,10 +65,7 @@ export async function GET() {
 
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { data: profile } = await supabase
@@ -77,10 +75,7 @@ export async function GET() {
       .single();
 
     if (profile?.role !== "admin") {
-      return NextResponse.json(
-        { error: "Admins only" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Admins only" }, { status: 403 });
     }
 
     /* ---------- FETCH ---------- */
@@ -111,8 +106,12 @@ export async function GET() {
 
         temp_title,
 
-        products ( name ),
+        products:products!customer_backorders_product_id_fkey (
+          name
+        ),
+
         backorder_receipts ( received_at ),
+
         supplier_purchase_orders (
           id,
           supplier_name,
@@ -125,13 +124,10 @@ export async function GET() {
 
     if (error) {
       console.error("❌ supplier-orders fetch failed", error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const rows = (data ?? []) as SupplierOrderRow[];
+    const rows = (data ?? []) as unknown as SupplierOrderRow[];
 
     /* ---------------------------------------------
        GROUPING
@@ -140,7 +136,8 @@ export async function GET() {
     const grouped = new Map<string, SupplierOrderGroup>();
 
     for (const r of rows) {
-      const po = r.supplier_purchase_orders?.[0] ?? null;
+      // ✅ FIX 2: no [0] access – relationship is singular
+      const po = r.supplier_purchase_orders ?? null;
       const groupKey = po?.id ?? "NO_PO";
 
       if (!grouped.has(groupKey)) {
@@ -186,14 +183,9 @@ export async function GET() {
 
       /* ---------- PRODUCT NAME ---------- */
 
-      const productForTitle =
-        r.products && r.products.length > 0
-          ? r.products[0]
-          : null;
-
       const productName = resolveBackorderTitle({
         temp_title: r.temp_title,
-        products: productForTitle,
+        products: r.products,
       });
 
       /* ---------- LINE ITEM ---------- */
@@ -207,7 +199,6 @@ export async function GET() {
 
         received_quantity: r.received_quantity ?? 0,
 
-        // ✅ REQUIRED lifecycle fields
         received_at: r.received_at ?? null,
         collected_at: r.collected_at ?? null,
 
@@ -220,9 +211,6 @@ export async function GET() {
     return NextResponse.json([...grouped.values()]);
   } catch (err) {
     console.error("🔥 supplier-orders crashed", err);
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

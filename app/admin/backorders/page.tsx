@@ -342,7 +342,7 @@ export default function BackordersPage() {
 
     {paymentStatus === "paid" && (
       <Input
-        placeholder="Payment reference (receipt, till, Stripe, etc.)"
+        placeholder="SumUp payment reference"
         value={paymentReference}
         onChange={(e) => setPaymentReference(e.target.value)}
       />

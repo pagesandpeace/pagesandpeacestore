@@ -28,6 +28,7 @@ export default function OrderHeader({
   return (
     <div className="flex justify-between items-start gap-6">
       <div className="space-y-2">
+        {/* Order date */}
         <p className="font-medium">
           Order date{" "}
           {orderDate
@@ -41,15 +42,20 @@ export default function OrderHeader({
             : "—"}
         </p>
 
+        {/* Timeline */}
         <OrderTimeline
           createdAt={createdAt}
           orderedAt={orderedAt}
           receivedAt={receivedAt}
         />
 
-        <SupplierPOReference poNumber={poNumber} />
+        {/* PO reference – only when it exists */}
+        {poNumber && (
+          <SupplierPOReference poNumber={poNumber} />
+        )}
       </div>
 
+      {/* Bulk action */}
       {showBulkButton && (
         <button
           disabled={bulkDisabled}
