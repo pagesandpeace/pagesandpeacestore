@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { supabaseServer } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 import Link from "next/link";
 import StartEventCheckout from "@/components/events/StartEventCheckout";
@@ -9,6 +10,7 @@ export default async function EventDetailPage(props: {
   params: Promise<{ id: string }>;
 }) {
   const { id: eventId } = await props.params;
+
   const supabase = await supabaseServer();
 
   /* --------------------------- AUTH --------------------------- */
@@ -64,16 +66,22 @@ export default async function EventDetailPage(props: {
     );
   }
 
-  /* ---------------------- BOOKINGS ---------------------- */
-  const { data: allBookings } = await supabase
+  /* ---------------------- CAPACITY ---------------------- */
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+
+  const { data: paidSeats } = await supabaseAdmin
     .from("event_bookings")
-    .select("cancelled")
-    .eq("event_id", eventId);
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("paid", true)
+    .eq("cancelled", false);
 
-  const activeBookings =
-    (allBookings ?? []).filter((b) => !b.cancelled).length;
-
-  const remainingSeats = event.capacity - activeBookings;
+  const usedSeats = paidSeats?.length ?? 0;
+  const remainingSeats = event.capacity - usedSeats;
   const soldOut = remainingSeats <= 0;
 
   const formattedDate = new Date(event.date).toLocaleString("en-GB", {
@@ -116,7 +124,7 @@ export default async function EventDetailPage(props: {
                 <span className="text-red-600 font-semibold">Sold Out</span>
               ) : (
                 <span className="text-green-700 font-semibold">
-                  {remainingSeats} seats remaining
+                  Seats available
                 </span>
               )}
             </div>
