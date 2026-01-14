@@ -9,12 +9,14 @@ export type EventCardType = {
   slug: string;
   title: string;
   date: string;
-  defaultPricePence: number; // ✅ default ticket price
+  defaultPricePence: number;
   imageUrl?: string | null;
   remaining: number;
 };
 
 export default function EventCard({ event }: { event: EventCardType }) {
+  const soldOut = event.remaining <= 0;
+
   const dateFormatted = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "2-digit",
@@ -33,6 +35,7 @@ export default function EventCard({ event }: { event: EventCardType }) {
         bg-white border border-[var(--accent)]/10 rounded-2xl
         shadow-sm hover:shadow-md transition-all duration-200
         overflow-hidden flex flex-col
+        relative
       "
     >
       {/* IMAGE */}
@@ -41,8 +44,17 @@ export default function EventCard({ event }: { event: EventCardType }) {
           src={event.imageUrl || "/coming_soon.svg"}
           alt={event.title}
           fill
-          className="object-cover"
+          className={`object-cover ${soldOut ? "opacity-60" : ""}`}
         />
+
+        {/* SOLD OUT BANNER */}
+        {soldOut && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            <span className="text-white text-xl font-bold tracking-wide uppercase">
+              Sold Out
+            </span>
+          </div>
+        )}
       </div>
 
       {/* CONTENT */}
@@ -59,7 +71,7 @@ export default function EventCard({ event }: { event: EventCardType }) {
           From £{price}
         </p>
 
-        {event.remaining > 0 ? (
+        {!soldOut ? (
           <Badge
             color={event.remaining <= 3 ? "yellow" : "green"}
             className="w-max px-3 py-1"
