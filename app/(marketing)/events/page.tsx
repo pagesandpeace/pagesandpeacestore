@@ -2,7 +2,26 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { supabaseServer } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import EventCard, { EventCardType } from "@/components/events/EventCard";
+
+type EventRow = {
+  id: string;
+  slug: string;
+  title: string;
+  date: string;
+  capacity: number;
+  image_url: string | null;
+  is_test: boolean;
+  event_ticket_types: {
+    price_pence: number;
+    is_default: boolean;
+  }[];
+};
+
+type BookingRow = {
+  event_id: string;
+};
 
 export default async function EventsPage() {
   const supabase = await supabaseServer();
@@ -34,15 +53,24 @@ export default async function EventsPage() {
     console.error("❌ Error loading events:", eventErr);
   }
 
-  /* -----------------------------
-     FETCH BOOKINGS
-  ----------------------------- */
-  const { data: bookings } = await supabase
-    .from("event_bookings")
-    .select("event_id, cancelled");
+  const allEvents: EventRow[] = events ?? [];
 
-  const allEvents = events ?? [];
-  const allBookings = bookings ?? [];
+  /* -----------------------------
+     FETCH BOOKINGS (SYSTEM SCOPE)
+  ----------------------------- */
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+
+  const { data: bookings } = await supabaseAdmin
+    .from("event_bookings")
+    .select("event_id")
+    .eq("paid", true)
+    .eq("cancelled", false);
+
+  const allBookings: BookingRow[] = bookings ?? [];
 
   /* -----------------------------
      UPCOMING EVENTS ONLY
@@ -54,12 +82,12 @@ export default async function EventsPage() {
   /* -----------------------------
      COMPUTE REMAINING SEATS
   ----------------------------- */
-  const eventRows = upcomingEvents.map((evt) => {
-    const active = allBookings.filter(
-      (b) => b.event_id === evt.id && !b.cancelled
+  const eventRows: EventCardType[] = upcomingEvents.map((evt) => {
+    const usedSeats = allBookings.filter(
+      (b) => b.event_id === evt.id
     ).length;
 
-    const defaultTicket = evt.event_ticket_types?.[0];
+    const defaultTicket = evt.event_ticket_types[0];
 
     return {
       id: evt.id,
@@ -67,7 +95,7 @@ export default async function EventsPage() {
       title: evt.title,
       date: evt.date,
       imageUrl: evt.image_url,
-      remaining: evt.capacity - active,
+      remaining: evt.capacity - usedSeats,
       defaultPricePence: defaultTicket?.price_pence ?? 0,
     };
   });
@@ -92,19 +120,9 @@ export default async function EventsPage() {
           </p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-            {eventRows.map((evt) => {
-              const cardEvent: EventCardType = {
-                id: evt.id,
-                slug: evt.slug,
-                title: evt.title,
-                date: evt.date,
-                imageUrl: evt.imageUrl,
-                remaining: evt.remaining,
-                defaultPricePence: evt.defaultPricePence,
-              };
-
-              return <EventCard key={evt.id} event={cardEvent} />;
-            })}
+            {eventRows.map((evt) => (
+              <EventCard key={evt.id} event={evt} />
+            ))}
           </div>
         )}
       </div>
