@@ -38,23 +38,17 @@ type ReadyBackorder = {
 
 type ToOrderItem = {
   backorder_id: string;
-  product_name?: string | null;
-  customer_name?: string | null;
-  order_intent?: string | null;
-  quantity?: number | null;
+  product_name: string | null;
+  customer_name: string | null;
+  quantity: number | null;
+  supplier_name: string | null;
+  source?: string | null;
 };
 
 type Props = {
   toPick?: ToPickItem[];
   readyBackorders?: ReadyBackorder[];
   toOrder?: ToOrderItem[];
-};
-
-type GroupedOnlineOrder = {
-  order_id: string;
-  created_at: string;
-  customer_name: string | null;
-  items: OnlineToPickItem[];
 };
 
 /* ---------------------------------------------
@@ -64,7 +58,6 @@ type GroupedOnlineOrder = {
 const formatDate = (iso?: string | null) =>
   iso
     ? new Date(iso).toLocaleString("en-GB", {
-        timeZone: "Europe/London",
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
@@ -72,31 +65,6 @@ const formatDate = (iso?: string | null) =>
         minute: "2-digit",
       })
     : "—";
-
-function getStatus(item: ToPickItem) {
-  // Backorders: payment status matters
-  if (item.source === "backorder") {
-    if (item.payment_status === "paid") {
-      return {
-        text: "Ready for collection · payment taken",
-        colour: "green" as const,
-      };
-    }
-
-    return {
-      text: "Ready for collection · payment due",
-      colour: "orange" as const,
-    };
-  }
-
-  // Online orders: payment is already settled upstream,
-  // but we DO NOT mutate payment state here
-  return {
-    text: "Ready for collection",
-    colour: "green" as const,
-  };
-}
-
 
 /* ---------------------------------------------
    COMPONENT
@@ -112,8 +80,6 @@ export default function OperationsClient({
   async function markPicked(
     items: { source: "online" | "backorder"; id: string }[]
   ) {
-    if (items.length === 0) return;
-
     await fetch("/api/admin/operations/mark-picked", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -141,236 +107,214 @@ export default function OperationsClient({
     window.location.reload();
   }
 
-  /* ---------------------------------------------
-     GROUP ONLINE ITEMS BY ORDER
-  --------------------------------------------- */
-
-  const groupedOnline = Object.values(
-    toPick
-      .filter(
-        (i): i is OnlineToPickItem => i.source === "online"
-      )
-      .reduce<Record<string, GroupedOnlineOrder>>((acc, item) => {
-        if (!acc[item.order_id]) {
-          acc[item.order_id] = {
-            order_id: item.order_id,
-            created_at: item.created_at,
-            customer_name: item.customer_name,
-            items: [],
-          };
-        }
-
-        acc[item.order_id].items.push(item);
-        return acc;
-      }, {})
-  );
-
-  const backorderItems = toPick.filter(
-    (i): i is BackorderToPickItem => i.source === "backorder"
-  );
-
-  /* ---------------------------------------------
-     RENDER
-  --------------------------------------------- */
-
   return (
-    <div className="max-w-5xl mx-auto py-10 space-y-14">
-      <h1 className="text-3xl font-bold">Operations</h1>
+    <div className="px-8 py-10 space-y-16">
+      <h1 className="text-3xl font-semibold">Operations</h1>
 
       {/* ===================== 🔴 TO PICK ===================== */}
-      <section>
-        <h2 className="font-semibold mb-4">🔴 To Pick</h2>
 
-        {groupedOnline.length === 0 && backorderItems.length === 0 && (
-          <p className="text-sm text-gray-500">Nothing to pick.</p>
-        )}
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-red-500" />
+          📓 To Pick
+        </h2>
 
-        {groupedOnline.map((order) => {
-          const bulkItems = order.items.map((i) => ({
-            source: "online" as const,
-            id: i.id,
-          }));
+        <div className="rounded-xl border border-muted overflow-hidden">
+          {toPick.length === 0 ? (
+            <p className="p-6 text-sm text-foreground/60">
+              Nothing to pick.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase tracking-wide text-foreground/60 border-b border-muted">
+                <tr>
+                  <th className="px-6 py-4 text-left">Item</th>
+                  <th className="px-6 py-4 text-left">Customer</th>
+                  <th className="px-6 py-4 text-left">Qty</th>
+                  <th className="px-6 py-4 text-left">Created</th>
+                  <th className="px-6 py-4 text-right">Action</th>
+                </tr>
+              </thead>
 
-          return (
-            <div key={order.order_id} className="space-y-3 mb-6">
-              {order.items.map((i) => {
-                const status = getStatus(i);
-
-                return (
-                  <div
-                    key={i.id}
-                    className="border rounded px-4 py-3 flex justify-between items-start"
-                  >
-                    <div className="space-y-1">
-                      <div className="font-medium">📦 {i.title}</div>
-
-                      <div className="text-sm text-gray-600">
-                        {i.customer_name ?? "Unknown customer"}
-                      </div>
-
-                      <div
-                        className={`text-xs ${
-                          status.colour === "green"
-                            ? "text-green-700"
-                            : "text-orange-700"
-                        }`}
-                      >
-                        {status.text}
-                      </div>
-
-                      <div className="text-xs text-gray-400">
-                        Qty: {i.quantity} · {formatDate(i.created_at)}
-                      </div>
-
-                      <div className="text-xs text-gray-500 flex gap-4 pt-1">
-                        <Link
-                          href={`/admin/orders/${order.order_id}`}
-                          className="underline"
+              <tbody className="divide-y divide-muted">
+                {toPick.map((i) => (
+                  <tr key={i.id} className="hover:bg-muted/30">
+                    <td className="px-6 py-5 font-medium">
+                      {i.title}
+                    </td>
+                    <td className="px-6 py-5">
+                      {i.customer_name ?? "Unknown customer"}
+                    </td>
+                    <td className="px-6 py-5">{i.quantity ?? "—"}</td>
+                    <td className="px-6 py-5">
+                      {formatDate(i.created_at)}
+                    </td>
+                    <td className="px-6 py-5 text-right">
+                      <div className="flex flex-col items-end gap-1">
+                        <button
+                          onClick={() =>
+                            markPicked([
+                              { source: i.source, id: i.id },
+                            ])
+                          }
+                          className="text-accent hover:underline"
                         >
-                          View order
-                        </Link>
+                          Mark picked
+                        </button>
 
-                        {order.items.length > 1 && (
-                          <button
-                            onClick={() => markPicked(bulkItems)}
-                            className="underline"
+                        {i.source === "online" && (
+                          <Link
+                            href={`/admin/orders/${i.order_id}`}
+                            className="text-xs text-foreground/60 hover:underline"
                           >
-                            Mark entire order picked
-                          </button>
+                            View order
+                          </Link>
                         )}
                       </div>
-                    </div>
-
-                    <button
-                      onClick={() =>
-                        markPicked([{ source: "online", id: i.id }])
-                      }
-                      className="text-sm underline text-green-700"
-                    >
-                      Mark picked
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-
-        {backorderItems.map((b) => {
-          const status = getStatus(b);
-
-          return (
-            <div
-              key={b.id}
-              className="border rounded px-4 py-3 mb-3 flex justify-between items-start"
-            >
-              <div className="space-y-1">
-                <div className="font-medium">📦 {b.title}</div>
-                <div className="text-sm text-gray-600">
-                  {b.customer_name ?? "Unknown customer"}
-                </div>
-                <div
-                  className={`text-xs ${
-                    status.colour === "green"
-                      ? "text-green-700"
-                      : "text-orange-700"
-                  }`}
-                >
-                  {status.text}
-                </div>
-              </div>
-
-              <button
-                onClick={() =>
-                  markPicked([{ source: "backorder", id: b.id }])
-                }
-                className="text-sm underline text-green-700"
-              >
-                Mark picked
-              </button>
-            </div>
-          );
-        })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </section>
 
-      {/* ===================== 🟢 READY ===================== */}
-      <section>
-        <h2 className="font-semibold mb-4">🟢 Ready for Collection</h2>
+      {/* ===================== 🟢 READY FOR COLLECTION ===================== */}
 
-        {readyBackorders.length === 0 && (
-          <p className="text-sm text-gray-500">
-            No orders ready for collection.
-          </p>
-        )}
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-green-500" />
+          📦Ready for Collection
+        </h2>
 
-        {readyBackorders.map((b) => {
-          const isPaid = b.payment_status === "paid";
-          const ref = paymentRefs[b.id] ?? "";
+        <div className="rounded-xl border border-muted overflow-hidden">
+          {readyBackorders.length === 0 ? (
+            <p className="p-6 text-sm text-foreground/60">
+              No orders ready for collection.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase tracking-wide text-foreground/60 border-b border-muted">
+                <tr>
+                  <th className="px-6 py-4 text-left">Item</th>
+                  <th className="px-6 py-4 text-left">Customer</th>
+                  <th className="px-6 py-4 text-left">Payment</th>
+                  <th className="px-6 py-4 text-right">Action</th>
+                </tr>
+              </thead>
 
-          return (
-            <div
-              key={b.id}
-              className="border rounded px-4 py-3 mb-3 space-y-3"
-            >
-              <div>
-                <div className="font-medium">📦 {b.title}</div>
-                <div className="text-sm text-gray-600">
-                  {b.customer_name ?? "Unknown customer"}
-                </div>
-                <div className="text-xs text-green-700">
-                  Ready for collection
-                </div>
-              </div>
+              <tbody className="divide-y divide-muted">
+                {readyBackorders.map((b) => {
+                  const isPaid = b.payment_status === "paid";
+                  const ref = paymentRefs[b.id] ?? "";
 
-              {!isPaid && (
-                <input
-                  type="text"
-                  placeholder="Payment reference"
-                  value={ref}
-                  onChange={(e) =>
-                    setPaymentRefs((p) => ({
-                      ...p,
-                      [b.id]: e.target.value,
-                    }))
-                  }
-                  className="w-full border rounded px-2 py-1 text-sm"
-                />
-              )}
-
-              <div className="flex justify-end pt-2 border-t">
-                <button
-                  onClick={() => markCollected(b.id, !isPaid, ref)}
-                  disabled={!isPaid && !ref}
-                  className="text-sm bg-green-700 text-white px-4 py-1.5 rounded disabled:opacity-40"
-                >
-                  {isPaid ? "Mark collected" : "Complete collection"}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+                  return (
+                    <tr key={b.id} className="hover:bg-muted/30">
+                      <td className="px-6 py-5 font-medium">
+                        {b.title}
+                      </td>
+                      <td className="px-6 py-5">
+                        {b.customer_name ?? "Unknown customer"}
+                      </td>
+                      <td className="px-6 py-5">
+                        {isPaid ? (
+                          <span className="text-accent font-medium">
+                            Paid
+                          </span>
+                        ) : (
+                          <input
+                            value={ref}
+                            onChange={(e) =>
+                              setPaymentRefs((p) => ({
+                                ...p,
+                                [b.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="Payment reference"
+                            className="w-full max-w-xs border border-muted rounded-md px-3 py-2 text-sm bg-background"
+                          />
+                        )}
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        <button
+                          disabled={!isPaid && !ref}
+                          onClick={() =>
+                            markCollected(b.id, !isPaid, ref)
+                          }
+                          className="text-accent hover:underline disabled:opacity-40"
+                        >
+                          Complete
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
       </section>
 
       {/* ===================== 🔵 TO ORDER ===================== */}
-      <section>
-        <h2 className="font-semibold mb-4">🔵 To Order ({toOrder.length})</h2>
 
-        {toOrder.length === 0 && (
-          <p className="text-sm text-gray-500">
-            No items awaiting supplier order.
-          </p>
-        )}
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-blue-500" />
+          ➡️To Order ({toOrder.length})
+        </h2>
 
-        {toOrder.map((o) => (
-          <div key={o.backorder_id} className="border rounded px-4 py-3">
-            <div className="font-medium">
-              📦 {o.product_name ?? "Unknown product"}
-            </div>
-            <div className="text-sm text-gray-600">
-              {o.customer_name ?? "Unknown customer"}
-            </div>
-          </div>
-        ))}
+        <div className="rounded-xl border border-muted overflow-hidden">
+          {toOrder.length === 0 ? (
+            <p className="p-6 text-sm text-foreground/60">
+              No items awaiting supplier order.
+            </p>
+          ) : (
+            <>
+              <div className="p-4 border-b border-muted">
+                <input
+                  placeholder="Search"
+                  className="w-full max-w-sm border border-muted rounded-md px-3 py-2 text-sm bg-background"
+                />
+              </div>
+
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase tracking-wide text-foreground/60 border-b border-muted">
+                  <tr>
+                    <th className="px-6 py-4 text-left">Product</th>
+                    <th className="px-6 py-4 text-left">
+                      Customer / Source
+                    </th>
+                    <th className="px-6 py-4 text-left">Qty</th>
+                    <th className="px-6 py-4 text-left">Supplier</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-muted">
+                  {toOrder.map((o) => (
+                    <tr
+                      key={o.backorder_id}
+                      className="hover:bg-muted/30"
+                    >
+                      <td className="px-6 py-5 font-medium">
+                        {o.product_name}
+                      </td>
+                      <td className="px-6 py-5">
+                        {o.source === "customer"
+                          ? o.customer_name ?? "Unknown customer"
+                          : "Stock order"}
+                      </td>
+                      <td className="px-6 py-5">{o.quantity}</td>
+                      <td className="px-6 py-5">
+                        {o.supplier_name}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
       </section>
     </div>
   );

@@ -208,24 +208,31 @@ await supabase
   });
 
   if (!existingOrder) {
-    await supabase.from("orders").insert({
-      id: orderId,
-      user_id: user!.id,
-      user_id_uuid: md.userId,
-      total: (session!.amount_total ?? 0) / 100,
-      status: "completed",
-      stripe_checkout_session_id: session!.id,
-      stripe_payment_intent_id:
-        typeof session!.payment_intent === "string"
-          ? session!.payment_intent
-          : null,
-      inventory_processed: false,
-      confirmation_email_sent: false,
-      is_test: !session!.livemode,
-    });
+  await supabase.from("orders").insert({
+    id: orderId,
+    user_id: user!.id,
+    user_id_uuid: md.userId,
 
-    logWebhook("Order inserted", { orderId });
-  }
+    // 🔑 ADD THESE TWO FIELDS
+    customer_name:
+      session?.customer_details?.name ?? null,
+    customer_email:
+      session?.customer_details?.email ?? null,
+
+    total: (session!.amount_total ?? 0) / 100,
+    status: "completed",
+    stripe_checkout_session_id: session!.id,
+    stripe_payment_intent_id:
+      typeof session!.payment_intent === "string"
+        ? session!.payment_intent
+        : null,
+    inventory_processed: false,
+    confirmation_email_sent: false,
+    is_test: !session!.livemode,
+  });
+
+  logWebhook("Order inserted", { orderId });
+}
 
   /* -----------------------------------------------------
      RECONCILE STRIPE CHARGE (RACE SAFE)

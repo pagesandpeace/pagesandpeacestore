@@ -3,6 +3,14 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase/server";
 
+import { TableSurface } from "@/components/table/TableSurface";
+import { Table } from "@/components/table/Table";
+import { TableHead } from "@/components/table/TableHead";
+import { TableBody } from "@/components/table/TableBody";
+import { TableRow } from "@/components/table/TableRow";
+import { Cell } from "@/components/table/Cell";
+import { HeadCell } from "@/components/table/HeadCell";
+
 export default async function AdminAuthorsPage() {
   const supabase = await supabaseServer();
 
@@ -21,8 +29,9 @@ export default async function AdminAuthorsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12">
-      <div className="flex items-center justify-between mb-8">
+    <div className="max-w-5xl mx-auto px-6 py-12 space-y-6">
+      {/* HEADER */}
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">
           Authors
         </h1>
@@ -35,44 +44,55 @@ export default async function AdminAuthorsPage() {
         </Link>
       </div>
 
-      {(!authors || authors.length === 0) ? (
-        <p className="text-neutral-600">
-          No authors found.
-        </p>
-      ) : (
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b text-left">
-              <th className="py-3">Name</th>
-              <th className="py-3">Slug</th>
-              <th className="py-3"></th>
+      {/* TABLE */}
+      <TableSurface>
+        <Table>
+          <TableHead>
+            <tr>
+              <HeadCell>Name</HeadCell>
+              <HeadCell>Slug</HeadCell>
+              <HeadCell>{" "}</HeadCell>
             </tr>
-          </thead>
-          <tbody>
-            {authors.map((author) => (
-              <tr
-                key={author.id}
-                className="border-b last:border-none"
-              >
-                <td className="py-3">
-                  {author.name}
-                </td>
-                <td className="py-3 text-sm text-neutral-600">
-                  {author.slug}
-                </td>
-                <td className="py-3 text-right">
-                  <Link
-                    href={`/admin/authors/${author.id}`}
-                    className="text-sm underline"
-                  >
-                    Edit
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+          </TableHead>
+
+          <TableBody>
+            {(!authors || authors.length === 0) ? (
+              <TableRow>
+                <Cell>
+                  <span className="text-neutral-600">
+                    No authors found.
+                  </span>
+                </Cell>
+                <Cell>{" "}</Cell>
+                <Cell>{" "}</Cell>
+              </TableRow>
+            ) : (
+              authors.map((author) => (
+                <TableRow key={author.id}>
+                  <Cell strong>
+                    {author.name}
+                  </Cell>
+
+                  <Cell>
+                    <span className="text-sm text-foreground/60">
+                      {author.slug}
+                    </span>
+                  </Cell>
+
+                  <Cell>
+                    <Link
+                      href={`/admin/authors/${author.id}`}
+                      className="text-sm underline"
+                    >
+                      Edit
+                    </Link>
+                  </Cell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableSurface>
     </div>
   );
 }

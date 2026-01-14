@@ -1,12 +1,15 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import Link from "next/link";
-import {
-  Card,
-  CardHeader,
-  CardBody,
-  CardTitle,
-} from "@/components/ui/Card";
+
 import { Button } from "@/components/ui/Button";
+
+import { TableSurface } from "@/components/table/TableSurface";
+import { Table } from "@/components/table/Table";
+import { TableHead } from "@/components/table/TableHead";
+import { TableBody } from "@/components/table/TableBody";
+import { TableRow } from "@/components/table/TableRow";
+import { HeadCell } from "@/components/table/HeadCell";
+import { Cell } from "@/components/table/Cell";
 
 /* ---------------------------------------------------
    HELPERS
@@ -53,20 +56,15 @@ export default async function SupplierImportHistoryPage() {
   if (error) {
     return (
       <main className="max-w-6xl mx-auto py-10 space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Supplier Import History</CardTitle>
-          </CardHeader>
-          <CardBody className="space-y-4">
-            <p className="text-red-600">
-              Failed to load supplier import history.
-            </p>
+        <h1 className="text-3xl font-bold">Supplier Import History</h1>
 
-            <Link href="/admin">
-              <Button variant="neutral">Back to Admin</Button>
-            </Link>
-          </CardBody>
-        </Card>
+        <p className="text-red-600">
+          Failed to load supplier import history.
+        </p>
+
+        <Link href="/admin">
+          <Button variant="neutral">Back to Admin</Button>
+        </Link>
       </main>
     );
   }
@@ -87,89 +85,67 @@ export default async function SupplierImportHistoryPage() {
         </Link>
       </div>
 
-      {/* TABLE CARD */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Import Batches</CardTitle>
-        </CardHeader>
+      {/* TABLE */}
+      <TableSurface>
+        <Table>
+          <TableHead>
+            <tr>
+              <HeadCell>Supplier</HeadCell>
+              <HeadCell>Uploaded</HeadCell>
+              <HeadCell>Status</HeadCell>
+              <HeadCell align="right">Valid</HeadCell>
+              <HeadCell align="right">New</HeadCell>
+              <HeadCell align="right">Price Δ</HeadCell>
+              <HeadCell align="right">Inserted</HeadCell>
+              <HeadCell align="right">Updated</HeadCell>
+            </tr>
+          </TableHead>
 
-        <CardBody className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-[#f6f3ef] border-b">
-                <tr className="text-left">
-                  <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">Uploaded</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Valid</th>
-                  <th className="px-4 py-3 text-right">New</th>
-                  <th className="px-4 py-3 text-right">Price Δ</th>
-                  <th className="px-4 py-3 text-right">Inserted</th>
-                  <th className="px-4 py-3 text-right">Updated</th>
-                </tr>
-              </thead>
+          <TableBody>
+            {batches.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-6 py-8 text-center">
+                  <span className="text-muted-foreground">
+                    No supplier imports recorded yet.
+                  </span>
+                </td>
+              </tr>
+            )}
 
-              <tbody>
-                {batches.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="px-4 py-6 text-center text-muted-foreground"
-                    >
-                      No supplier imports recorded yet.
-                    </td>
-                  </tr>
-                )}
+            {batches.map((b) => (
+              <TableRow key={b.id}>
+                <Cell strong>
+                  <span className="capitalize">
+                    {b.supplier}
+                  </span>
+                </Cell>
 
-                {batches.map((b) => (
-                  <tr
-                    key={b.id}
-                    className="border-b last:border-b-0 hover:bg-[#faf6f1]"
+                <Cell>
+                  <span className="text-muted-foreground">
+                    {new Date(b.uploaded_at).toLocaleString("en-GB")}
+                  </span>
+                </Cell>
+
+                <Cell>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(
+                      b.status
+                    )}`}
                   >
-                    <td className="px-4 py-3 font-medium capitalize">
-                      {b.supplier}
-                    </td>
+                    {b.status}
+                  </span>
+                </Cell>
 
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {new Date(b.uploaded_at).toLocaleString("en-GB")}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(
-                          b.status
-                        )}`}
-                      >
-                        {b.status}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3 text-right">
-                      {b.valid_rows ?? "—"}
-                    </td>
-
-                    <td className="px-4 py-3 text-right">
-                      {b.new_records ?? 0}
-                    </td>
-
-                    <td className="px-4 py-3 text-right">
-                      {b.price_changes ?? 0}
-                    </td>
-
-                    <td className="px-4 py-3 text-right">
-                      {b.inserted_records ?? 0}
-                    </td>
-
-                    <td className="px-4 py-3 text-right">
-                      {b.updated_price_records ?? 0}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardBody>
-      </Card>
+                <Cell align="right">{b.valid_rows ?? "—"}</Cell>
+                <Cell align="right">{b.new_records ?? 0}</Cell>
+                <Cell align="right">{b.price_changes ?? 0}</Cell>
+                <Cell align="right">{b.inserted_records ?? 0}</Cell>
+                <Cell align="right">{b.updated_price_records ?? 0}</Cell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableSurface>
     </main>
   );
 }

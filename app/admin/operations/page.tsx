@@ -17,7 +17,7 @@ const supabaseAdmin = createClient(
 );
 
 /* ---------------------------------------------
-   DB ROW TYPES
+   TYPES
 --------------------------------------------- */
 
 type OnlineOrderItemRow = {
@@ -25,34 +25,42 @@ type OnlineOrderItemRow = {
   order_id: string;
   quantity: number;
   name: string | null;
-  picked_at: string | null;
 };
 
 type OrderRow = {
   id: string;
   created_at: string;
   status: string;
-  fulfilment_method: string | null;
-  users: {
-    name: string | null;
-  }[];
+  user_id: string | null;
+};
+
+type UserRow = {
+  id: string;
+  name: string | null;
 };
 
 type BackorderRow = {
   id: string;
   customer_name: string | null;
   received_at: string | null;
-  picked_at?: string | null;
   payment_status?: "paid" | "unpaid" | "deposit_taken";
   temp_title: string | null;
 };
 
-type ToOrderRow = {
+/**
+ * ✅ ACTUAL DB SHAPE returned by the to-order query
+ */
+type ToOrderDbRow = {
   id: string;
   order_intent: string | null;
-  quantity: number | null;
+  requested_quantity: number | null;
   customer_name: string | null;
   temp_title: string | null;
+  supplier_name: string | null;
+  products: {
+    name: string | null;
+    fulfilment_mode: string;
+  }[] | null;
 };
 
 /* ---------------------------------------------
@@ -62,6 +70,7 @@ type ToOrderRow = {
 export default async function AdminOperationsPage() {
   const supabase = await supabaseServer();
 
+  /* ---------- AUTH ---------- */
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -76,63 +85,56 @@ export default async function AdminOperationsPage() {
 
   if (profile?.role !== "admin") redirect("/dashboard");
 
-  console.log("🧪 [OPS] AdminOperationsPage loaded");
-
   /* =====================================================
      🔴 ONLINE ORDERS → TO PICK
   ===================================================== */
 
-  const { data: onlineItemsRaw, error: onlineItemsError } =
-    await supabaseAdmin
-      .from("order_items")
-      .select(
-        `
-        id,
-        order_id,
-        quantity,
-        name,
-        picked_at,
-        products!inner ( fulfilment_mode )
+  const { data: onlineItemsRaw } = await supabaseAdmin
+    .from("order_items")
+    .select(
       `
-      )
-      .eq("kind", "product")
-      .eq("products.fulfilment_mode", "physical")
-      .is("picked_at", null);
+      id,
+      order_id,
+      quantity,
+      name,
+      products!inner ( fulfilment_mode )
+    `
+    )
+    .eq("kind", "product")
+    .eq("products.fulfilment_mode", "physical")
+    .is("picked_at", null);
 
   const onlineItems = (onlineItemsRaw ?? []) as OnlineOrderItemRow[];
+  const orderIds = Array.from(new Set(onlineItems.map((i) => i.order_id)));
 
-  console.log("🧪 [OPS] onlineItems count:", onlineItems.length);
-  console.log("🧪 [OPS] onlineItems error:", onlineItemsError);
-
-  const orderIds = Array.from(
-    new Set(onlineItems.map((i) => i.order_id))
-  );
-
-  /* =====================================================
-     🔴 FETCH ORDERS
-  ===================================================== */
-
-  const { data: ordersRaw, error: ordersError } =
+  const { data: ordersRaw } =
     orderIds.length > 0
       ? await supabaseAdmin
           .from("orders")
-          .select(
-            `
-            id,
-            created_at,
-            status,
-            fulfilment_method,
-            users ( name )
-          `
-          )
+          .select("id, created_at, status, user_id")
           .in("id", orderIds)
           .eq("status", "completed")
-      : { data: [], error: null };
+      : { data: [] };
 
   const orders = (ordersRaw ?? []) as OrderRow[];
 
-  console.log("🧪 [OPS] orders fetched:", orders);
-  console.log("🧪 [OPS] orders error:", ordersError);
+  /* ---------- USERS ---------- */
+
+  const userIds = Array.from(
+    new Set(orders.map((o) => o.user_id).filter(Boolean) as string[])
+  );
+
+  const { data: usersRaw } =
+    userIds.length > 0
+      ? await supabaseAdmin
+          .from("users")
+          .select("id, name")
+          .in("id", userIds)
+      : { data: [] };
+
+  const usersById = new Map(
+    (usersRaw ?? []).map((u: UserRow) => [u.id, u])
+  );
 
   const orderMap = new Map<string, OrderRow>(
     orders.map((o) => [o.id, o])
@@ -142,6 +144,9 @@ export default async function AdminOperationsPage() {
     .filter((i) => orderMap.has(i.order_id))
     .map((i) => {
       const order = orderMap.get(i.order_id)!;
+      const customer = order.user_id
+        ? usersById.get(order.user_id)
+        : null;
 
       return {
         source: "online" as const,
@@ -149,7 +154,7 @@ export default async function AdminOperationsPage() {
         order_id: i.order_id,
         quantity: i.quantity,
         title: i.name ?? "Untitled item",
-        customer_name: order.users[0]?.name ?? null,
+        customer_name: customer?.name ?? null,
         created_at: order.created_at,
       };
     });
@@ -188,34 +193,6 @@ export default async function AdminOperationsPage() {
   );
 
   /* =====================================================
-     🟢 READY FOR COLLECTION
-  ===================================================== */
-
-  const { data: readyBackordersRaw } = await supabaseAdmin
-    .from("customer_backorders")
-    .select(
-      `
-      id,
-      customer_name,
-      picked_at,
-      payment_status,
-      temp_title
-    `
-    )
-    .not("picked_at", "is", null)
-    .is("collected_at", null)
-    .order("picked_at", { ascending: true });
-
-  const readyBackorders = ((readyBackordersRaw ?? []) as BackorderRow[]).map(
-    (b) => ({
-      id: b.id,
-      customer_name: b.customer_name,
-      title: resolveBackorderTitle(b),
-      payment_status: b.payment_status,
-    })
-  );
-
-  /* =====================================================
      🔵 TO ORDER
   ===================================================== */
 
@@ -225,10 +202,11 @@ export default async function AdminOperationsPage() {
       `
       id,
       order_intent,
-      quantity,
+      requested_quantity,
       customer_name,
       temp_title,
-      products ( fulfilment_mode )
+      supplier_name,
+      products ( name, fulfilment_mode )
     `
     )
     .is("ordered_at", null)
@@ -236,18 +214,17 @@ export default async function AdminOperationsPage() {
     .eq("products.fulfilment_mode", "made_to_order")
     .order("created_at", { ascending: true });
 
-  const toOrder = ((toOrderRaw ?? []) as ToOrderRow[]).map((r) => ({
+  const toOrder = ((toOrderRaw ?? []) as ToOrderDbRow[]).map((r) => ({
     backorder_id: r.id,
-    order_intent: r.order_intent,
-    quantity: r.quantity,
+    quantity: r.requested_quantity,
+    product_name: resolveBackorderTitle({
+      temp_title: r.temp_title,
+      products: r.products,
+    }),
+    supplier_name: r.supplier_name ?? "Gardners",
     customer_name: r.customer_name,
-    product_name: resolveBackorderTitle(r),
+    source: r.order_intent,
   }));
-
-  console.log("🧪 [OPS] FINAL toPick payload:", [
-    ...onlineToPick,
-    ...backordersToPick,
-  ]);
 
   /* =====================================================
      RENDER
@@ -256,7 +233,7 @@ export default async function AdminOperationsPage() {
   return (
     <OperationsClient
       toPick={[...onlineToPick, ...backordersToPick]}
-      readyBackorders={readyBackorders}
+      readyBackorders={[]}
       toOrder={toOrder}
     />
   );

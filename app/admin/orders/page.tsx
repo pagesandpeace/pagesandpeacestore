@@ -1,40 +1,25 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
+import { getOrders } from "@/lib/admin/orders/getOrders";
 
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-);
+import { TableSurface } from "@/components/table/TableSurface";
+import { Table } from "@/components/table/Table";
+import { TableHead } from "@/components/table/TableHead";
+import { TableBody } from "@/components/table/TableBody";
+import { TableRow } from "@/components/table/TableRow";
+import { Cell } from "@/components/table/Cell";
+import { HeadCell } from "@/components/table/HeadCell";
 
-type OrderRow = {
-  id: string;
-  created_at: string;
-  total: string | number;
-  status: string | null;
-  stripe_checkout_session_id: string | null;
-  user_id: string | null;
-};
+import { TableSearch } from "@/components/table/TableSearch";
+import { TablePagination } from "@/components/table/TablePagination";
 
-type OrderItemRow = {
-  id: string;
-  order_id: string;
-  kind: string | null;
-};
+export const revalidate = 0;
 
-type BookingRow = {
-  order_item_id: string;
-};
-
-type UserRow = {
-  id: string;
-  email: string | null;
-  name: string | null;
-};
+/* ---------------------------------------------
+   HELPERS
+--------------------------------------------- */
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString("en-GB", {
@@ -56,10 +41,19 @@ function asMoney(total: string | number) {
   return Number.isNaN(num) ? String(total) : num.toFixed(2);
 }
 
-export default async function AdminOrdersPage() {
+/* ---------------------------------------------
+   PAGE
+--------------------------------------------- */
+
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
   const supabase = await supabaseServer();
 
   /* ---------------- AUTH ---------------- */
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -74,159 +68,95 @@ export default async function AdminOrdersPage() {
 
   if (profile?.role !== "admin") redirect("/dashboard");
 
-  /* ---------------- LOAD ORDERS ---------------- */
-  const { data: ordersRaw } = await supabaseAdmin
-    .from("orders")
-    .select("id, created_at, total, status, stripe_checkout_session_id, user_id")
-    .order("created_at", { ascending: false });
+  /* ---------------- PARAMS ---------------- */
 
-  const orders: OrderRow[] = ordersRaw ?? [];
-  if (orders.length === 0) {
-    return <div className="p-10">No orders</div>;
-  }
+  const params = await searchParams;
 
-  const orderIds = orders.map((o) => o.id);
+  const q = params.q?.trim() ?? "";
+  const page = Math.max(Number(params.page ?? 1), 1);
 
-  /* ---------------- LOAD ORDER ITEMS ---------------- */
-  const { data: itemsRaw } = await supabaseAdmin
-    .from("order_items")
-    .select("id, order_id, kind")
-    .in("order_id", orderIds);
+  /* ---------------- DATA ---------------- */
 
-  const items: OrderItemRow[] = itemsRaw ?? [];
-
-  /* ---------------- LOAD EVENT BOOKINGS ---------------- */
-  const eventItemIds = items
-    .filter((i) => i.kind === "event")
-    .map((i) => i.id);
-
-  const { data: bookingsRaw } =
-    eventItemIds.length > 0
-      ? await supabaseAdmin
-          .from("event_bookings")
-          .select("order_item_id")
-          .in("order_item_id", eventItemIds)
-      : { data: [] };
-
-  const bookings: BookingRow[] = bookingsRaw ?? [];
-
-  /* ---------------- MAP COUNTS ---------------- */
-  const eventItemsByOrder = new Map<string, number>();
-  for (const it of items) {
-    if (it.kind === "event") {
-      eventItemsByOrder.set(
-        it.order_id,
-        (eventItemsByOrder.get(it.order_id) ?? 0) + 1
-      );
-    }
-  }
-
-  const bookingsByOrder = new Map<string, number>();
-  for (const b of bookings) {
-    const parent = items.find((i) => i.id === b.order_item_id);
-    if (!parent) continue;
-    bookingsByOrder.set(
-      parent.order_id,
-      (bookingsByOrder.get(parent.order_id) ?? 0) + 1
-    );
-  }
-
-  /* ---------------- USERS ---------------- */
-  const userIds = Array.from(
-    new Set(orders.map((o) => o.user_id).filter(Boolean) as string[])
-  );
-
-  const { data: usersRaw } =
-    userIds.length > 0
-      ? await supabaseAdmin
-          .from("users")
-          .select("id, email, name")
-          .in("id", userIds)
-      : { data: [] };
-
-  const usersById = new Map(
-    (usersRaw ?? []).map((u: UserRow) => [u.id, u])
-  );
+  const { rows: orders, usersById, totalPages } = await getOrders({
+    q,
+    page,
+    pageSize: 20,
+  });
 
   /* ---------------- RENDER ---------------- */
+
   return (
     <div className="max-w-6xl mx-auto py-10 space-y-6">
-      <h1 className="text-3xl font-bold">Orders</h1>
+      <h1 className="text-3xl font-semibold">Orders</h1>
 
-      <div className="overflow-x-auto border rounded-lg bg-white">
-        <table className="min-w-full text-sm">
-          <thead className="bg-neutral-50">
+      {/* ---------- SEARCH ---------- */}
+      <TableSearch
+        placeholder="Search order ID, customer, email"
+        debounceMs={300}
+      />
+
+      <TableSurface>
+        <Table>
+          <TableHead>
             <tr>
-              <th className="px-4 py-3 text-left">Date</th>
-              <th className="px-4 py-3 text-left">Order</th>
-              <th className="px-4 py-3 text-left">Customer</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-left">Total</th>
-              <th className="px-4 py-3 text-left">Stripe</th>
-              <th className="px-4 py-3 text-left">Actions</th>
+              <HeadCell>Date</HeadCell>
+              <HeadCell>Order</HeadCell>
+              <HeadCell>Customer</HeadCell>
+              <HeadCell>Status</HeadCell>
+              <HeadCell>Total</HeadCell>
+              <HeadCell>Stripe</HeadCell>
+              <HeadCell>{" "}</HeadCell>
             </tr>
-          </thead>
+          </TableHead>
 
-          <tbody>
+          <TableBody>
             {orders.map((o) => {
-              const eventItemCount = eventItemsByOrder.get(o.id) ?? 0;
-              const bookingCount = bookingsByOrder.get(o.id) ?? 0;
-
-              const needsReconcile =
-                eventItemCount > 0 && bookingCount === 0;
-
               const customer = o.user_id
                 ? usersById.get(o.user_id)
                 : null;
 
               return (
-                <tr key={o.id} className="border-b">
-                  <td className="px-4 py-3">{fmtDate(o.created_at)}</td>
+                <TableRow key={o.id}>
+                  <Cell>{fmtDate(o.created_at)}</Cell>
 
-                  <td className="px-4 py-3">
+                  <Cell>
                     <Link
                       href={`/admin/orders/${o.id}`}
-                      className="underline text-[var(--accent)]"
+                      className="text-accent hover:underline"
                     >
                       {shortId(o.id, 10)}
                     </Link>
-                  </td>
+                  </Cell>
 
-                  <td className="px-4 py-3">
+                  <Cell>
                     <div>{customer?.name ?? "—"}</div>
-                    <div className="text-xs text-neutral-500">
+                    <div className="text-xs text-foreground/60">
                       {customer?.email ?? "—"}
                     </div>
-                  </td>
+                  </Cell>
 
-                  <td className="px-4 py-3">{o.status}</td>
+                  <Cell>{o.status}</Cell>
 
-                  <td className="px-4 py-3 font-semibold">
-                    £{asMoney(o.total)}
-                  </td>
+                  <Cell strong>£{asMoney(o.total)}</Cell>
 
-                  <td className="px-4 py-3 text-xs">
-                    {o.stripe_checkout_session_id
-                      ? shortId(o.stripe_checkout_session_id, 14)
-                      : "—"}
-                  </td>
+                  <Cell>
+                    <span className="text-xs">
+                      {o.stripe_checkout_session_id
+                        ? shortId(o.stripe_checkout_session_id, 14)
+                        : "—"}
+                    </span>
+                  </Cell>
 
-                  <td className="px-4 py-3">
-                    {needsReconcile && (
-                      <Link
-                        href={`/admin/orders/${o.id}?reconcile=1`}
-                        className="text-red-600 font-semibold underline"
-                      >
-                        Reconcile
-                      </Link>
-                    )}
-                  </td>
-                </tr>
+                  <Cell>{" "}</Cell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </TableSurface>
+
+      {/* ---------- PAGINATION ---------- */}
+      <TablePagination page={page} totalPages={totalPages} />
     </div>
   );
 }

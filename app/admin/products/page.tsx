@@ -2,18 +2,31 @@ export const dynamic = "force-dynamic";
 
 import { supabaseServer } from "@/lib/supabase/server";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { redirect } from "next/navigation";
+
 import AdminProductFilterBar from "./AdminProductFilterBar";
+
+import { TableSurface } from "@/components/table/TableSurface";
+import { Table } from "@/components/table/Table";
+import { TableHead } from "@/components/table/TableHead";
+import { TableBody } from "@/components/table/TableBody";
+import { TableRow } from "@/components/table/TableRow";
+import { Cell } from "@/components/table/Cell";
+import { HeadCell } from "@/components/table/HeadCell";
+import { TableSearch } from "@/components/table/TableSearch";
+import { TablePagination } from "@/components/table/TablePagination";
 
 /* ------------------------------------
    TYPES
 ------------------------------------ */
 
 type SearchParams = {
-  search?: string;
+  q?: string;
   status?: string;
+  product_type?: string;
   page?: string;
 };
 
@@ -43,19 +56,15 @@ const PAGE_SIZE = 20;
 ------------------------------------ */
 
 function deriveStatus(p: ProductRow): ProductStatus {
-  if (p.fulfilment_mode === "made_to_order") {
-    return "made_to_order";
-  }
+  if (p.fulfilment_mode === "made_to_order") return "made_to_order";
 
   const qty = p.inventory_count ?? 0;
-
   if (qty === 0) return "out";
   if (qty <= 3) return "low";
   return "in_stock";
 }
 
-
-function statusRank(status: ProductStatus): number {
+function statusRank(status: ProductStatus) {
   return ["out", "made_to_order", "low", "in_stock"].indexOf(status);
 }
 
@@ -84,24 +93,39 @@ export default async function AdminProductsPage({
   const supabase = await supabaseServer();
   const params = await searchParams;
 
-  const search = params.search?.trim() ?? "";
+  const q = params.q?.trim() ?? "";
   const statusFilter = (params.status ?? "all") as ProductStatus | "all";
+  const productType = params.product_type ?? "all";
   const page = Math.max(Number(params.page ?? 1), 1);
 
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
+  /* ------------------------------------
+     BASE QUERY
+  ------------------------------------ */
+
   let query = supabase
     .from("products")
     .select("*", { count: "exact" })
-    .neq("product_type", "event")
+    .neq("product_type", "event") // HARD RULE: never show events
     .order("created_at", { ascending: false })
     .range(from, to);
 
-  if (search) {
-    query = query.or(
-      `display_title.ilike.%${search}%,name.ilike.%${search}%`
-    );
+  /* ------------------------------------
+     PRODUCT TYPE FILTER
+  ------------------------------------ */
+
+  if (productType !== "all") {
+    query = query.eq("product_type", productType);
+  }
+
+  /* ------------------------------------
+     SEARCH (GIN-backed)
+  ------------------------------------ */
+
+  if (q.length >= 3) {
+    query = query.ilike("search_text", `%${q.toLowerCase()}%`);
   }
 
   const { data: products, count, error } = await query;
@@ -112,7 +136,7 @@ export default async function AdminProductsPage({
   }
 
   /* ------------------------------------
-     FETCH LAST STOCK MOVEMENTS
+     LAST STOCK MOVEMENTS
   ------------------------------------ */
 
   const productIds = products.map((p) => p.id);
@@ -125,31 +149,31 @@ export default async function AdminProductsPage({
 
   const lastMovementByProduct: Record<string, StockMovement> = {};
 
-  movements?.forEach((m: StockMovement) => {
+  movements?.forEach((m) => {
     if (!lastMovementByProduct[m.product_id]) {
       lastMovementByProduct[m.product_id] = m;
     }
   });
 
   /* ------------------------------------
-     ENRICH + FILTER + SORT
+     ENRICH + STATUS FILTER + SORT
   ------------------------------------ */
 
   const enriched = products
-    .map((p: ProductRow) => {
-      const status = deriveStatus(p);
-      return {
-        ...p,
-        status,
-        lastMovement: lastMovementByProduct[p.id] ?? null,
-      };
-    })
+    .map((p: ProductRow) => ({
+      ...p,
+      status: deriveStatus(p),
+      lastMovement: lastMovementByProduct[p.id] ?? null,
+    }))
     .filter(
       (p) => statusFilter === "all" || p.status === statusFilter
     )
     .sort((a, b) => statusRank(a.status) - statusRank(b.status));
 
-  const totalPages = count ? Math.ceil(count / PAGE_SIZE) : 1;
+  const totalPages = Math.max(
+    Math.ceil((count ?? 0) / PAGE_SIZE),
+    1
+  );
 
   if (page > totalPages && totalPages > 0) {
     redirect(`/admin/products?page=${totalPages}`);
@@ -175,79 +199,82 @@ export default async function AdminProductsPage({
         </Link>
       </div>
 
-      {/* FILTER BAR */}
+      {/* FILTERS */}
       <AdminProductFilterBar />
 
-      {/* TABLE */}
-      <div className="border rounded-lg bg-white overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-[#f4f0ea] text-xs uppercase text-[#444]">
-            <tr>
-              <th className="px-4 py-3">Product</th>
-              <th className="px-4 py-3">Price</th>
-              <th className="px-4 py-3">Inventory</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Last movement</th>
-              <th className="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
+      {/* SEARCH */}
+      <TableSearch placeholder="Search products…" />
 
-          <tbody>
+      {/* TABLE */}
+      <TableSurface>
+        <Table>
+          <TableHead>
+            <tr>
+              <HeadCell>Product</HeadCell>
+              <HeadCell>Price</HeadCell>
+              <HeadCell>Inventory</HeadCell>
+              <HeadCell>Status</HeadCell>
+              <HeadCell>Last movement</HeadCell>
+              <HeadCell align="right">Actions</HeadCell>
+            </tr>
+          </TableHead>
+
+          <TableBody>
             {enriched.map((p) => {
               const badge = statusBadge(p.status);
 
               return (
-                <tr key={p.id} className="border-t hover:bg-[#faf8f5]">
-                  <td className="px-4 py-3 font-medium">
+                <TableRow key={p.id}>
+                  <Cell strong>
                     {p.display_title || p.name}
-                  </td>
+                  </Cell>
 
-                  <td className="px-4 py-3">
+                  <Cell>
                     £{Number(p.price).toFixed(2)}
-                  </td>
+                  </Cell>
 
-                  <td className="px-4 py-3">
+                  <Cell>
                     {p.inventory_count ?? 0}
-                  </td>
+                  </Cell>
 
-                  <td className="px-4 py-3">
-                    <Link href={`/admin/products?status=${p.status}`}>
-                      <Badge
-                        color={badge.color}
-                        className="cursor-pointer hover:opacity-80"
-                      >
-                        {badge.label}
-                      </Badge>
-                    </Link>
-                  </td>
+                  <Cell>
+                    <Badge color={badge.color}>
+                      {badge.label}
+                    </Badge>
+                  </Cell>
 
-                  <td className="px-4 py-3 text-xs text-neutral-600">
-                    {p.lastMovement
-                      ? `${p.lastMovement.reason} · ${new Date(
-                          p.lastMovement.created_at
-                        ).toLocaleDateString()}`
-                      : "—"}
-                  </td>
+                  <Cell>
+                    <span className="text-xs text-foreground/60">
+                      {p.lastMovement
+                        ? `${p.lastMovement.reason} · ${new Date(
+                            p.lastMovement.created_at
+                          ).toLocaleDateString()}`
+                        : "—"}
+                    </span>
+                  </Cell>
 
-                  <td className="px-4 py-3">
+                  <Cell align="right">
                     <Link href={`/admin/products/${p.id}`}>
                       <Button size="sm" variant="neutral">
                         View
                       </Button>
                     </Link>
-                  </td>
-                </tr>
+                  </Cell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
 
         {enriched.length === 0 && (
           <p className="p-6 text-neutral-600 text-center">
             No products match your filters.
           </p>
         )}
-      </div>
+      </TableSurface>
+
+      {/* PAGINATION */}
+      <TablePagination page={page} totalPages={totalPages} />
     </main>
   );
 }

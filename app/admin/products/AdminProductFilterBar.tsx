@@ -7,8 +7,8 @@ export default function AdminProductFilterBar() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const [search, setSearch] = useState(params.get("search") ?? "");
   const status = params.get("status") ?? "all";
+  const productType = params.get("product_type") ?? "all";
 
   const update = (key: string, value: string | null) => {
     const q = new URLSearchParams(params.toString());
@@ -25,17 +25,6 @@ export default function AdminProductFilterBar() {
 
   return (
     <div className="bg-white border rounded-xl p-4 flex flex-col md:flex-row gap-4">
-      {/* SEARCH */}
-      <input
-        className={inputClass}
-        placeholder="Search products…"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          update("search", e.target.value);
-        }}
-      />
-
       {/* STATUS FILTER */}
       <select
         className={inputClass}
@@ -48,6 +37,21 @@ export default function AdminProductFilterBar() {
         <option value="low">Low stock</option>
         <option value="in_stock">In stock</option>
       </select>
+
+      {/* PRODUCT TYPE FILTER */}
+      <select
+  className={inputClass}
+  value={productType}
+  onChange={(e) => update("product_type", e.target.value)}
+>
+  <option value="all">All product types</option>
+  <option value="book">Books</option>
+  
+  <option value="merch">Merch</option>
+  <option value="subscription">Subscriptions</option>
+  <option value="digital">Digital</option>
+</select>
+
     </div>
   );
 }

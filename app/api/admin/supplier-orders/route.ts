@@ -36,15 +36,15 @@ type SupplierOrderRow = {
 
   temp_title: string | null;
 
+  // ✅ FIXED: relation is an ARRAY
   products: {
     name: string | null;
-  } | null;
+  }[] | null;
 
   backorder_receipts: {
     received_at: string;
   }[] | null;
 
-  // ✅ FIX 1: this is a SINGLE object, not an array
   supplier_purchase_orders: {
     id: string;
     supplier_name: string;
@@ -52,6 +52,7 @@ type SupplierOrderRow = {
     ordered_at: string | null;
   } | null;
 };
+
 
 /* ---------------------------------------------
    GET

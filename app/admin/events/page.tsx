@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
-import EventsTabs from "@/components/admin/events/EventsTab";
+import AdminEventsTable from "@/components/admin/events/AdminEventsTable";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -52,16 +52,22 @@ export default async function AdminEventsPage() {
     console.error("EVENT FETCH ERROR:", error);
   }
 
-  /* --------------------------------------------------
-     NORMALISE (ATTENDEE COUNT)
-  -------------------------------------------------- */
   const normalisedEvents =
     events?.map((e) => ({
       ...e,
-      // keep event_bookings array for your existing UI
       event_bookings:
         e.event_bookings?.filter((b) => !b.cancelled) ?? [],
     })) ?? [];
+
+  const now = new Date();
+
+  const upcoming = normalisedEvents.filter(
+    (e) => new Date(e.date) >= now
+  );
+
+  const archived = normalisedEvents.filter(
+    (e) => new Date(e.date) < now
+  );
 
   /* --------------------------------------------------
      RENDER
@@ -77,8 +83,17 @@ export default async function AdminEventsPage() {
         </Link>
       </div>
 
-      {/* Tabs + cards */}
-      <EventsTabs events={normalisedEvents} />
+      {/* UPCOMING */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Upcoming</h2>
+        <AdminEventsTable events={upcoming} />
+      </section>
+
+      {/* ARCHIVED */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Archived</h2>
+        <AdminEventsTable events={archived} />
+      </section>
     </div>
   );
 }

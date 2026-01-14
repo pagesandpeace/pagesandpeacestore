@@ -34,15 +34,12 @@ export default function TicketEditor({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // 🔑 SINGLE SOURCE OF TRUTH
   const priceLocked = hasBookings && !isAdmin;
 
   /* -----------------------------------------
-     LOAD TICKETS + BOOKING STATE
+     FETCH (STABLE)
   ----------------------------------------- */
-  const loadTickets = useCallback(async () => {
-    setLoading(true);
-
+  const fetchTickets = useCallback(async () => {
     const ticketsRes = await fetch(
       `/api/admin/events/${eventId}/tickets`,
       { cache: "no-store" }
@@ -72,13 +69,26 @@ export default function TicketEditor({
 
     const bookingJson = await bookingRes.json();
     setHasBookings(Boolean(bookingJson?.hasBookings));
-
-    setLoading(false);
   }, [eventId]);
 
+  /* -----------------------------------------
+     EFFECT
+  ----------------------------------------- */
   useEffect(() => {
-    loadTickets();
-  }, [loadTickets]);
+    let cancelled = false;
+
+    async function run() {
+      setLoading(true);
+      await fetchTickets();
+      if (!cancelled) setLoading(false);
+    }
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchTickets]);
 
   /* -----------------------------------------
      PERSIST EXISTING TICKET
@@ -89,13 +99,12 @@ export default function TicketEditor({
     if (!draft || !original) return;
 
     if (
-  !isAdmin &&
-  hasBookings &&
-  Math.round(Number(draft.price) * 100) !== original.price_pence
-) {
-  return;
-}
-
+      !isAdmin &&
+      hasBookings &&
+      Math.round(Number(draft.price) * 100) !== original.price_pence
+    ) {
+      return;
+    }
 
     const payload: {
       id: string;
@@ -110,19 +119,17 @@ export default function TicketEditor({
 
     const newPricePence = Math.round(Number(draft.price) * 100);
     if (
-  newPricePence !== original.price_pence &&
-  (isAdmin || !hasBookings)
-) {
-  payload.price_pence = newPricePence;
-}
+      newPricePence !== original.price_pence &&
+      (isAdmin || !hasBookings)
+    ) {
+      payload.price_pence = newPricePence;
+    }
 
-    const res = await fetch("/api/admin/tickets/update", {
+    await fetch("/api/admin/tickets/update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
-    if (!res.ok) return;
   }
 
   /* -----------------------------------------
@@ -161,7 +168,7 @@ export default function TicketEditor({
     setNewName("");
     setNewPrice("");
     setNewIsActive(true);
-    await loadTickets();
+    await fetchTickets();
     setSubmitting(false);
   }
 

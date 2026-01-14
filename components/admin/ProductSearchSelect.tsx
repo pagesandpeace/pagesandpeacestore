@@ -31,7 +31,7 @@ export default function ProductSearchSelect({ onAdd }: Props) {
   const abortRef = useRef<AbortController | null>(null);
 
   /* ---------------------------------------------
-     AUTO-CLOSE WHEN INPUT CLEARED
+     AUTO-CLOSE WHEN CLEARED
   --------------------------------------------- */
   useEffect(() => {
     if (query.trim() === "") {
@@ -41,10 +41,10 @@ export default function ProductSearchSelect({ onAdd }: Props) {
   }, [query]);
 
   /* ---------------------------------------------
-     SEARCH
+     SEARCH (NEW q-BASED SYSTEM)
   --------------------------------------------- */
   useEffect(() => {
-    if (!open || query.trim().length < 2) {
+    if (!open || query.trim().length < 3) {
       setResults([]);
       return;
     }
@@ -58,7 +58,7 @@ export default function ProductSearchSelect({ onAdd }: Props) {
         setLoading(true);
 
         const res = await fetch(
-          `/api/admin/backorders/search?q=${encodeURIComponent(query)}`,
+          `/api/admin/products/search?q=${encodeURIComponent(query)}`,
           { signal: controller.signal }
         );
 
@@ -73,7 +73,7 @@ export default function ProductSearchSelect({ onAdd }: Props) {
       } finally {
         setLoading(false);
       }
-    }, 250);
+    }, 300);
 
     return () => {
       clearTimeout(timeout);
@@ -87,7 +87,6 @@ export default function ProductSearchSelect({ onAdd }: Props) {
   function handleAdd(product: ProductResult) {
     onAdd(product);
 
-    // reset search UI
     setQuery("");
     setResults([]);
     setOpen(false);
@@ -106,7 +105,7 @@ export default function ProductSearchSelect({ onAdd }: Props) {
         onChange={(e) => setQuery(e.target.value)}
       />
 
-      {open && query.trim().length > 0 && results.length > 0 && (
+      {open && results.length > 0 && (
         <div className="absolute z-20 mt-1 w-full bg-white border rounded shadow max-h-80 overflow-y-auto">
           {loading && (
             <div className="px-3 py-2 text-sm text-gray-500">
