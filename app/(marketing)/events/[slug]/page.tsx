@@ -3,6 +3,7 @@ export const revalidate = 0;
 
 import Image from "next/image";
 import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import BookNowButton from "@/components/events/BookNowButton";
 import { Badge } from "@/components/ui/Badge";
@@ -34,15 +35,12 @@ interface EventCategory {
   name: string;
 }
 
-interface Booking {
-  cancelled: boolean | null;
-}
-
 export default async function EventDetailPage(props: { params: Promise<Params> }) {
   const { slug } = await props.params;
 
   const supabase = await supabaseServer();
 
+  /* ------------------------ EVENT ------------------------ */
   const { data: event, error: eventErr } = await supabase
     .from("events")
     .select("*")
@@ -66,13 +64,14 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
 
   const eventId = event.id;
 
+  /* -------------------- CATEGORIES -------------------- */
   const { data: categoryLinksRaw } = await supabase
     .from("event_category_links")
     .select("category_id")
     .eq("event_id", eventId);
 
-  const categoryLinks: CategoryLink[] = categoryLinksRaw ?? [];
-  const categoryIds = categoryLinks.map((c) => c.category_id);
+  const categoryIds =
+    categoryLinksRaw?.map((c) => c.category_id) ?? [];
 
   let categories: EventCategory[] = [];
   if (categoryIds.length > 0) {
@@ -84,15 +83,22 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
     categories = cats ?? [];
   }
 
-  const { data: bookingsRaw } = await supabase
+  /* ---------------------- CAPACITY ---------------------- */
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+
+  const { data: paidSeats } = await supabaseAdmin
     .from("event_bookings")
-    .select("cancelled")
-    .eq("event_id", eventId);
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("paid", true)
+    .eq("cancelled", false);
 
-  const bookings: Booking[] = bookingsRaw ?? [];
-  const activeBookings = bookings.filter((b) => !b.cancelled).length;
-
-  const remainingSeats = event.capacity - activeBookings;
+  const usedSeats = paidSeats?.length ?? 0;
+  const remainingSeats = event.capacity - usedSeats;
   const soldOut = remainingSeats <= 0;
 
   const formattedDate = new Date(event.date).toLocaleString("en-GB", {
@@ -103,6 +109,7 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
     minute: "2-digit",
   });
 
+  /* ---------------------- UI ---------------------- */
   return (
     <main className="bg-background min-h-screen pb-20 font-[Montserrat]">
       <div className="relative w-full h-[55vh] min-h-80">
@@ -150,14 +157,14 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
         <section className="space-y-6 text-foreground/90 text-lg">
           <div className="border-b border-muted pb-4">
             <strong>Date & Time</strong>
-            {formattedDate}
+            <div>{formattedDate}</div>
           </div>
-
-        
 
           <div className="border-b border-muted pb-4">
             <strong>Availability</strong>
-            {soldOut ? " Sold Out" : ` ${remainingSeats} seats left`}
+            <div>
+              {soldOut ? "Sold Out" : "Seats available"}
+            </div>
           </div>
 
           {event.description && (
