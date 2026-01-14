@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Genre = { id: string; name: string };
 type Author = { id: string; name: string };
@@ -22,42 +22,97 @@ export default function FilterBar({
   const router = useRouter();
   const params = useSearchParams();
 
-  const [search, setSearch] = useState(params.get("search") ?? "");
+  /* ---------------------------------------------
+     STATE
+  --------------------------------------------- */
+
+  const [qValue, setQValue] = useState(params.get("q") ?? "");
   const [inStock, setInStock] = useState(params.get("inStock") === "1");
   const [authorSearch, setAuthorSearch] = useState("");
 
   const type = params.get("type") ?? "all";
 
+  // Prevent URL writes on initial mount
+  const hasInteracted = useRef(false);
+
+  /* ---------------------------------------------
+     URL UPDATE HELPER (NON-SEARCH FILTERS)
+  --------------------------------------------- */
+
   const update = (key: string, value: string | null) => {
-    const q = new URLSearchParams(params.toString());
+    const next = new URLSearchParams(params.toString());
 
-    if (!value) q.delete(key);
-    else q.set(key, value);
+    // 🔥 ensure legacy param is never present
+    next.delete("search");
 
-    q.set("page", "1");
-    router.push(`/shop?${q.toString()}`);
+    if (!value) next.delete(key);
+    else next.set(key, value);
+
+    next.set("page", "1");
+
+    router.replace(`/shop?${next.toString()}`);
   };
+
+  /* ---------------------------------------------
+     DEBOUNCED q SEARCH (CANONICAL)
+  --------------------------------------------- */
+
+  useEffect(() => {
+    if (!hasInteracted.current) return;
+
+    const t = setTimeout(() => {
+      const next = new URLSearchParams(params.toString());
+
+      // 🔥 remove legacy param permanently
+      next.delete("search");
+
+      if (qValue.trim()) {
+        next.set("q", qValue.trim());
+      } else {
+        next.delete("q");
+      }
+
+      next.set("page", "1");
+
+      const nextString = next.toString();
+      const currentString = params.toString();
+
+      // 🔒 guard against no-op navigation
+      if (nextString !== currentString) {
+        router.replace(`/shop?${nextString}`);
+      }
+    }, 300);
+
+    return () => clearTimeout(t);
+  }, [qValue, params, router]);
+
+  /* ---------------------------------------------
+     STYLES
+  --------------------------------------------- */
 
   const selectClass =
     "border px-3 py-2 rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#D6C28B]";
 
+  /* ---------------------------------------------
+     RENDER
+  --------------------------------------------- */
+
   return (
     <div className="bg-white border rounded-xl p-4 flex flex-col gap-4 mb-8">
-      {/* GLOBAL SEARCH */}
+      {/* GLOBAL SEARCH (q) */}
       <input
         className="border px-3 py-2 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#D6C28B]"
         placeholder="Search products…"
-        value={search}
+        value={qValue}
         onChange={(e) => {
-          setSearch(e.target.value);
-          update("search", e.target.value);
+          hasInteracted.current = true;
+          setQValue(e.target.value);
         }}
       />
 
       {/* BOOK FILTERS */}
       {type === "book" && (
         <div className="flex flex-wrap gap-4">
-          {/* GENRE */}
           <select
             className={selectClass}
             value={params.get("genre") ?? ""}

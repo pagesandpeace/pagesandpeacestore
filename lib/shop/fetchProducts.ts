@@ -4,8 +4,8 @@ export const PAGE_SIZE = 12;
 
 export type ProductQueryParams = {
   page?: string;
+  q?: string;
   type?: string;
-  search?: string;
   genre?: string;
   author?: string;
   vibe?: string;
@@ -13,6 +13,7 @@ export type ProductQueryParams = {
   inStock?: string;
   sort?: string;
 };
+
 
 type ProductRow = {
   id: string;
@@ -66,7 +67,7 @@ export async function fetchProducts(params: ProductQueryParams) {
 
   const page = Number(safe.page ?? 1);
   const type = safe.type ?? "all";
-  const rawSearch = safe.search?.trim() ?? "";
+const rawSearch = safe.q?.trim() ?? "";
   const sort = safe.sort ?? "newest";
   const inStock = safe.inStock === "1";
 
@@ -153,31 +154,14 @@ export async function fetchProducts(params: ProductQueryParams) {
     query = query.in("product_type", TYPES);
   }
 
-  /* --------------------------------------------------------
-     GLOBAL SEARCH (FIXED)
-  -------------------------------------------------------- */
-  if (rawSearch) {
-    const safeSearch = normalizeSearch(rawSearch);
+/* --------------------------------------------------------
+   GLOBAL SEARCH (GIN-backed via search_text)
+-------------------------------------------------------- */
+if (rawSearch.length >= 3) {
+  const safeSearch = normalizeSearch(rawSearch);
+  query = query.ilike("search_text", `%${safeSearch}%`);
+}
 
-    const { data: matchingAuthors } = await supabase
-      .from("authors")
-      .select("id")
-      .ilike("name", `%${safeSearch}%`);
-
-    const authorIds = (matchingAuthors ?? []).map((a) => a.id);
-
-    const clauses = [
-      `display_title.ilike.%${safeSearch}%`,
-      `name.ilike.%${safeSearch}%`,
-      `description.ilike.%${safeSearch}%`,
-    ];
-
-    if (authorIds.length > 0) {
-      clauses.push(`author_id.in.(${authorIds.join(",")})`);
-    }
-
-    query = query.or(clauses.join(","));
-  }
 
   /* --------------------------------------------------------
      IN STOCK FILTER

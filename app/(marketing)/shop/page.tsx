@@ -7,16 +7,24 @@ import ProductGrid from "@/components/shop/ProductGrid";
 import CategoryTabs from "@/components/shop/CategoryTabs";
 import { supabaseServer } from "@/lib/supabase/server";
 
+/* ---------------------------------------------
+   SEARCH PARAMS
+--------------------------------------------- */
+
 export type SearchParams = {
   page?: string;
+  q?: string;
   type?: string;
-  search?: string;
   genre?: string;
   author?: string;
   vibe?: string;
   theme?: string;
   inStock?: string;
 };
+
+/* ---------------------------------------------
+   PAGE
+--------------------------------------------- */
 
 export default async function ShopPage({
   searchParams,
@@ -26,9 +34,19 @@ export default async function ShopPage({
   const params = await searchParams;
   const supabase = await supabaseServer();
 
+  /* ---------------------------------------------
+     NORMALISE QUERY PARAMS (SERVER OWNS STATE)
+  --------------------------------------------- */
+
+  const normalisedParams: SearchParams = {
+    ...params,
+    q: params.q?.trim() || undefined,
+  };
+
   /* ----------------------------------------------------
      1. LOAD HERO BLOCK
   ---------------------------------------------------- */
+
   const { data: heroBlock } = await supabase
     .from("marketing_blocks")
     .select("*")
@@ -49,8 +67,9 @@ export default async function ShopPage({
   }
 
   /* -----------------------------
-     GENRES (SAFE)
+     GENRES
   ------------------------------ */
+
   const { data: genresData } = await supabase
     .from("genres")
     .select("*")
@@ -59,8 +78,9 @@ export default async function ShopPage({
   const genres = genresData ?? [];
 
   /* -----------------------------
-     AUTHORS (REFERENCE TABLE)
+     AUTHORS
   ------------------------------ */
+
   const { data: authorsData, error: authorsError } = await supabase
     .from("authors")
     .select("id, name")
@@ -75,6 +95,7 @@ export default async function ShopPage({
   /* -----------------------------
      VIBES
   ------------------------------ */
+
   const { data: vibesData } = await supabase
     .from("vibes")
     .select("*")
@@ -85,6 +106,7 @@ export default async function ShopPage({
   /* -----------------------------
      THEMES
   ------------------------------ */
+
   const { data: themesData } = await supabase
     .from("themes")
     .select("*")
@@ -94,16 +116,18 @@ export default async function ShopPage({
 
   /* -----------------------------
      PRODUCTS
-     (events + test products excluded inside fetchProducts)
   ------------------------------ */
-  const { products, total, page, pageSize } = await fetchProducts(params);
+
+  const { products, total, page, pageSize } =
+    await fetchProducts(normalisedParams);
 
   /* -----------------------------
      CATEGORY TABS
   ------------------------------ */
+
   const CATEGORIES = [
     { key: "all", label: "All" },
-    { key: "bestsellers", label: "Bestsellers" }, 
+    { key: "bestsellers", label: "Bestsellers" },
     { key: "book", label: "Books" },
     { key: "blind-date", label: "Blind Date Books" },
     { key: "coffee", label: "Coffee" },
