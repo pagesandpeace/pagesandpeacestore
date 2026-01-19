@@ -1,26 +1,31 @@
 "use client";
 
-import * as React from "react";
+import React from "react";
 
-interface ModalProps {
-  open: boolean;
-  onClose: () => void;
+export type ModalProps = {
+  title?: string;
   children: React.ReactNode;
-}
+  onClose: () => void;
+};
 
-export function Modal({ open, onClose, children }: ModalProps) {
-  if (!open) return null;
-
+export function Modal({ title, children, onClose }: ModalProps) {
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg relative">
-        <button
-          type="button"
-          className="absolute top-3 right-3 text-neutral-500 hover:text-black"
-          onClick={onClose}
-        >
-          ✕
-        </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-lg">
+        {title && (
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">{title}</h2>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-lg leading-none"
+              aria-label="Close modal"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {children}
       </div>

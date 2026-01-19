@@ -14,7 +14,6 @@ export type ProductQueryParams = {
   sort?: string;
 };
 
-
 type ProductRow = {
   id: string;
   name: string;
@@ -40,7 +39,7 @@ type ProductRow = {
 };
 
 /* --------------------------------------------------------
-   SEARCH NORMALISATION (POSTGREST-SAFE)
+   SEARCH NORMALISATION
 -------------------------------------------------------- */
 function normalizeSearch(value: string) {
   return value
@@ -50,31 +49,19 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
-/* --------------------------------------------------------
-   POSTGREST ESCAPE (NOT USED FOR .or SEARCH)
--------------------------------------------------------- */
-function escapePostgrestLike(value: string) {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_");
-}
-
 export async function fetchProducts(params: ProductQueryParams) {
   const supabase = supabaseService();
 
-  const safe = { ...params };
+  const page = Number(params.page ?? 1);
+  const type = params.type ?? "all";
+  const rawSearch = params.q?.trim() ?? "";
+  const sort = params.sort ?? "newest";
+  const inStock = params.inStock === "1";
 
-  const page = Number(safe.page ?? 1);
-  const type = safe.type ?? "all";
-const rawSearch = safe.q?.trim() ?? "";
-  const sort = safe.sort ?? "newest";
-  const inStock = safe.inStock === "1";
-
-  const genre = safe.genre ?? "";
-  const authorId = safe.author ?? "";
-  const vibeParam = safe.vibe?.toLowerCase() ?? "";
-  const themeParam = safe.theme?.toLowerCase() ?? "";
+  const genre = params.genre ?? "";
+  const authorId = params.author ?? "";
+  const vibeParam = params.vibe?.toLowerCase() ?? "";
+  const themeParam = params.theme?.toLowerCase() ?? "";
 
   const TYPES = ["blind-date", "book", "coffee", "merch", "physical"];
 
@@ -113,7 +100,7 @@ const rawSearch = safe.q?.trim() ?? "";
   }
 
   /* --------------------------------------------------------
-     BASE QUERY
+     BASE QUERY (STRICT SHOP BOUNDARY)
   -------------------------------------------------------- */
   let query = supabase
     .from("products")
@@ -142,8 +129,8 @@ const rawSearch = safe.q?.trim() ?? "";
       `,
       { count: "exact" }
     )
-    .neq("product_type", "event")
-    .eq("is_test", false);
+    .eq("is_test", false)
+.in("product_type", ["book", "blind-date", "merch", "physical"]);
 
   /* --------------------------------------------------------
      TYPE FILTER
@@ -154,21 +141,21 @@ const rawSearch = safe.q?.trim() ?? "";
     query = query.in("product_type", TYPES);
   }
 
-/* --------------------------------------------------------
-   GLOBAL SEARCH (GIN-backed via search_text)
--------------------------------------------------------- */
-if (rawSearch.length >= 3) {
-  const safeSearch = normalizeSearch(rawSearch);
-  query = query.ilike("search_text", `%${safeSearch}%`);
-}
-
+  /* --------------------------------------------------------
+     GLOBAL SEARCH (GIN-backed)
+  -------------------------------------------------------- */
+  if (rawSearch.length >= 3) {
+    const safeSearch = normalizeSearch(rawSearch);
+    query = query.ilike("search_text", `%${safeSearch}%`);
+  }
 
   /* --------------------------------------------------------
-     IN STOCK FILTER
+     IN STOCK FILTER (NO .or())
   -------------------------------------------------------- */
   if (inStock) {
     query = query.or(
-      "inventory_count.gt.0,fulfilment_mode.eq.made_to_order"
+      "inventory_count.gt.0,fulfilment_mode.eq.made_to_order",
+      { foreignTable: undefined }
     );
   }
 
@@ -223,15 +210,12 @@ if (rawSearch.length >= 3) {
   }
 
   /* --------------------------------------------------------
-     NORMALISE AUTHOR FOR SHOP UI
+     NORMALISE AUTHOR FOR UI
   -------------------------------------------------------- */
   const products =
     (data ?? []).map((p: ProductRow) => ({
       ...p,
-      author:
-        p.author_rel?.[0]?.name ??
-        p.author ??
-        null,
+      author: p.author_rel?.[0]?.name ?? p.author ?? null,
     }));
 
   return {

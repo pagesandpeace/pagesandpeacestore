@@ -27,10 +27,14 @@ type AdminSidebarProps = {
    COMPONENT
 ------------------------------------------------------- */
 
-export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
+export default function AdminSidebar({
+  user,
+  profile,
+}: AdminSidebarProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [localProfile, setLocalProfile] = useState<UserProfile>(profile);
+  const [localProfile, setLocalProfile] =
+    useState<UserProfile>(profile);
   const accountRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -48,7 +52,8 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
     };
 
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    return () =>
+      document.removeEventListener("mousedown", handler);
   }, []);
 
   const handleNav = (href: string) => {
@@ -95,19 +100,31 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
             </span>
 
             <div className="mt-3 flex flex-col gap-3">
-              <button onClick={() => handleNav("/admin")} className="text-left hover:text-[#5DA865]">
+              <button
+                onClick={() => handleNav("/admin")}
+                className="text-left hover:text-[#5DA865]"
+              >
                 Dashboard
               </button>
 
-              <button onClick={() => handleNav("/admin/products")} className="text-left hover:text-[#5DA865]">
+              <button
+                onClick={() => handleNav("/admin/products")}
+                className="text-left hover:text-[#5DA865]"
+              >
                 Products
               </button>
 
-              <button onClick={() => handleNav("/admin/authors")} className="text-left hover:text-[#5DA865]">
+              <button
+                onClick={() => handleNav("/admin/authors")}
+                className="text-left hover:text-[#5DA865]"
+              >
                 Authors
               </button>
 
-              <button onClick={() => handleNav("/admin/events")} className="text-left hover:text-[#5DA865]">
+              <button
+                onClick={() => handleNav("/admin/events")}
+                className="text-left hover:text-[#5DA865]"
+              >
                 Events
               </button>
             </div>
@@ -120,28 +137,16 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
             </span>
 
             <div className="mt-3 flex flex-col gap-3">
-              <button onClick={() => handleNav("/admin/orders")} className="text-left hover:text-[#5DA865]">
+              <button
+                onClick={() => handleNav("/admin/orders")}
+                className="text-left hover:text-[#5DA865]"
+              >
                 Online Orders
               </button>
-
-              {/* NEW: Manual customer & supplier backorders (Gardners / phone / web) */}
-              <button
-                onClick={() => handleNav("/admin/backorders")}
-                className="text-left hover:text-[#5DA865]"
-              >
-                Place Backorder
-              </button>
-
-              <button
-                onClick={() => handleNav("/admin/supplier-orders")}
-                className="text-left hover:text-[#5DA865]"
-              >
-                Order status
-              </button>
-
             </div>
           </div>
-                    {/* OPERATIONS */}
+
+          {/* OPERATIONS */}
           <div>
             <span className="text-xs uppercase text-gray-500 tracking-wider">
               Operations
@@ -149,15 +154,34 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
 
             <div className="mt-3 flex flex-col gap-3">
               <button
+                onClick={() => handleNav("/admin/backorders")}
+                className="text-left hover:text-[#5DA865]"
+              >
+                📚 Place Backorder
+              </button>
+
+              <button
+                onClick={() => handleNav("/admin/supplier-orders")}
+                className="text-left hover:text-[#5DA865]"
+              >
+                📦 Order Status
+              </button>
+
+              <button
                 onClick={() => handleNav("/admin/operations")}
                 className="text-left hover:text-[#5DA865] font-medium"
               >
-                Operations Queue
+                🔄 Operations Queue
+              </button>
+
+              <button
+                onClick={() => handleNav("/admin/food")}
+                className="text-left hover:text-[#5DA865] font-medium"
+              >
+                🍰 Food Ops
               </button>
             </div>
           </div>
-          
-
 
           {/* MARKETING */}
           <div>
@@ -166,15 +190,26 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
             </span>
 
             <div className="mt-3 flex flex-col gap-3">
-              <button onClick={() => handleNav("/admin/marketing")} className="text-left hover:text-[#5DA865]">
+              <button
+                onClick={() => handleNav("/admin/marketing")}
+                className="text-left hover:text-[#5DA865]"
+              >
                 Shop Hero Banner
               </button>
 
-              <button onClick={() => handleNav("/admin/newsletter")} className="text-left hover:text-[#5DA865]">
+              <button
+                onClick={() => handleNav("/admin/newsletter")}
+                className="text-left hover:text-[#5DA865]"
+              >
                 Newsletter Manager
               </button>
 
-              <button onClick={() => handleNav("/admin/newsletter/history")} className="text-left hover:text-[#5DA865]">
+              <button
+                onClick={() =>
+                  handleNav("/admin/newsletter/history")
+                }
+                className="text-left hover:text-[#5DA865]"
+              >
                 Blast History
               </button>
             </div>
@@ -188,31 +223,35 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
 
             <div className="mt-3 flex flex-col gap-3">
               <button
-                onClick={() => handleNav("/admin/suppliers/gardners")}
+                onClick={() =>
+                  handleNav("/admin/suppliers/gardners")
+                }
                 className="text-left hover:text-[#5DA865]"
               >
                 Gardners Import
               </button>
 
               <button
-                onClick={() => handleNav("/admin/suppliers/gardners/catalogue")}
+                onClick={() =>
+                  handleNav(
+                    "/admin/suppliers/gardners/catalogue"
+                  )
+                }
                 className="text-left hover:text-[#5DA865]"
               >
                 Gardners Catalogue
               </button>
 
               <button
-                onClick={() => handleNav("/admin/supplier-changes")}
+                onClick={() =>
+                  handleNav("/admin/supplier-changes")
+                }
                 className="text-left hover:text-[#5DA865]"
               >
                 Product Catalogue Changes
               </button>
-              
-
             </div>
           </div>
-          
-
         </nav>
       </div>
 
@@ -226,7 +265,10 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
           className="flex items-center gap-3 w-full text-left rounded-md px-2 py-2 hover:bg-[#f1ede7]"
         >
           <Image
-            src={localProfile.image ?? "/user_avatar_placeholder.svg"}
+            src={
+              localProfile.image ??
+              "/user_avatar_placeholder.svg"
+            }
             alt="User avatar"
             width={36}
             height={36}
@@ -235,7 +277,9 @@ export default function AdminSidebar({ user, profile }: AdminSidebarProps) {
 
           <div className="flex flex-col leading-tight">
             <span className="font-medium text-sm truncate">
-              {localProfile.name || user.email || "Admin"}
+              {localProfile.name ||
+                user.email ||
+                "Admin"}
             </span>
 
             <span className="mt-1 inline-block bg-red-200 text-red-700 text-xs px-2 py-0.5 rounded-full border border-red-300">
