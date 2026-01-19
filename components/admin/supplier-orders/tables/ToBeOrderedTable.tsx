@@ -2,9 +2,14 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 import CancelRemainingModal from "../CancelRemainingModal";
-import type { SupplierOrderGroup } from "../types";
+import type {
+  SupplierOrderGroup,
+  PaymentStatus,
+} from "../types";
 
 type Props = {
   group: SupplierOrderGroup;
@@ -26,6 +31,17 @@ export default function ToBeOrderedTable({
     id: string;
     remaining: number;
   } | null>(null);
+
+  /* ---------------- PAYMENT MODAL STATE ---------------- */
+
+  const [paymentModal, setPaymentModal] = useState<{
+    backorderId: string;
+    status: PaymentStatus;
+    reference: string;
+  } | null>(null);
+
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   /* ---------------------------------------------
      FILTER TO "TO BE ORDERED"
@@ -54,6 +70,42 @@ export default function ToBeOrderedTable({
   const toggleSelectAll = () => {
     allIds.forEach((id) => onToggle(id));
   };
+
+  /* ---------------------------------------------
+     SAVE PAYMENT
+  --------------------------------------------- */
+
+  async function savePayment() {
+    if (!paymentModal) return;
+
+    if (
+      paymentModal.status === "paid" &&
+      !paymentModal.reference.trim()
+    ) {
+      setPaymentError("SumUp payment reference is required");
+      return;
+    }
+
+    setPaymentSaving(true);
+    setPaymentError(null);
+
+    await fetch("/api/admin/supplier-orders/set-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        backorder_id: paymentModal.backorderId,
+        payment_status: paymentModal.status,
+        payment_reference:
+          paymentModal.status === "paid"
+            ? paymentModal.reference.trim()
+            : null,
+      }),
+    });
+
+    setPaymentSaving(false);
+    setPaymentModal(null);
+    onRefresh();
+  }
 
   /* ---------------------------------------------
      RENDER
@@ -91,7 +143,7 @@ export default function ToBeOrderedTable({
               draftOrdered > 0 &&
               draftOrdered <= item.requested_quantity;
 
-            const paymentStatus =
+            const paymentStatus: PaymentStatus =
               c.payment_status ?? "unpaid";
 
             return (
@@ -161,27 +213,42 @@ export default function ToBeOrderedTable({
                 </td>
 
                 <td className="border p-2">
-                  {c.customer_name}
+                  <div className="font-medium">
+                    {c.customer_name}
+                  </div>
                   {c.customer_email && (
                     <div className="text-xs text-gray-500">
                       {c.customer_email}
                     </div>
                   )}
+                  {c.customer_phone && (
+                    <div className="text-xs text-gray-500">
+                      📞 {c.customer_phone}
+                    </div>
+                  )}
                 </td>
 
-                {/* ✅ READ-ONLY PAYMENT STATUS */}
+                {/* PAYMENT (EDITABLE) */}
                 <td className="border p-2 text-center">
-                  <Badge
-                    className={
-                      paymentStatus === "paid"
-                        ? "bg-green-100 text-green-700"
-                        : paymentStatus === "deposit_taken"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-red-100 text-red-700"
+                  <button
+                    onClick={() =>
+                      setPaymentModal({
+                        backorderId: item.backorder_id,
+                        status: paymentStatus,
+                        reference: "",
+                      })
                     }
                   >
-                    {paymentStatus.replace("_", " ")}
-                  </Badge>
+                    <Badge
+                      className={`cursor-pointer hover:opacity-80 ${
+                        paymentStatus === "paid"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {paymentStatus}
+                    </Badge>
+                  </button>
                 </td>
 
                 <td className="border p-2 text-center">
@@ -203,6 +270,87 @@ export default function ToBeOrderedTable({
           })}
         </tbody>
       </table>
+
+      {/* PAYMENT MODAL */}
+      {paymentModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+          <div className="bg-white rounded-lg w-full max-w-sm p-4 space-y-4">
+            <h3 className="text-lg font-semibold">
+              Update payment
+            </h3>
+
+            <div className="flex gap-2">
+              <Button
+                variant={
+                  paymentModal.status === "unpaid"
+                    ? "primary"
+                    : "neutral"
+                }
+                onClick={() =>
+                  setPaymentModal((m) =>
+                    m ? { ...m, status: "unpaid" } : m
+                  )
+                }
+              >
+                Unpaid
+              </Button>
+
+              <Button
+                variant={
+                  paymentModal.status === "paid"
+                    ? "primary"
+                    : "neutral"
+                }
+                onClick={() =>
+                  setPaymentModal((m) =>
+                    m ? { ...m, status: "paid" } : m
+                  )
+                }
+              >
+                Paid
+              </Button>
+            </div>
+
+            {paymentModal.status === "paid" && (
+              <Input
+                placeholder="SumUp payment reference"
+                value={paymentModal.reference}
+                onChange={(e) =>
+                  setPaymentModal((m) =>
+                    m
+                      ? {
+                          ...m,
+                          reference: e.target.value,
+                        }
+                      : m
+                  )
+                }
+              />
+            )}
+
+            {paymentError && (
+              <div className="text-sm text-red-600">
+                {paymentError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="neutral"
+                onClick={() => setPaymentModal(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={savePayment}
+                disabled={paymentSaving}
+              >
+                {paymentSaving ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CancelRemainingModal
         open={!!cancelModal}

@@ -4,7 +4,6 @@
 
 export type PaymentStatus =
   | "unpaid"
-  | "deposit_taken"
   | "paid";
 
 /* ---------------------------------------------
@@ -41,15 +40,18 @@ export type LineItem = {
 --------------------------------------------- */
 
 export type CustomerGroup = {
+  customer_id: string;
+
   customer_name: string;
   customer_email: string | null;
   customer_phone: string | null;
 
-  // Customer-level payment status (current model)
+  // Customer-level payment status (admin flag)
   payment_status: PaymentStatus;
 
   items: LineItem[];
 };
+
 
 /* ---------------------------------------------
    SUPPLIER ORDER GROUP (PO-LEVEL CONTEXT)

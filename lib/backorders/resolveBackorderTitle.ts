@@ -8,9 +8,11 @@ type BackorderTitleSource = {
 export function resolveBackorderTitle(
   row: BackorderTitleSource
 ): string {
-  return (
-    row.products?.[0]?.name ??
-    row.temp_title ??
-    "Customer request"
-  );
+  const productName = row.products?.[0]?.name?.trim();
+  if (productName) return productName;
+
+  const tempTitle = row.temp_title?.trim();
+  if (tempTitle) return tempTitle;
+
+  return "Customer request";
 }

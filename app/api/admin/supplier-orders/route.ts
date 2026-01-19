@@ -15,8 +15,12 @@ import type {
 
 type SupplierOrderRow = {
   id: string;
+
+  // 🔑 NEW: real stored title (preferred)
+  title: string | null;
+
   order_id: string | null;
-  payment_status: "paid" | "unpaid" | "deposit_taken" | null;
+  payment_status: "paid" | "unpaid" | null;
 
   order_date: string;
   created_at: string;
@@ -36,7 +40,7 @@ type SupplierOrderRow = {
 
   temp_title: string | null;
 
-  // ✅ FIXED: relation is an ARRAY
+  // ✅ working join kept
   products: {
     name: string | null;
   }[] | null;
@@ -52,7 +56,6 @@ type SupplierOrderRow = {
     ordered_at: string | null;
   } | null;
 };
-
 
 /* ---------------------------------------------
    GET
@@ -86,6 +89,8 @@ export async function GET() {
       .select(
         `
         id,
+        title,
+
         order_id,
         payment_status,
 
@@ -137,7 +142,6 @@ export async function GET() {
     const grouped = new Map<string, SupplierOrderGroup>();
 
     for (const r of rows) {
-      // ✅ FIX 2: no [0] access – relationship is singular
       const po = r.supplier_purchase_orders ?? null;
       const groupKey = po?.id ?? "NO_PO";
 
@@ -167,12 +171,16 @@ export async function GET() {
         ) ??
         (() => {
           const created: CustomerGroup = {
-            customer_name: customerName,
-            customer_email: customerEmail,
-            customer_phone: r.customer_phone ?? null,
-            payment_status: r.payment_status ?? "unpaid",
-            items: [],
-          };
+  customer_id: r.order_id!, // 🔑 customer-scoped identifier
+
+  customer_name: customerName,
+  customer_email: customerEmail,
+  customer_phone: r.customer_phone ?? null,
+
+  payment_status: r.payment_status ?? "unpaid",
+  items: [],
+};
+
           group.customers.push(created);
           return created;
         })();
@@ -182,12 +190,14 @@ export async function GET() {
         customer.payment_status = "paid";
       }
 
-      /* ---------- PRODUCT NAME ---------- */
+      /* ---------- PRODUCT NAME (SAFE PRIORITY) ---------- */
 
-      const productName = resolveBackorderTitle({
-        temp_title: r.temp_title,
-        products: r.products,
-      });
+      const productName =
+        r.title ??
+        resolveBackorderTitle({
+          temp_title: r.temp_title,
+          products: r.products,
+        });
 
       /* ---------- LINE ITEM ---------- */
 

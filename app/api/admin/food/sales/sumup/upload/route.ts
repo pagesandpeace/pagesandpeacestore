@@ -16,13 +16,6 @@ const supabaseAdmin = createClient(
 );
 
 /* ---------------------------------------------
-   CONFIG
---------------------------------------------- */
-
-// ✅ IMPORT CUTOFF (inclusive)
-const IMPORT_CUTOFF_DAY = "2025-11-16";
-
-/* ---------------------------------------------
    HELPERS
 --------------------------------------------- */
 
@@ -73,7 +66,7 @@ function parseUkDate(value: unknown): Date | null {
   const [hour = 0, minute = 0] =
     timePart.trim().split(":").map(Number);
 
-  // Treat as Europe/London local time
+  // Europe/London local time → JS Date
   return new Date(year, month, day, hour, minute);
 }
 
@@ -84,7 +77,6 @@ function parseUkDate(value: unknown): Date | null {
 export async function POST(req: Request) {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("🧾 [SUMUP SALES IMPORT → fd.sales_events]");
-  console.log("📆 Import cutoff day:", IMPORT_CUTOFF_DAY);
 
   try {
     const formData = await req.formData();
@@ -108,7 +100,6 @@ export async function POST(req: Request) {
     console.log(`📄 Parsed ${records.length} CSV rows`);
 
     const importId = crypto.randomUUID();
-    let skippedAfterCutoff = 0;
 
     const rows = records
       .map((row, idx) => {
@@ -123,18 +114,12 @@ export async function POST(req: Request) {
           timeZone: "Europe/London",
         });
 
-        // 🚫 Skip rows after cutoff
-        if (saleDay > IMPORT_CUTOFF_DAY) {
-          skippedAfterCutoff++;
-          return null;
-        }
-
         return {
           source: "sumup",
           source_ref: row["Transaction ID"] ?? null,
 
-          sold_at: soldAt.toISOString(), // exact instant
-          sale_day: saleDay,             // trading day (UK)
+          sold_at: soldAt.toISOString(),
+          sale_day: saleDay,
 
           raw_name: row["Description"]?.trim() || "Unknown item",
           quantity: safeNumber(row["Quantity"], 1),
@@ -151,13 +136,9 @@ export async function POST(req: Request) {
         (r): r is NonNullable<typeof r> => r !== null
       );
 
-    console.log(
-      `✂️ Skipped ${skippedAfterCutoff} rows after ${IMPORT_CUTOFF_DAY}`
-    );
-
     if (!rows.length) {
       return NextResponse.json(
-        { error: "No valid rows before cutoff" },
+        { error: "No valid rows found in CSV" },
         { status: 400 }
       );
     }
@@ -185,7 +166,6 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       rows_processed: rows.length,
-      rows_skipped_after_cutoff: skippedAfterCutoff,
       import_id: importId,
     });
   } catch (err) {

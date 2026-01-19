@@ -5,7 +5,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 
 type Body = {
   id: string;
-  payment_status: "unpaid" | "deposit_taken" | "paid";
+  payment_status: "unpaid" | "paid";
 };
 
 export async function POST(req: Request) {

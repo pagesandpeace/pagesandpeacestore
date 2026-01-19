@@ -5,9 +5,10 @@ import { resolveBackorderTitle } from "@/lib/backorders/resolveBackorderTitle";
 import OperationsClient from "./OperationsClient";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /* ---------------------------------------------
-   ADMIN CLIENT
+   ADMIN CLIENT (SERVICE ROLE)
 --------------------------------------------- */
 
 const supabaseAdmin = createClient(
@@ -17,60 +18,15 @@ const supabaseAdmin = createClient(
 );
 
 /* ---------------------------------------------
-   TYPES
---------------------------------------------- */
-
-type OnlineOrderItemRow = {
-  id: string;
-  order_id: string;
-  quantity: number;
-  name: string | null;
-};
-
-type OrderRow = {
-  id: string;
-  created_at: string;
-  status: string;
-  user_id: string | null;
-};
-
-type UserRow = {
-  id: string;
-  name: string | null;
-};
-
-type BackorderRow = {
-  id: string;
-  customer_name: string | null;
-  received_at: string | null;
-  payment_status?: "paid" | "unpaid" | "deposit_taken";
-  temp_title: string | null;
-};
-
-/**
- * ✅ ACTUAL DB SHAPE returned by the to-order query
- */
-type ToOrderDbRow = {
-  id: string;
-  order_intent: string | null;
-  requested_quantity: number | null;
-  customer_name: string | null;
-  temp_title: string | null;
-  supplier_name: string | null;
-  products: {
-    name: string | null;
-    fulfilment_mode: string;
-  }[] | null;
-};
-
-/* ---------------------------------------------
    PAGE
 --------------------------------------------- */
 
 export default async function AdminOperationsPage() {
   const supabase = await supabaseServer();
 
-  /* ---------- AUTH ---------- */
+  /* -------------------------
+     AUTH
+  ------------------------- */
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -86,111 +42,199 @@ export default async function AdminOperationsPage() {
   if (profile?.role !== "admin") redirect("/dashboard");
 
   /* =====================================================
-     🔴 ONLINE ORDERS → TO PICK
+     🔴 TO PICK (ONLINE + BACKORDERS)
   ===================================================== */
 
+  // ---------- ONLINE ORDER ITEMS ----------
   const { data: onlineItemsRaw } = await supabaseAdmin
     .from("order_items")
-    .select(
-      `
+    .select(`
       id,
       order_id,
       quantity,
       name,
       products!inner ( fulfilment_mode )
-    `
-    )
+    `)
     .eq("kind", "product")
     .eq("products.fulfilment_mode", "physical")
     .is("picked_at", null);
 
-  const onlineItems = (onlineItemsRaw ?? []) as OnlineOrderItemRow[];
-  const orderIds = Array.from(new Set(onlineItems.map((i) => i.order_id)));
+  const orderIds = Array.from(
+    new Set((onlineItemsRaw ?? []).map((i) => i.order_id))
+  );
 
   const { data: ordersRaw } =
     orderIds.length > 0
       ? await supabaseAdmin
           .from("orders")
-          .select("id, created_at, status, user_id")
+          .select("id, created_at, user_id")
           .in("id", orderIds)
           .eq("status", "completed")
       : { data: [] };
 
-  const orders = (ordersRaw ?? []) as OrderRow[];
-
-  /* ---------- USERS ---------- */
-
-  const userIds = Array.from(
-    new Set(orders.map((o) => o.user_id).filter(Boolean) as string[])
-  );
-
   const { data: usersRaw } =
-    userIds.length > 0
+    ordersRaw && ordersRaw.length > 0
       ? await supabaseAdmin
           .from("users")
           .select("id, name")
-          .in("id", userIds)
+          .in(
+            "id",
+            ordersRaw.map((o) => o.user_id).filter(Boolean) as string[]
+          )
       : { data: [] };
 
   const usersById = new Map(
-    (usersRaw ?? []).map((u: UserRow) => [u.id, u])
+    (usersRaw ?? []).map((u) => [u.id, u.name])
   );
 
-  const orderMap = new Map<string, OrderRow>(
-    orders.map((o) => [o.id, o])
-  );
+  const onlineToPick =
+    onlineItemsRaw
+      ?.filter((i) => ordersRaw?.some((o) => o.id === i.order_id))
+      .map((i) => {
+        const order = ordersRaw!.find((o) => o.id === i.order_id)!;
 
-  const onlineToPick = onlineItems
-    .filter((i) => orderMap.has(i.order_id))
-    .map((i) => {
-      const order = orderMap.get(i.order_id)!;
-      const customer = order.user_id
-        ? usersById.get(order.user_id)
-        : null;
+        return {
+          source: "online" as const,
+          id: i.id,
+          order_id: i.order_id,
+          quantity: i.quantity,
+          title: i.name ?? "Untitled item",
+          customer_name: order.user_id
+            ? usersById.get(order.user_id) ?? null
+            : null,
+          created_at: order.created_at,
+        };
+      }) ?? [];
 
-      return {
-        source: "online" as const,
-        id: i.id,
-        order_id: i.order_id,
-        quantity: i.quantity,
-        title: i.name ?? "Untitled item",
-        customer_name: customer?.name ?? null,
-        created_at: order.created_at,
-      };
-    });
-
-  /* =====================================================
-     🟠 CUSTOMER BACKORDERS → TO PICK
-  ===================================================== */
-
-  const { data: backordersRaw } = await supabaseAdmin
+  // ---------- BACKORDERS TO PICK ----------
+  const { data: backordersToPickRaw, error: backordersError } =
+  await supabaseAdmin
     .from("customer_backorders")
-    .select(
-      `
-      id,
-      customer_name,
-      received_at,
-      payment_status,
-      temp_title,
-      products ( fulfilment_mode )
-    `
-    )
-    .not("received_at", "is", null)
+    .select(`
+  id,
+  title,
+  customer_name,
+  quantity,
+  payment_status,
+  temp_title,
+  picked_at,
+  collected_at,
+  cancelled_at,
+  products ( name )
+`)
     .is("picked_at", null)
     .is("collected_at", null)
-    .eq("products.fulfilment_mode", "made_to_order");
+    .is("cancelled_at", null);
 
-  const backordersToPick = ((backordersRaw ?? []) as BackorderRow[]).map(
-    (b) => ({
-      source: "backorder" as const,
-      id: b.id,
-      quantity: null,
-      title: resolveBackorderTitle(b),
-      customer_name: b.customer_name,
-      created_at: b.received_at!,
-      payment_status: b.payment_status,
-    })
+if (backordersError) {
+  console.error("❌ BACKORDERS TO PICK QUERY FAILED:", backordersError);
+}
+
+const backordersToPick =
+  backordersToPickRaw?.map((b) => ({
+    source: "backorder" as const,
+    id: b.id,
+    quantity: b.quantity,
+    title: b.title ?? resolveBackorderTitle(b),
+    customer_name: b.customer_name,
+    created_at: new Date().toISOString(),
+    payment_status: b.payment_status,
+  })) ?? [];
+
+
+  /* =====================================================
+     🟢 READY FOR COLLECTION
+     (ONLINE ORDERS + BACKORDERS)
+  ===================================================== */
+
+  // ---------- READY BACKORDERS ----------
+  const { data: readyBackordersRaw } = await supabaseAdmin
+    .from("customer_backorders")
+    .select(`
+  id,
+  title,
+  customer_name,
+  quantity,
+  payment_status,
+  temp_title,
+  picked_at,
+  collected_at,
+  cancelled_at,
+  products ( name )
+`)
+    .not("picked_at", "is", null)
+    .is("collected_at", null)
+    .is("cancelled_at", null)
+    .order("picked_at", { ascending: true });
+
+
+  const readyBackorders = Array.from(
+  new Map(
+    (readyBackordersRaw ?? []).map((b) => [
+      `backorder:${b.id}`,
+      {
+        id: b.id,
+        source: "backorder" as const,
+        quantity: b.quantity,
+        title: b.title ?? resolveBackorderTitle(b),
+        customer_name: b.customer_name,
+        payment_status: b.payment_status,
+      },
+    ])
+  ).values()
+);
+
+
+  // ---------- READY ONLINE ORDERS ----------
+  const { data: readyOnlineOrdersRaw } = await supabaseAdmin
+    .from("orders")
+    .select(`
+      id,
+      user_id,
+      ready_for_collection_at,
+      order_items (
+        id,
+        name,
+        quantity
+      )
+    `)
+    .not("ready_for_collection_at", "is", null)
+    .eq("status", "completed")
+    .order("ready_for_collection_at", { ascending: true });
+
+  const readyUserIds = Array.from(
+    new Set(
+      (readyOnlineOrdersRaw ?? [])
+        .map((o) => o.user_id)
+        .filter(Boolean)
+    )
   );
+
+  const { data: readyUsersRaw } =
+    readyUserIds.length > 0
+      ? await supabaseAdmin
+          .from("users")
+          .select("id, name")
+          .in("id", readyUserIds)
+      : { data: [] };
+
+  const readyUsersById = new Map(
+    (readyUsersRaw ?? []).map((u) => [u.id, u.name])
+  );
+
+  const readyOnlineOrders =
+  readyOnlineOrdersRaw?.flatMap((order) =>
+    (order.order_items ?? []).map((item) => ({
+      id: item.id, // ✅ UNIQUE
+      source: "online" as const,
+      title: item.name ?? "Untitled item",
+      customer_name: order.user_id
+        ? readyUsersById.get(order.user_id) ?? null
+        : null,
+      quantity: item.quantity,
+      payment_status: "paid" as const,
+    }))
+  ) ?? [];
 
   /* =====================================================
      🔵 TO ORDER
@@ -198,33 +242,28 @@ export default async function AdminOperationsPage() {
 
   const { data: toOrderRaw } = await supabaseAdmin
     .from("customer_backorders")
-    .select(
-      `
+    .select(`
       id,
-      order_intent,
       requested_quantity,
       customer_name,
-      temp_title,
       supplier_name,
-      products ( name, fulfilment_mode )
-    `
-    )
+      order_intent,
+      temp_title,
+      products ( name )
+    `)
     .is("ordered_at", null)
     .is("cancelled_at", null)
-    .eq("products.fulfilment_mode", "made_to_order")
     .order("created_at", { ascending: true });
 
-  const toOrder = ((toOrderRaw ?? []) as ToOrderDbRow[]).map((r) => ({
-    backorder_id: r.id,
-    quantity: r.requested_quantity,
-    product_name: resolveBackorderTitle({
-      temp_title: r.temp_title,
-      products: r.products,
-    }),
-    supplier_name: r.supplier_name ?? "Gardners",
-    customer_name: r.customer_name,
-    source: r.order_intent,
-  }));
+  const toOrder =
+    toOrderRaw?.map((r) => ({
+      backorder_id: r.id,
+      quantity: r.requested_quantity,
+      product_name: resolveBackorderTitle(r),
+      supplier_name: r.supplier_name ?? "Gardners",
+      customer_name: r.customer_name,
+      source: r.order_intent,
+    })) ?? [];
 
   /* =====================================================
      RENDER
@@ -233,7 +272,7 @@ export default async function AdminOperationsPage() {
   return (
     <OperationsClient
       toPick={[...onlineToPick, ...backordersToPick]}
-      readyBackorders={[]}
+      readyBackorders={[...readyOnlineOrders, ...readyBackorders]}
       toOrder={toOrder}
     />
   );

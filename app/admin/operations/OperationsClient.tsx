@@ -20,20 +20,22 @@ type OnlineToPickItem = {
 type BackorderToPickItem = {
   source: "backorder";
   id: string;
-  quantity: null;
+  quantity: number;
   title: string;
   customer_name: string | null;
   created_at: string;
-  payment_status?: "paid" | "unpaid" | "deposit_taken";
+  payment_status?: "paid" | "unpaid";
 };
 
 type ToPickItem = OnlineToPickItem | BackorderToPickItem;
 
 type ReadyBackorder = {
   id: string;
+  source: "backorder" | "online";
   title: string;
   customer_name: string | null;
-  payment_status?: "paid" | "unpaid" | "deposit_taken";
+  quantity: number;
+  payment_status?: "paid" | "unpaid";
 };
 
 type ToOrderItem = {
@@ -90,7 +92,7 @@ export default function OperationsClient({
   }
 
   async function markCollected(
-    backorderId: string,
+    id: string,
     markPaid: boolean,
     paymentReference?: string
   ) {
@@ -98,7 +100,7 @@ export default function OperationsClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        backorder_id: backorderId,
+        backorder_id: id,
         markPaid,
         payment_reference: paymentReference,
       }),
@@ -138,14 +140,12 @@ export default function OperationsClient({
 
               <tbody className="divide-y divide-muted">
                 {toPick.map((i) => (
-                  <tr key={i.id} className="hover:bg-muted/30">
-                    <td className="px-6 py-5 font-medium">
-                      {i.title}
-                    </td>
+                  <tr key={`${i.source}:${i.id}`} className="hover:bg-muted/30">
+                    <td className="px-6 py-5 font-medium">{i.title}</td>
                     <td className="px-6 py-5">
                       {i.customer_name ?? "Unknown customer"}
                     </td>
-                    <td className="px-6 py-5">{i.quantity ?? "—"}</td>
+                    <td className="px-6 py-5">{i.quantity}</td>
                     <td className="px-6 py-5">
                       {formatDate(i.created_at)}
                     </td>
@@ -153,9 +153,7 @@ export default function OperationsClient({
                       <div className="flex flex-col items-end gap-1">
                         <button
                           onClick={() =>
-                            markPicked([
-                              { source: i.source, id: i.id },
-                            ])
+                            markPicked([{ source: i.source, id: i.id }])
                           }
                           className="text-accent hover:underline"
                         >
@@ -185,7 +183,7 @@ export default function OperationsClient({
       <section className="space-y-4">
         <h2 className="text-sm font-semibold flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-green-500" />
-          📦Ready for Collection
+          📦 Ready for Collection
         </h2>
 
         <div className="rounded-xl border border-muted overflow-hidden">
@@ -199,6 +197,7 @@ export default function OperationsClient({
                 <tr>
                   <th className="px-6 py-4 text-left">Item</th>
                   <th className="px-6 py-4 text-left">Customer</th>
+                  <th className="px-6 py-4 text-left">Qty</th>
                   <th className="px-6 py-4 text-left">Payment</th>
                   <th className="px-6 py-4 text-right">Action</th>
                 </tr>
@@ -210,18 +209,18 @@ export default function OperationsClient({
                   const ref = paymentRefs[b.id] ?? "";
 
                   return (
-                    <tr key={b.id} className="hover:bg-muted/30">
-                      <td className="px-6 py-5 font-medium">
-                        {b.title}
-                      </td>
+                    <tr
+                      key={`${b.source}:${b.id}`}
+                      className="hover:bg-muted/30"
+                    >
+                      <td className="px-6 py-5 font-medium">{b.title}</td>
                       <td className="px-6 py-5">
                         {b.customer_name ?? "Unknown customer"}
                       </td>
+                      <td className="px-6 py-5">{b.quantity}</td>
                       <td className="px-6 py-5">
                         {isPaid ? (
-                          <span className="text-accent font-medium">
-                            Paid
-                          </span>
+                          <span className="text-accent font-medium">Paid</span>
                         ) : (
                           <input
                             value={ref}
@@ -239,9 +238,13 @@ export default function OperationsClient({
                       <td className="px-6 py-5 text-right">
                         <button
                           disabled={!isPaid && !ref}
-                          onClick={() =>
-                            markCollected(b.id, !isPaid, ref)
-                          }
+                          onClick={() => {
+                            if (b.source === "online") {
+                              markCollected(b.id, false);
+                            } else {
+                              markCollected(b.id, !isPaid, ref);
+                            }
+                          }}
                           className="text-accent hover:underline disabled:opacity-40"
                         >
                           Complete
@@ -261,7 +264,7 @@ export default function OperationsClient({
       <section className="space-y-4">
         <h2 className="text-sm font-semibold flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-blue-500" />
-          ➡️To Order ({toOrder.length})
+          ➡️ To Order ({toOrder.length})
         </h2>
 
         <div className="rounded-xl border border-muted overflow-hidden">
@@ -270,49 +273,33 @@ export default function OperationsClient({
               No items awaiting supplier order.
             </p>
           ) : (
-            <>
-              <div className="p-4 border-b border-muted">
-                <input
-                  placeholder="Search"
-                  className="w-full max-w-sm border border-muted rounded-md px-3 py-2 text-sm bg-background"
-                />
-              </div>
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase tracking-wide text-foreground/60 border-b border-muted">
+                <tr>
+                  <th className="px-6 py-4 text-left">Product</th>
+                  <th className="px-6 py-4 text-left">Customer / Source</th>
+                  <th className="px-6 py-4 text-left">Qty</th>
+                  <th className="px-6 py-4 text-left">Supplier</th>
+                </tr>
+              </thead>
 
-              <table className="w-full text-sm">
-                <thead className="text-xs uppercase tracking-wide text-foreground/60 border-b border-muted">
-                  <tr>
-                    <th className="px-6 py-4 text-left">Product</th>
-                    <th className="px-6 py-4 text-left">
-                      Customer / Source
-                    </th>
-                    <th className="px-6 py-4 text-left">Qty</th>
-                    <th className="px-6 py-4 text-left">Supplier</th>
+              <tbody className="divide-y divide-muted">
+                {toOrder.map((o) => (
+                  <tr key={o.backorder_id} className="hover:bg-muted/30">
+                    <td className="px-6 py-5 font-medium">
+                      {o.product_name}
+                    </td>
+                    <td className="px-6 py-5">
+                      {o.source === "customer"
+                        ? o.customer_name ?? "Unknown customer"
+                        : "Stock order"}
+                    </td>
+                    <td className="px-6 py-5">{o.quantity}</td>
+                    <td className="px-6 py-5">{o.supplier_name}</td>
                   </tr>
-                </thead>
-
-                <tbody className="divide-y divide-muted">
-                  {toOrder.map((o) => (
-                    <tr
-                      key={o.backorder_id}
-                      className="hover:bg-muted/30"
-                    >
-                      <td className="px-6 py-5 font-medium">
-                        {o.product_name}
-                      </td>
-                      <td className="px-6 py-5">
-                        {o.source === "customer"
-                          ? o.customer_name ?? "Unknown customer"
-                          : "Stock order"}
-                      </td>
-                      <td className="px-6 py-5">{o.quantity}</td>
-                      <td className="px-6 py-5">
-                        {o.supplier_name}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </section>

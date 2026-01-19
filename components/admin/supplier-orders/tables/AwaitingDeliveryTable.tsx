@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 import CancelRemainingModal from "../CancelRemainingModal";
 import type {
@@ -39,6 +41,17 @@ export default function AwaitingDeliveryTable({
     remaining: number;
   } | null>(null);
 
+  /* ---------------- PAYMENT MODAL STATE ---------------- */
+
+  const [paymentModal, setPaymentModal] = useState<{
+    backorderId: string;
+    status: "paid" | "unpaid";
+    reference: string;
+  } | null>(null);
+
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
   /* ---------------------------------------------
      FLATTEN + DEDUPE BACKORDERS
   --------------------------------------------- */
@@ -64,10 +77,7 @@ export default function AwaitingDeliveryTable({
   const allIds = uniqueItems
     .filter((item) => {
       const received = item.received_quantity ?? 0;
-      const remaining = Math.max(
-        0,
-        item.quantity - received
-      );
+      const remaining = Math.max(0, item.quantity - received);
 
       return (
         item.ordered_at != null &&
@@ -115,6 +125,42 @@ export default function AwaitingDeliveryTable({
   }
 
   /* ---------------------------------------------
+     SAVE PAYMENT (WITH REFERENCE)
+  --------------------------------------------- */
+
+  async function savePayment() {
+    if (!paymentModal) return;
+
+    if (
+      paymentModal.status === "paid" &&
+      !paymentModal.reference.trim()
+    ) {
+      setPaymentError("SumUp payment reference is required");
+      return;
+    }
+
+    setPaymentSaving(true);
+    setPaymentError(null);
+
+    await fetch("/api/admin/supplier-orders/set-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        backorder_id: paymentModal.backorderId,
+        payment_status: paymentModal.status,
+        payment_reference:
+          paymentModal.status === "paid"
+            ? paymentModal.reference.trim()
+            : null,
+      }),
+    });
+
+    setPaymentSaving(false);
+    setPaymentModal(null);
+    onRefresh();
+  }
+
+  /* ---------------------------------------------
      RENDER
   --------------------------------------------- */
 
@@ -145,10 +191,7 @@ export default function AwaitingDeliveryTable({
         <tbody>
           {uniqueItems.map(({ customer, ...item }) => {
             const received = item.received_quantity ?? 0;
-            const remaining = Math.max(
-              0,
-              item.quantity - received
-            );
+            const remaining = Math.max(0, item.quantity - received);
 
             const isAwaitingDelivery =
               item.ordered_at != null &&
@@ -160,11 +203,13 @@ export default function AwaitingDeliveryTable({
             const receiveNow =
               receivedNow[item.backorder_id] ?? 0;
 
-            const canReceive =
-              receiveNow > 0 && receiveNow <= remaining;
-
             const paymentStatus =
               customer.payment_status ?? "unpaid";
+
+            const canReceive =
+              paymentStatus === "paid" &&
+              receiveNow > 0 &&
+              receiveNow <= remaining;
 
             return (
               <tr key={item.backorder_id}>
@@ -199,26 +244,42 @@ export default function AwaitingDeliveryTable({
                 </td>
 
                 <td className="border p-2">
-                  {customer.customer_name}
+                  <div className="font-medium">
+                    {customer.customer_name}
+                  </div>
                   {customer.customer_email && (
                     <div className="text-xs text-gray-500">
                       {customer.customer_email}
                     </div>
                   )}
+                  {customer.customer_phone && (
+                    <div className="text-xs text-gray-500">
+                      📞 {customer.customer_phone}
+                    </div>
+                  )}
                 </td>
 
+                {/* PAYMENT (OPENS MODAL) */}
                 <td className="border p-2 text-center">
-                  <Badge
-                    className={
-                      paymentStatus === "paid"
-                        ? "bg-green-100 text-green-700"
-                        : paymentStatus === "deposit_taken"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-red-100 text-red-700"
+                  <button
+                    onClick={() =>
+                      setPaymentModal({
+                        backorderId: item.backorder_id,
+                        status: paymentStatus,
+                        reference: "",
+                      })
                     }
                   >
-                    {paymentStatus.replace("_", " ")}
-                  </Badge>
+                    <Badge
+                      className={`cursor-pointer hover:opacity-80 ${
+                        paymentStatus === "paid"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {paymentStatus}
+                    </Badge>
+                  </button>
                 </td>
 
                 <td className="border p-2 text-center">
@@ -276,6 +337,84 @@ export default function AwaitingDeliveryTable({
           })}
         </tbody>
       </table>
+
+      {/* PAYMENT MODAL */}
+      {paymentModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+          <div className="bg-white rounded-lg w-full max-w-sm p-4 space-y-4">
+            <h3 className="text-lg font-semibold">
+              Update payment
+            </h3>
+
+            <div className="flex gap-2">
+              <Button
+                variant={
+                  paymentModal.status === "unpaid"
+                    ? "primary"
+                    : "neutral"
+                }
+                onClick={() =>
+                  setPaymentModal((m) =>
+                    m ? { ...m, status: "unpaid" } : m
+                  )
+                }
+              >
+                Unpaid
+              </Button>
+
+              <Button
+                variant={
+                  paymentModal.status === "paid"
+                    ? "primary"
+                    : "neutral"
+                }
+                onClick={() =>
+                  setPaymentModal((m) =>
+                    m ? { ...m, status: "paid" } : m
+                  )
+                }
+              >
+                Paid
+              </Button>
+            </div>
+
+            {paymentModal.status === "paid" && (
+              <Input
+                placeholder="SumUp payment reference"
+                value={paymentModal.reference}
+                onChange={(e) =>
+                  setPaymentModal((m) =>
+                    m
+                      ? { ...m, reference: e.target.value }
+                      : m
+                  )
+                }
+              />
+            )}
+
+            {paymentError && (
+              <div className="text-sm text-red-600">
+                {paymentError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="neutral"
+                onClick={() => setPaymentModal(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={savePayment}
+                disabled={paymentSaving}
+              >
+                {paymentSaving ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CancelRemainingModal
         open={!!cancelModal}

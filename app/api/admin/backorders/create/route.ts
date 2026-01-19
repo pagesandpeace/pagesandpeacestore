@@ -123,6 +123,7 @@ export async function POST(req: Request) {
 
       const requestedQty = item.requested_quantity ?? item.quantity;
 
+      /* ---------- EXISTING PRODUCT ---------- */
       if (item.kind === "existing") {
         if (!item.product_id) {
           throw new Error("Missing product_id for existing item");
@@ -131,8 +132,11 @@ export async function POST(req: Request) {
         return {
           product_id: item.product_id,
 
+          // ✅ PHYSICAL TITLE STORED
+          title: item.product_name,
+
           quantity: item.quantity,
-          requested_quantity: requestedQty, // ✅ GUARANTEED
+          requested_quantity: requestedQty,
 
           temp_title: null,
           temp_author: null,
@@ -178,7 +182,7 @@ export async function POST(req: Request) {
         };
       }
 
-      /* ---------- NEW TITLE ---------- */
+      /* ---------- NEW / MANUAL ITEM ---------- */
       if (item.kind === "new") {
         if (!item.title?.trim()) {
           throw new Error("Missing title for new item");
@@ -187,8 +191,11 @@ export async function POST(req: Request) {
         return {
           product_id: null,
 
+          // ✅ PHYSICAL TITLE STORED
+          title: item.title,
+
           quantity: item.quantity,
-          requested_quantity: requestedQty, // ✅ GUARANTEED
+          requested_quantity: requestedQty,
 
           temp_title: item.title,
           temp_author: item.author ?? null,

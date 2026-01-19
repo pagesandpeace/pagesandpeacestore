@@ -8,6 +8,11 @@ type Props = {
   receivedAt?: string | null;
   poNumber: string | null;
 
+  // 👇 NEW
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+
   showBulkButton: boolean;
   bulkButtonLabel: string;
   onBulkClick: () => void;
@@ -20,6 +25,11 @@ export default function OrderHeader({
   orderedAt,
   receivedAt,
   poNumber,
+
+  customerName,
+  customerEmail,
+  customerPhone,
+
   showBulkButton,
   bulkButtonLabel,
   onBulkClick,
@@ -41,6 +51,23 @@ export default function OrderHeader({
               })
             : "—"}
         </p>
+
+        {/* 👤 Customer details */}
+        {(customerName || customerEmail || customerPhone) && (
+          <div className="text-sm text-gray-700 space-y-0.5">
+            {customerName && (
+              <p className="font-medium">{customerName}</p>
+            )}
+
+            {customerEmail && (
+              <p className="text-gray-600">{customerEmail}</p>
+            )}
+
+            {customerPhone && (
+              <p className="text-gray-600">📞 {customerPhone}</p>
+            )}
+          </div>
+        )}
 
         {/* Timeline */}
         <OrderTimeline

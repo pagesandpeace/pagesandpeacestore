@@ -161,13 +161,18 @@ export default function BackordersPage() {
       : undefined,
 
   items: lines.map((l) =>
-    l.kind === "existing"
-      ? {
-          kind: "existing",
-          product_id: l.product_id,
-          quantity: l.quantity,
-          notes: l.notes,
-        }
+  l.kind === "existing"
+    ? {
+        kind: "existing",
+        product_id: l.product_id,
+
+        // 🔥 THIS WAS MISSING
+        product_name: l.product_name,
+
+        quantity: l.quantity,
+        notes: l.notes,
+      }
+
       : {
           kind: "new",
           title: l.title,
@@ -359,35 +364,46 @@ export default function BackordersPage() {
       
 
       {/* MODAL */}
-      <AddOrderItemModal
-        open={showAddItem}
-        onClose={() => setShowAddItem(false)}
-        onAdd={(item) => {
-          if (item.kind === "existing") {
-            const line: ExistingLine = {
-              id: crypto.randomUUID(),
-              kind: "existing",
-              product_id: item.product_id,
-              product_name: item.product_name,
-              quantity: item.quantity,
-              notes: item.notes ?? "",
-            };
-            setLines((prev) => [line, ...prev]);
-          } else {
-            const line: NewLine = {
-              id: crypto.randomUUID(),
-              kind: "new",
-              title: item.title,
-              author: item.author,
-              supplier: item.supplier,
-              isbn: item.isbn,
-              quantity: item.quantity,
-              notes: item.notes ?? "",
-            };
-            setLines((prev) => [line, ...prev]);
-          }
-        }}
-      />
+<AddOrderItemModal
+  open={showAddItem}
+  onClose={() => setShowAddItem(false)}
+  onAdd={(item) => {
+    if (item.kind === "existing") {
+      const line: ExistingLine = {
+        id: crypto.randomUUID(),
+        kind: "existing",
+        product_id: item.product_id,
+
+        // ✅ CRITICAL FIX:
+        // Always ensure we have something displayable
+        product_name:
+          item.product_name?.trim() ||
+          "⚠️ Missing product title",
+
+        quantity: item.quantity,
+        notes: item.notes ?? "",
+      };
+
+      setLines((prev) => [line, ...prev]);
+      return;
+    }
+
+    // ---------- NEW / MANUAL ITEM ----------
+    const line: NewLine = {
+      id: crypto.randomUUID(),
+      kind: "new",
+      title: item.title,
+      author: item.author,
+      supplier: item.supplier,
+      isbn: item.isbn,
+      quantity: item.quantity,
+      notes: item.notes ?? "",
+    };
+
+    setLines((prev) => [line, ...prev]);
+  }}
+/>
+
     </div>
   );
 }

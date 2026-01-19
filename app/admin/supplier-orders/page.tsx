@@ -220,12 +220,14 @@ export default function SupplierOrdersPage() {
               )}
 
               {activeTab === "delivered" && (
-                <DeliveredTable
-                  group={group}
-                  selected={selected}
-                  onToggle={toggleSelect}
-                />
-              )}
+  <DeliveredTable
+    group={group}
+    selected={selected}
+    onToggle={toggleSelect}
+    onRefresh={load}   // ✅ THIS IS THE FIX
+  />
+)}
+
             </div>
           );
         })}

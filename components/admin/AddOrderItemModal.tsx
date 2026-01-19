@@ -29,7 +29,6 @@ type NewItem = {
   notes: string;
 };
 
-
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -51,9 +50,11 @@ export default function AddOrderItemModal({
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
 
-  // existing
-  const [productId, setProductId] = useState<string | null>(null);
-  const [productName, setProductName] = useState<string>("");
+  // existing (store together to avoid desync)
+  const [selectedProduct, setSelectedProduct] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // new
   const [title, setTitle] = useState("");
@@ -66,8 +67,7 @@ export default function AddOrderItemModal({
   function reset() {
     setQuantity(1);
     setNotes("");
-    setProductId(null);
-    setProductName("");
+    setSelectedProduct(null);
     setTitle("");
     setAuthor("");
     setSupplier("");
@@ -76,36 +76,39 @@ export default function AddOrderItemModal({
   }
 
   function submit() {
-  if (mode === "existing") {
-    if (!productId) return;
+    if (mode === "existing") {
+      if (!selectedProduct) return;
 
-    onAdd({
-      kind: "existing",
-      product_id: productId,
-      product_name: productName,
-      quantity,
-      requested_quantity: quantity, // ✅ IMPORTANT
-      notes,
-    });
-  } else {
-    if (!title.trim()) return;
+      const name = selectedProduct.name.trim();
+      if (!name) return; // hard stop – never allow empty titles
 
-    onAdd({
-      kind: "new",
-      title,
-      author: author || undefined,
-      supplier: supplier || undefined,
-      isbn: isbn || undefined,
-      quantity,
-      requested_quantity: quantity, // ✅ IMPORTANT
-      notes,
-    });
+      onAdd({
+        kind: "existing",
+        product_id: selectedProduct.id,
+        product_name: name,
+        quantity,
+        requested_quantity: quantity,
+        notes,
+      });
+    } else {
+      const cleanTitle = title.trim();
+      if (!cleanTitle) return;
+
+      onAdd({
+        kind: "new",
+        title: cleanTitle,
+        author: author || undefined,
+        supplier: supplier || undefined,
+        isbn: isbn || undefined,
+        quantity,
+        requested_quantity: quantity,
+        notes,
+      });
+    }
+
+    reset();
+    onClose();
   }
-
-  reset();
-  onClose();
-}
-
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -133,15 +136,19 @@ export default function AddOrderItemModal({
           <div className="space-y-3">
             <ProductSearchSelect
               onAdd={(product) => {
-                setProductId(product.id);
-                setProductName(product.name);
+                if (!product?.id || !product?.name) return;
+
+                setSelectedProduct({
+                  id: product.id,
+                  name: product.name,
+                });
               }}
             />
 
-            {productId && (
+            {selectedProduct && (
               <div className="border rounded p-3 bg-gray-50 text-sm">
                 <p className="font-medium">Selected product</p>
-                <p>{productName}</p>
+                <p>{selectedProduct.name}</p>
               </div>
             )}
           </div>
@@ -197,7 +204,7 @@ export default function AddOrderItemModal({
             onClick={submit}
             disabled={
               mode === "existing"
-                ? !productId
+                ? !selectedProduct
                 : !title.trim()
             }
           >
