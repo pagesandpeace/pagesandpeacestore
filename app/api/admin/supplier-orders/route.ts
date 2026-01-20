@@ -15,8 +15,6 @@ import type {
 
 type SupplierOrderRow = {
   id: string;
-
-  // 🔑 NEW: real stored title (preferred)
   title: string | null;
 
   order_id: string | null;
@@ -40,7 +38,6 @@ type SupplierOrderRow = {
 
   temp_title: string | null;
 
-  // ✅ working join kept
   products: {
     name: string | null;
   }[] | null;
@@ -54,8 +51,9 @@ type SupplierOrderRow = {
     supplier_name: string;
     po_number: string;
     ordered_at: string | null;
-  } | null;
+  }[] | null; // ✅ ARRAY
 };
+
 
 /* ---------------------------------------------
    GET
@@ -69,7 +67,10 @@ export async function GET() {
 
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      );
     }
 
     const { data: profile } = await supabase
@@ -79,10 +80,13 @@ export async function GET() {
       .single();
 
     if (profile?.role !== "admin") {
-      return NextResponse.json({ error: "Admins only" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Admins only" },
+        { status: 403 }
+      );
     }
 
-    /* ---------- FETCH ---------- */
+    /* ---------- FETCH (CRITICAL FILTER ADDED) ---------- */
 
     const { data, error } = await supabase
       .from("customer_backorders")
@@ -126,14 +130,18 @@ export async function GET() {
         )
       `
       )
+      .is("collected_at", null) // ✅ ARCHIVE RULE
       .order("created_at", { ascending: true });
 
     if (error) {
       console.error("❌ supplier-orders fetch failed", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
     }
 
-    const rows = (data ?? []) as unknown as SupplierOrderRow[];
+    const rows = (data ?? []) as SupplierOrderRow[];
 
     /* ---------------------------------------------
        GROUPING
@@ -142,7 +150,7 @@ export async function GET() {
     const grouped = new Map<string, SupplierOrderGroup>();
 
     for (const r of rows) {
-      const po = r.supplier_purchase_orders ?? null;
+const po = r.supplier_purchase_orders?.[0] ?? null;
       const groupKey = po?.id ?? "NO_PO";
 
       if (!grouped.has(groupKey)) {
@@ -171,26 +179,23 @@ export async function GET() {
         ) ??
         (() => {
           const created: CustomerGroup = {
-  customer_id: r.order_id!, // 🔑 customer-scoped identifier
-
-  customer_name: customerName,
-  customer_email: customerEmail,
-  customer_phone: r.customer_phone ?? null,
-
-  payment_status: r.payment_status ?? "unpaid",
-  items: [],
-};
+            customer_id: r.order_id!,
+            customer_name: customerName,
+            customer_email: customerEmail,
+            customer_phone: r.customer_phone ?? null,
+            payment_status: r.payment_status ?? "unpaid",
+            items: [],
+          };
 
           group.customers.push(created);
           return created;
         })();
 
-      // Paid always wins
       if (r.payment_status === "paid") {
         customer.payment_status = "paid";
       }
 
-      /* ---------- PRODUCT NAME (SAFE PRIORITY) ---------- */
+      /* ---------- PRODUCT NAME ---------- */
 
       const productName =
         r.title ??
@@ -204,15 +209,11 @@ export async function GET() {
       customer.items.push({
         backorder_id: r.id,
         product_name: productName,
-
         quantity: r.quantity,
         requested_quantity: r.requested_quantity,
-
         received_quantity: r.received_quantity ?? 0,
-
         received_at: r.received_at ?? null,
         collected_at: r.collected_at ?? null,
-
         supplier_po_id: po?.id ?? null,
         ordered_at: r.ordered_at,
         cancelled_at: r.cancelled_at,
@@ -222,6 +223,9 @@ export async function GET() {
     return NextResponse.json([...grouped.values()]);
   } catch (err) {
     console.error("🔥 supplier-orders crashed", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server error" },
+      { status: 500 }
+    );
   }
 }

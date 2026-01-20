@@ -16,7 +16,7 @@ type Props = {
   group: SupplierOrderGroup;
   selected: Set<string>;
   onToggle: (id: string) => void;
-  onRefresh: () => void; // ✅ ADD
+  onRefresh: () => void;
 };
 
 type DeliveredRow = LineItem & {
@@ -27,10 +27,10 @@ export default function DeliveredTable({
   group,
   selected,
   onToggle,
-  onRefresh, // ✅ ADD
+  onRefresh,
 }: Props) {
   /* ---------------------------------------------
-     STATE (MUST BE TOP-LEVEL)
+     STATE
   --------------------------------------------- */
 
   const [paymentModal, setPaymentModal] = useState<{
@@ -46,35 +46,29 @@ export default function DeliveredTable({
      DERIVE DELIVERED ITEMS
   --------------------------------------------- */
 
-  const deliveredItems: DeliveredRow[] = group.customers.flatMap(
-    (c) =>
-      c.items
-        .filter((item) => {
-          const received = item.received_quantity ?? 0;
-
-          return (
-            received > 0 &&
-            item.collected_at == null &&
-            item.cancelled_at == null
-          );
-        })
-        .map((item) => ({
-          ...item,
-          customer: c,
-        }))
+  const deliveredItems: DeliveredRow[] = group.customers.flatMap((c) =>
+    c.items
+      .filter((item) => {
+        const received = item.received_quantity ?? 0;
+        return (
+          received > 0 &&
+          item.collected_at == null &&
+          item.cancelled_at == null
+        );
+      })
+      .map((item) => ({
+        ...item,
+        customer: c,
+      }))
   );
 
-  if (deliveredItems.length === 0) {
-    return null;
-  }
+  if (deliveredItems.length === 0) return null;
 
   /* ---------------------------------------------
-     SELECTION
+     SELECTION (SAFE TO KEEP)
   --------------------------------------------- */
 
-  const allIds = deliveredItems.map(
-    (i) => i.backorder_id
-  );
+  const allIds = deliveredItems.map((i) => i.backorder_id);
 
   const allSelected =
     allIds.length > 0 &&
@@ -117,8 +111,7 @@ export default function DeliveredTable({
 
     setSavingPayment(false);
     setPaymentModal(null);
-
-    onRefresh(); // ✅ THIS IS THE KEY FIX
+    onRefresh();
   }
 
   /* ---------------------------------------------
@@ -127,7 +120,13 @@ export default function DeliveredTable({
 
   return (
     <>
-      <table className="w-full text-sm border">
+      {/* EXPLANATORY NOTE */}
+      <p className="text-sm text-gray-500">
+        These items have been delivered from suppliers and are awaiting customer
+        collection. Collection is handled from the Operations page.
+      </p>
+
+      <table className="w-full text-sm border mt-3">
         <thead className="bg-gray-100">
           <tr>
             <th className="border p-2 text-center w-10">
@@ -156,6 +155,8 @@ export default function DeliveredTable({
 
             const paymentStatus: PaymentStatus =
               item.customer.payment_status ?? "unpaid";
+
+            const isPaid = paymentStatus === "paid";
 
             return (
               <tr key={item.backorder_id}>
@@ -203,7 +204,7 @@ export default function DeliveredTable({
                   )}
                 </td>
 
-                {/* PAYMENT */}
+                {/* PAYMENT (EDITABLE) */}
                 <td className="border p-2 text-center">
                   <button
                     onClick={() =>
@@ -216,7 +217,7 @@ export default function DeliveredTable({
                   >
                     <Badge
                       className={`cursor-pointer hover:opacity-80 ${
-                        paymentStatus === "paid"
+                        isPaid
                           ? "bg-green-100 text-green-700"
                           : "bg-red-100 text-red-700"
                       }`}

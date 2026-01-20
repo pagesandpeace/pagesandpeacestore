@@ -161,30 +161,50 @@ export async function POST(req: Request) {
   }
 
   if (source === "backorder") {
-    const update: BackorderUpdate = {
-      collected_at: now,
-    };
-
-    if (markPaid) {
-      update.payment_status = "paid";
-    }
-
-    const { data, error } = await supabaseAdmin
+  // 1️⃣ Load backorder first (do NOT assume state)
+  const { data: backorder, error: fetchError } =
+    await supabaseAdmin
       .from("customer_backorders")
-      .update(update)
+      .select("id, payment_status, collected_at")
       .eq("id", id)
-      .is("collected_at", null)
-      .select()
       .single();
 
-    if (error || !data) {
-      return NextResponse.json(
-        { error },
-        { status: 500 }
-      );
-    }
+  if (fetchError || !backorder) {
+    return NextResponse.json(
+      { error: "Backorder not found" },
+      { status: 404 }
+    );
   }
 
-  console.log("✅ [MARK COLLECTED] success", { id, source });
-  return NextResponse.json({ success: true });
+  // 2️⃣ HARD STOP: unpaid backorders cannot be collected
+  if (backorder.payment_status !== "paid") {
+    return NextResponse.json(
+      {
+        error: "Cannot mark collected: payment not completed",
+        payment_status: backorder.payment_status,
+      },
+      { status: 400 }
+    );
+  }
+
+  // 3️⃣ Mark as collected (payment already confirmed)
+  const { error: updateError } = await supabaseAdmin
+    .from("customer_backorders")
+    .update({
+      collected_at: now,
+    })
+    .eq("id", id)
+    .is("collected_at", null);
+
+  if (updateError) {
+    return NextResponse.json(
+      { error: updateError },
+      { status: 500 }
+    );
+  }
 }
+
+console.log("✅ [MARK COLLECTED] success", { id, source });
+return NextResponse.json({ success: true });
+}
+

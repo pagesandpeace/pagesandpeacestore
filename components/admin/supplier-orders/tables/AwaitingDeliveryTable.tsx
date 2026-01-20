@@ -318,19 +318,20 @@ export default function AwaitingDeliveryTable({
                 </td>
 
                 <td className="border p-2 text-center">
-                  {received > 0 && (
-                    <button
-                      className="px-2 py-1 text-xs bg-red-600 text-white rounded"
-                      onClick={() =>
-                        setCancelModal({
-                          id: item.backorder_id,
-                          remaining,
-                        })
-                      }
-                    >
-                      Cancel remaining
-                    </button>
-                  )}
+                  {remaining > 0 && (
+  <button
+    className="px-2 py-1 text-xs bg-red-600 text-white rounded"
+    onClick={() =>
+      setCancelModal({
+        id: item.backorder_id,
+        remaining,
+      })
+    }
+  >
+    Cancel remaining
+  </button>
+)}
+
                 </td>
               </tr>
             );

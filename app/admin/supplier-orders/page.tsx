@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import OrderHeader from "@/components/admin/supplier-orders/OrderHeader";
 import ToBeOrderedTable from "@/components/admin/supplier-orders/tables/ToBeOrderedTable";
@@ -10,21 +10,13 @@ import CreateSupplierPOModal from "@/components/admin/supplier-orders/CreateSupp
 
 import type { SupplierOrderGroup } from "@/components/admin/supplier-orders/types";
 
-/* ---------------------------------------------
-   TAB KEYS
---------------------------------------------- */
-
 type TabKey = "to_order" | "awaiting_delivery" | "delivered";
-
-/* ---------------------------------------------
-   GROUP VISIBILITY
---------------------------------------------- */
 
 function groupHasRows(group: SupplierOrderGroup, tab: TabKey): boolean {
   return group.customers.some((c) =>
     c.items.some((item) => {
       const received = item.received_quantity ?? 0;
-const remaining = item.quantity - received;
+      const remaining = item.quantity - received;
 
       switch (tab) {
         case "to_order":
@@ -38,7 +30,11 @@ const remaining = item.quantity - received;
           );
 
         case "delivered":
-          return received > 0 && item.cancelled_at == null;
+          return (
+            received > 0 &&
+            item.collected_at == null && // ✅ EXCLUDE collected
+            item.cancelled_at == null
+          );
 
         default:
           return false;
@@ -47,21 +43,12 @@ const remaining = item.quantity - received;
   );
 }
 
-/* ---------------------------------------------
-   PAGE
---------------------------------------------- */
-
-export default function SupplierOrdersPage() {
+export default function SupplierOrdersClient({ tab }: { tab: TabKey }) {
   const [data, setData] = useState<SupplierOrderGroup[]>([]);
-  const [activeTab, setActiveTab] = useState<TabKey>("to_order");
   const [loading, setLoading] = useState(true);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showCreatePO, setShowCreatePO] = useState(false);
-
-  /* ---------------------------------------------
-     LOAD
-  --------------------------------------------- */
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,41 +67,31 @@ export default function SupplierOrdersPage() {
     load();
   }, [load]);
 
-  /* ---------------------------------------------
-     SELECTION
-  --------------------------------------------- */
+  // Clear selection when tab changes (now comes from props)
+  useEffect(() => {
+    setSelected(new Set());
+  }, [tab]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const clearSelection = () => setSelected(new Set());
 
-  useEffect(() => {
-    clearSelection();
-  }, [activeTab]);
-
-  /* ---------------------------------------------
-     BULK ACTIONS
-  --------------------------------------------- */
-
   const submitBulk = async () => {
     if (selected.size === 0) return;
 
-    if (activeTab === "to_order") {
+    if (tab === "to_order") {
       setShowCreatePO(true);
       return;
     }
 
-    if (activeTab === "awaiting_delivery") {
+    if (tab === "awaiting_delivery") {
       await fetch("/api/admin/backorders/bulk-update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,107 +107,91 @@ export default function SupplierOrdersPage() {
   };
 
   const bulkButtonLabel =
-    activeTab === "to_order"
+    tab === "to_order"
       ? `Create supplier PO (${selected.size})`
-      : activeTab === "awaiting_delivery"
+      : tab === "awaiting_delivery"
       ? `Mark received (${selected.size})`
       : "";
 
-  const showBulkButton = activeTab !== "delivered";
+  const showBulkButton = tab !== "delivered";
 
-  /* ---------------------------------------------
-     RENDER
-  --------------------------------------------- */
+  const visibleGroups = useMemo(
+    () => data.filter((g) => groupHasRows(g, tab)),
+    [data, tab]
+  );
 
   return (
-    <div className="max-w-6xl mx-auto py-10 space-y-6">
-      <h1 className="text-3xl font-bold">Supplier Orders</h1>
+    <div className="space-y-6">
+      {loading && <p className="text-sm text-gray-500">Loading…</p>}
 
-      <Tabs active={activeTab} onChange={setActiveTab} />
-
-      {loading && (
-        <p className="text-sm text-gray-500">Loading…</p>
+      {!loading && visibleGroups.length === 0 && (
+        <p className="text-sm text-gray-500">No orders in this state.</p>
       )}
 
-      {!loading &&
-        data.filter((g) => groupHasRows(g, activeTab)).length === 0 && (
-          <p className="text-sm text-gray-500">
-            No orders in this state.
-          </p>
-        )}
+      {visibleGroups.map((group) => {
+        const allItems = group.customers.flatMap((c) => c.items);
 
-      {data
-        .filter((group) => groupHasRows(group, activeTab))
-        .map((group) => {
-          const allItems = group.customers.flatMap((c) => c.items);
+        const orderedAt =
+          group.ordered_at ??
+          allItems
+            .map((i) => i.ordered_at)
+            .filter(Boolean)
+            .sort()[0] ??
+          null;
 
-          const orderedAt =
-            group.ordered_at ??
-            allItems
-              .map((i) => i.ordered_at)
-              .filter(Boolean)
-              .sort()[0] ??
-            null;
+        const receivedAt =
+          allItems
+            .map((i) => i.received_at)
+            .filter(Boolean)
+            .sort()
+            .at(-1) ?? null;
 
-          const receivedAt =
-  allItems
-    .map((i) => i.received_at)
-    .filter(Boolean)
-    .sort()
-    .at(-1) ?? null;
+        return (
+          <div
+            key={group.po_id ?? group.created_at}
+            className="border rounded-lg bg-white p-5 space-y-4"
+          >
+            <OrderHeader
+              orderDate={tab === "to_order" ? group.created_at : orderedAt ?? group.created_at}
+              createdAt={tab === "to_order" ? null : group.created_at}
+              orderedAt={tab === "to_order" ? null : orderedAt}
+              receivedAt={tab === "delivered" ? receivedAt : null}
+              poNumber={tab === "to_order" ? null : group.po_number}
+              showBulkButton={showBulkButton}
+              bulkButtonLabel={bulkButtonLabel}
+              bulkDisabled={selected.size === 0}
+              onBulkClick={submitBulk}
+            />
 
-
-          return (
-            <div
-              key={group.po_id ?? group.created_at}
-              className="border rounded-lg bg-white p-5 space-y-4"
-            >
-              <OrderHeader
-                orderDate={
-                  activeTab === "to_order"
-                    ? group.created_at
-                    : orderedAt ?? group.created_at
-                }
-                createdAt={activeTab === "to_order" ? null : group.created_at}
-                orderedAt={activeTab === "to_order" ? null : orderedAt}
-                receivedAt={activeTab === "delivered" ? receivedAt : null}
-                poNumber={activeTab === "to_order" ? null : group.po_number}
-                showBulkButton={showBulkButton}
-                bulkButtonLabel={bulkButtonLabel}
-                bulkDisabled={selected.size === 0}
-                onBulkClick={submitBulk}
+            {tab === "to_order" && (
+              <ToBeOrderedTable
+                group={group}
+                selected={selected}
+                onToggle={toggleSelect}
+                onRefresh={load}
               />
+            )}
 
-              {activeTab === "to_order" && (
-                <ToBeOrderedTable
-                  group={group}
-                  selected={selected}
-                  onToggle={toggleSelect}
-                  onRefresh={load}
-                />
-              )}
+            {tab === "awaiting_delivery" && (
+              <AwaitingDeliveryTable
+                group={group}
+                selected={selected}
+                onToggle={toggleSelect}
+                onRefresh={load}
+              />
+            )}
 
-              {activeTab === "awaiting_delivery" && (
-                <AwaitingDeliveryTable
-                  group={group}
-                  selected={selected}
-                  onToggle={toggleSelect}
-                  onRefresh={load}
-                />
-              )}
-
-              {activeTab === "delivered" && (
-  <DeliveredTable
-    group={group}
-    selected={selected}
-    onToggle={toggleSelect}
-    onRefresh={load}   // ✅ THIS IS THE FIX
-  />
-)}
-
-            </div>
-          );
-        })}
+            {tab === "delivered" && (
+              <DeliveredTable
+                group={group}
+                selected={selected}
+                onToggle={toggleSelect}
+                onRefresh={load}
+              />
+            )}
+          </div>
+        );
+      })}
 
       <CreateSupplierPOModal
         open={showCreatePO}
@@ -243,60 +204,5 @@ export default function SupplierOrdersPage() {
         }}
       />
     </div>
-  );
-}
-
-/* ---------------------------------------------
-   TABS
---------------------------------------------- */
-
-function Tabs({
-  active,
-  onChange,
-}: {
-  active: TabKey;
-  onChange: (k: TabKey) => void;
-}) {
-  return (
-    <div className="flex gap-2 border-b pb-2">
-      <Tab
-        label="To be ordered"
-        active={active === "to_order"}
-        onClick={() => onChange("to_order")}
-      />
-      <Tab
-        label="Awaiting delivery"
-        active={active === "awaiting_delivery"}
-        onClick={() => onChange("awaiting_delivery")}
-      />
-      <Tab
-        label="Delivered"
-        active={active === "delivered"}
-        onClick={() => onChange("delivered")}
-      />
-    </div>
-  );
-}
-
-function Tab({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-2 text-sm border-b-2 transition ${
-        active
-          ? "border-black font-medium"
-          : "border-transparent text-gray-500 hover:text-black"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
