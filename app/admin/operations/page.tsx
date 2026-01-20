@@ -151,23 +151,25 @@ const backordersToPick =
 
   // ---------- READY BACKORDERS ----------
   const { data: readyBackordersRaw } = await supabaseAdmin
-    .from("customer_backorders")
-    .select(`
-  id,
-  title,
-  customer_name,
-  quantity,
-  payment_status,
-  temp_title,
-  picked_at,
-  collected_at,
-  cancelled_at,
-  products ( name )
-`)
-    .not("picked_at", "is", null)
-    .is("collected_at", null)
-    .is("cancelled_at", null)
-    .order("picked_at", { ascending: true });
+  .from("customer_backorders")
+  .select(`
+    id,
+    title,
+    temp_title,
+    customer_name,
+    customer_email,
+    customer_phone,
+    quantity,
+    payment_status,
+    picked_at,
+    collected_at,
+    cancelled_at,
+    products ( name )
+  `)
+  .not("picked_at", "is", null)
+  .is("collected_at", null)
+  .is("cancelled_at", null)
+  .order("picked_at", { ascending: true });
 
 
   const readyBackorders = Array.from(
@@ -180,11 +182,14 @@ const backordersToPick =
         quantity: b.quantity,
         title: b.title ?? resolveBackorderTitle(b),
         customer_name: b.customer_name,
+        customer_email: b.customer_email,
+        customer_phone: b.customer_phone,
         payment_status: b.payment_status,
       },
     ])
   ).values()
 );
+
 
 
   // ---------- READY ONLINE ORDERS ----------

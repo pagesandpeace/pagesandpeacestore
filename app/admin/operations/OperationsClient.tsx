@@ -37,9 +37,12 @@ type ReadyItem = {
   source: "online" | "backorder";
   title: string;
   customer_name: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
   quantity: number;
-  payment_status?: "paid" | "unpaid" | "deposit_taken";
+  payment_status?: "paid" | "unpaid";
 };
+
 
 type ToOrderItem = {
   backorder_id: string;
@@ -283,8 +286,23 @@ export default function OperationsClient({
                 </td>
 
                 <td className="px-6 py-5">
-                  {b.customer_name ?? "Unknown customer"}
-                </td>
+  <div className="font-medium">
+    {b.customer_name ?? "Unknown customer"}
+  </div>
+
+  {"customer_email" in b && b.customer_email && (
+    <div className="text-xs text-foreground/60">
+      ✉️ {b.customer_email}
+    </div>
+  )}
+
+  {"customer_phone" in b && b.customer_phone && (
+    <div className="text-xs text-foreground/60">
+      📞 {b.customer_phone}
+    </div>
+  )}
+</td>
+
 
                 <td className="px-6 py-5">
                   {b.quantity}
