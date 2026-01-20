@@ -119,18 +119,20 @@ export default function OperationsClient({
     setSavingPayment(true);
     setPaymentError(null);
 
-    await fetch("/api/admin/backorders/payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: paymentModal.backorderId,
-        payment_status: paymentModal.status,
-        payment_reference:
-          paymentModal.status === "paid"
-            ? paymentModal.reference.trim()
-            : null,
-      }),
-    });
+    
+  await fetch("/api/admin/supplier-orders/set-payment", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    backorder_id: paymentModal.backorderId,
+    payment_status: paymentModal.status,
+    payment_reference:
+      paymentModal.status === "paid"
+        ? paymentModal.reference.trim()
+        : null,
+  }),
+});
+
 
     setSavingPayment(false);
     setPaymentModal(null);
@@ -149,129 +151,98 @@ export default function OperationsClient({
       {/* ===================== 🔴 TO PICK ===================== */}
 
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-red-500" />
-          📓 To Pick
-        </h2>
+  <h2 className="text-sm font-semibold flex items-center gap-2">
+    <span className="w-2 h-2 rounded-full bg-red-500" />
+    📓 To Pick
+  </h2>
 
-        <div className="rounded-xl border border-muted overflow-hidden">
-          {toPick.length === 0 ? (
-            <p className="p-6 text-sm text-foreground/60">
-              Nothing to pick.
-            </p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase tracking-wide text-foreground/60 border-b border-muted">
-                <tr>
-                  <th className="px-6 py-4 text-left">Item</th>
-                  <th className="px-6 py-4 text-left">Customer</th>
-                  <th className="px-6 py-4 text-left">Qty</th>
-                  <th className="px-6 py-4 text-left">Payment</th>
-                  <th className="px-6 py-4 text-left">Created</th>
-                  <th className="px-6 py-4 text-right">Action</th>
-                </tr>
-              </thead>
+  <div className="rounded-xl border border-muted overflow-hidden">
+    {toPick.length === 0 ? (
+      <p className="p-6 text-sm text-foreground/60">
+        Nothing to pick.
+      </p>
+    ) : (
+      <table className="w-full text-sm">
+        <thead className="text-xs uppercase tracking-wide text-foreground/60 border-b border-muted">
+          <tr>
+            <th className="px-6 py-4 text-left">Item</th>
+            <th className="px-6 py-4 text-left">Customer</th>
+            <th className="px-6 py-4 text-left">Qty</th>
+            <th className="px-6 py-4 text-left">Payment</th>
+            <th className="px-6 py-4 text-left">Created</th>
+            <th className="px-6 py-4 text-right">Action</th>
+          </tr>
+        </thead>
 
-              <tbody className="divide-y divide-muted">
-                {toPick.map((i) => {
-                  const isPaid =
-                    i.source === "online" ||
-                    i.payment_status === "paid";
+        <tbody className="divide-y divide-muted">
+          {toPick.map((i) => (
+            <tr
+              key={`${i.source}:${i.id}`}
+              className="hover:bg-muted/30"
+            >
+              <td className="px-6 py-5 font-medium">
+                {i.title}
+              </td>
 
-                  return (
-                    <tr
-                      key={`${i.source}:${i.id}`}
-                      className="hover:bg-muted/30"
+              <td className="px-6 py-5">
+                {i.customer_name ?? "Unknown customer"}
+              </td>
+
+              <td className="px-6 py-5">
+                {i.quantity}
+              </td>
+
+              {/* PAYMENT — informational only */}
+              <td className="px-6 py-5">
+                {i.source === "online" ? (
+                  <span className="text-accent font-medium">
+                    Paid
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-foreground/5 text-foreground/60">
+                    Pay on collection
+                  </span>
+                )}
+              </td>
+
+              <td className="px-6 py-5">
+                {formatDate(i.created_at)}
+              </td>
+
+              <td className="px-6 py-5 text-right">
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    onClick={() =>
+                      markPicked([
+                        {
+                          source: i.source,
+                          id: i.id,
+                        },
+                      ])
+                    }
+                    className="text-accent hover:underline"
+                  >
+                    Mark picked
+                  </button>
+
+                  {i.source === "online" && (
+                    <Link
+                      href={`/admin/orders/${i.order_id}`}
+                      className="text-xs text-foreground/60 hover:underline"
                     >
-                      <td className="px-6 py-5 font-medium">
-                        {i.title}
-                      </td>
+                      View order
+                    </Link>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+  </div>
+</section>
 
-                      <td className="px-6 py-5">
-                        {i.customer_name ?? "Unknown customer"}
-                      </td>
-
-                      <td className="px-6 py-5">
-                        {i.quantity}
-                      </td>
-
-                      {/* PAYMENT */}
-                      <td className="px-6 py-5">
-                        {i.source === "online" ? (
-                          <span className="text-accent font-medium">
-                            Paid
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              setPaymentModal({
-                                backorderId: i.id,
-                                status:
-                                  i.payment_status === "paid"
-                                    ? "paid"
-                                    : "unpaid",
-                                reference: "",
-                              })
-                            }
-                          >
-                            <span
-                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                                isPaid
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-red-100 text-red-700"
-                              }`}
-                            >
-                              {isPaid
-                                ? "Paid"
-                                : "Pay on collection"}
-                            </span>
-                          </button>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-5">
-                        {formatDate(i.created_at)}
-                      </td>
-
-                      <td className="px-6 py-5 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <button
-                            onClick={() =>
-                              markPicked([
-                                {
-                                  source: i.source,
-                                  id: i.id,
-                                },
-                              ])
-                            }
-                            disabled={!isPaid}
-                            className={`hover:underline ${
-                              !isPaid
-                                ? "text-foreground/40 cursor-not-allowed"
-                                : "text-accent"
-                            }`}
-                          >
-                            Mark picked
-                          </button>
-
-                          {i.source === "online" && (
-                            <Link
-                              href={`/admin/orders/${i.order_id}`}
-                              className="text-xs text-foreground/60 hover:underline"
-                            >
-                              View order
-                            </Link>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
 {/* ===================== 🟢 READY FOR COLLECTION ===================== */}
 
 <section className="space-y-4">
@@ -315,35 +286,56 @@ export default function OperationsClient({
                   {b.customer_name ?? "Unknown customer"}
                 </td>
 
-                <td className="px-6 py-5">{b.quantity}</td>
+                <td className="px-6 py-5">
+                  {b.quantity}
+                </td>
 
+                {/* PAYMENT — interactive here */}
                 <td className="px-6 py-5">
                   {isPaid ? (
                     <span className="text-accent font-medium">
                       Paid
                     </span>
                   ) : (
-                    <span className="text-foreground/60 text-sm">
-                      Pay on collection
-                    </span>
+                    <button
+                      onClick={() =>
+                        setPaymentModal({
+                          backorderId: b.id,
+                          status: "unpaid",
+                          reference: "",
+                        })
+                      }
+                    >
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700 hover:opacity-80">
+                        Pay on collection
+                      </span>
+                    </button>
                   )}
                 </td>
 
                 <td className="px-6 py-5 text-right">
                   <button
-                    onClick={() =>
-                      fetch("/api/admin/operations/mark-collected", {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                          id: b.id,
-                          source: b.source,
-                          markPaid: !isPaid,
-                        }),
-                      }).then(() => window.location.reload())
-                    }
+                    onClick={() => {
+                      if (!isPaid) return;
+
+                      fetch(
+                        "/api/admin/operations/mark-collected",
+                        {
+                          method: "POST",
+                          headers: {
+                            "Content-Type":
+                              "application/json",
+                          },
+                          body: JSON.stringify({
+                            id: b.id,
+                            source: b.source,
+                            markPaid: false,
+                          }),
+                        }
+                      ).then(() =>
+                        window.location.reload()
+                      );
+                    }}
                     disabled={!isPaid}
                     className={`hover:underline ${
                       !isPaid
@@ -362,6 +354,7 @@ export default function OperationsClient({
     )}
   </div>
 </section>
+
 
       {/* ===================== 🔵 TO ORDER ===================== */}
 
