@@ -43,7 +43,6 @@ export async function POST(req: Request) {
        1. WIPE EXISTING CLASSIFICATIONS
     -------------------------------------------------- */
     await supabaseAdmin
-      .schema("fd")
       .from("sales_classifications")
       .delete()
       .in("sales_event_id", salesEventIds);
@@ -61,7 +60,6 @@ export async function POST(req: Request) {
       }));
 
       await supabaseAdmin
-        .schema("fd")
         .from("sales_classifications")
         .insert(payload);
 
@@ -114,7 +112,6 @@ export async function POST(req: Request) {
     }));
 
     await supabaseAdmin
-      .schema("fd")
       .from("sales_classifications")
       .insert(payload);
 
@@ -123,7 +120,6 @@ export async function POST(req: Request) {
     -------------------------------------------------- */
     if (apply_to_future && raw_name) {
       await supabaseAdmin
-        .schema("fd")
         .from("sales_classification_rules")
         .upsert(
           {

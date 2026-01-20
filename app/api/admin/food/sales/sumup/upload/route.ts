@@ -148,7 +148,6 @@ export async function POST(req: Request) {
     --------------------------------------------- */
 
     const { error } = await supabaseAdmin
-      .schema("fd")
       .from("sales_events")
       .upsert(rows, {
         onConflict:

@@ -58,7 +58,6 @@ export default async function FoodReconciliationPage() {
   -------------------------------------------------- */
 
   const { data: allSales } = await supabaseAdmin
-    .schema("fd")
     .from("sales_events")
     .select(`
       id,

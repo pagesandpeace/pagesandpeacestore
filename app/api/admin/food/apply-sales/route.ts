@@ -86,7 +86,7 @@ export async function POST(req: Request) {
     -------------------------------------------------- */
 
     const { data: rows, error } = await supabaseAdmin
-      .schema("fd")
+
       .from("sales_events")
       .select(`
         id,
@@ -162,7 +162,7 @@ export async function POST(req: Request) {
 
     const { data: appliedRows, error: appErr } =
       await supabaseAdmin
-        .schema("fd")
+        
         .from("sales_stock_applications")
         .select("sales_event_id")
         .in(
@@ -278,7 +278,7 @@ export async function POST(req: Request) {
       }
 
       await supabaseAdmin
-        .schema("fd")
+        
         .from("sales_stock_applications")
         .insert(
           stockTracked.map((r, i) => ({
@@ -298,7 +298,6 @@ export async function POST(req: Request) {
 
     if (nonStockTracked.length > 0) {
       await supabaseAdmin
-        .schema("fd")
         .from("sales_stock_applications")
         .insert(
           nonStockTracked.map((r) => ({

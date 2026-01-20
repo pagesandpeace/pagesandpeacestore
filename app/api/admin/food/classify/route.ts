@@ -29,7 +29,6 @@ export async function POST(req: Request) {
 
   // 1) delete existing
   const del = await supabase
-    .schema("fd")
     .from("sales_classifications")
     .delete()
     .eq("sales_event_id", sales_event_id);
@@ -40,7 +39,6 @@ export async function POST(req: Request) {
 
   // 2) insert new
   const ins = await supabase
-    .schema("fd")
     .from("sales_classifications")
     .insert({
       sales_event_id,
