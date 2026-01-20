@@ -42,6 +42,10 @@ function calculateRetailPrice(
   return Math.ceil(supplierPrice * (1 + markupPercent / 100));
 }
 
+function looksLikeISBN(value: string) {
+  return /^[0-9]{10}([0-9]{3})?$/.test(value.replace(/-/g, ""));
+}
+
 /* ---------------------------------------------------
    COMPONENT
 --------------------------------------------------- */
@@ -187,28 +191,38 @@ export default function AdminCreateProductPage() {
     }
 
     const payload: Record<string, unknown> = {
-      name,
-      description,
-      product_type: productType,
-      image_url: imageUrl || null,
+  name,
+  description,
+  product_type: productType,
+  image_url: imageUrl || null,
 
-      supplier_price: supplierPrice || null,
-      markup_percent: markupPercent,
-      price,
+  supplier_price: supplierPrice || null,
+  markup_percent: markupPercent,
+  price,
 
-      fulfilment_mode: fulfilmentMode,
-      commercial_model: commercialModel,
-      supply_source:
-        fulfilmentMode === "made_to_order" ? "supplier" : "stock",
+  fulfilment_mode: fulfilmentMode,
+  commercial_model: commercialModel,
+  supply_source:
+    fulfilmentMode === "made_to_order" ? "supplier" : "stock",
 
-      out_of_stock_behavior: outOfStockBehavior,
-      inventory_count:
-        fulfilmentMode === "physical" ? inventoryCount : 0,
+  out_of_stock_behavior: outOfStockBehavior,
+  inventory_count:
+    fulfilmentMode === "physical" ? inventoryCount : 0,
 
-      // 🔹 supplier link
-      supplier,
-      supplier_ref: supplierRef,
-    };
+  // 🔹 supplier link
+  supplier,
+  supplier_ref: supplierRef || null,
+
+  // ✅ NEW: write ISBN ONLY for independent books
+  isbn_13:
+    isBookLike &&
+    supplier === "independent" &&
+    supplierRef &&
+    looksLikeISBN(supplierRef)
+      ? supplierRef.replace(/-/g, "")
+      : null,
+};
+
 
     if (isBookLike) {
       payload.author_id = authorId || null;

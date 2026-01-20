@@ -228,20 +228,28 @@ setLoading(false);
     setSaving(true);
 
     const payload: Record<string, unknown> = {
-      name,
-      display_title: displayTitle || null,
-      description,
-      price,
-      image_url: imageUrl || null,
+  name,
+  display_title: displayTitle || null,
+  description,
+  price,
+  image_url: imageUrl || null,
 
-      fulfilment_mode: fulfilmentMode,
-      out_of_stock_behavior: outOfStockBehavior,
+  fulfilment_mode: fulfilmentMode,
+  out_of_stock_behavior: outOfStockBehavior,
 
-      supplier,
-      supplier_ref: supplierRef,
-      supplier_price: supplierPrice,
-      markup_percent: markupPercent,
-    };
+  supplier,
+  supplier_ref: supplierRef,
+
+  // ✅ THIS IS THE MISSING LINE
+  isbn_13:
+    supplier === "independent" && supplierRef
+      ? supplierRef
+      : null,
+
+  supplier_price: supplierPrice,
+  markup_percent: markupPercent,
+};
+
 
     payload.inventory_count =
   fulfilmentMode === "made_to_order" ? 0 : inventoryCount;

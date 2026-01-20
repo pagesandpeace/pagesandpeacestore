@@ -20,14 +20,16 @@ export default function SupplierLinkSection({
       </h3>
 
       <select
-        className="w-full border rounded-md px-3 py-2 text-sm"
-        value={supplier}
-        onChange={(e) => onChange("supplier", e.target.value)}
-      >
-        <option value="">— Select supplier —</option>
-        <option value="gardners">Gardners</option>
-        <option value="ingram">Ingram</option>
-      </select>
+  className="w-full border rounded-md px-3 py-2 text-sm"
+  value={supplier}
+  onChange={(e) => onChange("supplier", e.target.value)}
+>
+  <option value="">— Select supplier —</option>
+  <option value="independent">Independent / self-published</option>
+  <option value="gardners">Gardners</option>
+  <option value="ingram">Ingram</option>
+</select>
+
 
       <Input
         placeholder="Supplier reference (ISBN / SKU)"
@@ -38,6 +40,8 @@ export default function SupplierLinkSection({
       <p className="text-xs text-neutral-500">
         Used for supplier matching and monthly uploads.  
         Does not affect pricing automatically.
+        For independent books, enter the ISBN below.
+        For suppliers, enter their reference (often ISBN).
       </p>
     </div>
   );

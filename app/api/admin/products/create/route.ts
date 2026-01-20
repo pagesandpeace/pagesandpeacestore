@@ -85,6 +85,9 @@ export async function POST(req: Request) {
       // 🔹 supplier link
       supplier = null,
       supplier_ref = null,
+
+      // ✅ NEW: ISBN (manual entry)
+      isbn_13 = null,
     } = body;
 
     /* -------------------------------------------------
@@ -169,6 +172,9 @@ export async function POST(req: Request) {
       product_type,
       image_url,
 
+      // ✅ ISBN IS NOW PERSISTED
+      isbn_13,
+
       // pricing
       supplier_price,
       markup_percent,
@@ -220,17 +226,18 @@ export async function POST(req: Request) {
     }
 
     console.log("✅ Product created:", product.id);
-/* -------------------------------------------------
-   INITIAL STOCK (LEDGER-SAFE)
-------------------------------------------------- */
-if (normalisedInventory > 0) {
-  await supabaseAdmin.rpc("adjust_product_inventory", {
-    p_product_id: product.id,
-    p_new_quantity: normalisedInventory,
-    p_reason: "initial_stock",
-    p_user_id: auth.user.id,
-  });
-}
+
+    /* -------------------------------------------------
+       INITIAL STOCK (LEDGER-SAFE)
+    ------------------------------------------------- */
+    if (normalisedInventory > 0) {
+      await supabaseAdmin.rpc("adjust_product_inventory", {
+        p_product_id: product.id,
+        p_new_quantity: normalisedInventory,
+        p_reason: "initial_stock",
+        p_user_id: auth.user.id,
+      });
+    }
 
     /* -------------------------------------------------
        LINK SUPPLIER (OPTIONAL)

@@ -19,8 +19,10 @@ async function upsertProductSupplier({
   supplier?: string;
   supplierRef?: string;
 }) {
+  console.log("🟡 [SUPPLIER LINK] input:", { supplier, supplierRef });
+
   if (!supplier || !supplierRef) {
-    console.log("ℹ️ [SUPPLIER LINK] skipped (missing supplier or ref)");
+    console.log("🟡 [SUPPLIER LINK] skipped");
     return;
   }
 
@@ -40,6 +42,8 @@ async function upsertProductSupplier({
   if (error) {
     throw new Error(`Supplier link failed: ${error.message}`);
   }
+
+  console.log("🟢 [SUPPLIER LINK] upserted");
 }
 
 export async function POST(
@@ -47,20 +51,20 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log("🟢 [PRODUCT UPDATE] route hit");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("🟢 [PRODUCT UPDATE] ROUTE HIT");
 
     const { id: productId } = await params;
+    console.log("🟢 [PRODUCT UPDATE] productId:", productId);
 
-    if (!productId || !/^[0-9a-f-]{36}$/i.test(productId)) {
-      return NextResponse.json(
-        { error: "Invalid product ID" },
-        { status: 400 }
-      );
-    }
+    const body = await req.json();
+    console.log("🟢 [PRODUCT UPDATE] RAW BODY:", body);
 
     const supabase = await supabaseServer();
 
     const { data: auth } = await supabase.auth.getUser();
+    console.log("🟢 [PRODUCT UPDATE] auth:", auth?.user?.email);
+
     if (!auth?.user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
@@ -71,33 +75,33 @@ export async function POST(
       .eq("auth_user_id", auth.user.id)
       .single();
 
+    console.log("🟢 [PRODUCT UPDATE] role:", profile?.role);
+
     if (!profile || profile.role !== "admin") {
       return NextResponse.json({ error: "Admins only" }, { status: 403 });
     }
 
-    const body = await req.json();
-
+    /* ---------- INVENTORY ---------- */
     let inventory_count: number | undefined;
     if (typeof body.inventory_count === "number") {
-      if (body.inventory_count < 0) {
-        return NextResponse.json(
-          { error: "Inventory cannot be negative" },
-          { status: 400 }
-        );
-      }
       inventory_count = body.inventory_count;
     }
 
+    /* ---------- BUILD UPDATE ---------- */
     const updateData: Record<string, unknown> = {};
 
     const allowed = [
       "name",
       "display_title",
       "description",
+      "price",
       "supplier_price",
       "markup_percent",
-      "price",
       "image_url",
+
+      // 👇 CRITICAL
+      "isbn_13",
+
       "author_id",
       "format",
       "language",
@@ -105,38 +109,22 @@ export async function POST(
       "vibe_id",
       "theme_id",
       "fulfilment_mode",
-      "out_of_stock_behavior",
-      "commercial_model",
       "supply_source",
-      "consignment_split_percent",
-      "consignment_notes",
+      "commercial_model",
+      "out_of_stock_behavior",
     ] as const;
 
     for (const key of allowed) {
       if (body[key] === "") {
         updateData[key] = null;
       } else if (body[key] !== undefined) {
-        if (
-          key === "price" ||
-          key === "supplier_price" ||
-          key === "markup_percent"
-        ) {
-          const num = Number(body[key]);
-          if (Number.isNaN(num)) {
-            return NextResponse.json(
-              { error: `Invalid numeric value for ${key}` },
-              { status: 400 }
-            );
-          }
-          updateData[key] = num;
-        } else {
-          updateData[key] = body[key];
-        }
+        updateData[key] = body[key];
       }
     }
 
-    console.log("🟢 [PRODUCT UPDATE] updateData:", updateData);
+    console.log("🟢 [PRODUCT UPDATE] FINAL updateData:", updateData);
 
+    /* ---------- WRITE ---------- */
     if (Object.keys(updateData).length > 0) {
       const { error } = await supabase
         .from("products")
@@ -144,31 +132,27 @@ export async function POST(
         .eq("id", productId);
 
       if (error) {
+        console.error("🔴 UPDATE FAILED:", error);
         return NextResponse.json(
-          { error: "Product update failed", detail: error },
+          { error: "Product update failed" },
           { status: 500 }
         );
       }
+    } else {
+      console.log("🟡 [PRODUCT UPDATE] nothing to update");
     }
 
-  
-
+    /* ---------- INVENTORY ---------- */
     if (typeof inventory_count === "number") {
-  const { error } = await supabase.rpc("adjust_product_inventory", {
-    p_product_id: productId,
-    p_new_quantity: inventory_count,
-    p_reason: "admin_adjustment",
-    p_user_id: auth.user.id,
-  });
+      console.log("🟢 [INVENTORY] adjusting:", inventory_count);
 
-  if (error) {
-    return NextResponse.json(
-      { error: "Inventory update failed", detail: error },
-      { status: 500 }
-    );
-  }
-}
-
+      await supabase.rpc("adjust_product_inventory", {
+        p_product_id: productId,
+        p_new_quantity: inventory_count,
+        p_reason: "admin_adjustment",
+        p_user_id: auth.user.id,
+      });
+    }
 
     await upsertProductSupplier({
       supabase,
@@ -177,9 +161,12 @@ export async function POST(
       supplierRef: body.supplier_ref,
     });
 
+    console.log("🟢 [PRODUCT UPDATE] DONE");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("❌ PRODUCT UPDATE FAILED", err);
+    console.error("🔥 PRODUCT UPDATE CRASHED:", err);
     return NextResponse.json(
       { error: "Server error", detail: String(err) },
       { status: 500 }
