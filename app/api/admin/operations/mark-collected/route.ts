@@ -4,104 +4,187 @@ import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
+/* ---------------------------------------------
+   TYPES
+--------------------------------------------- */
+
+type MarkCollectedSource = "online" | "backorder";
+
+type MarkCollectedBody = {
+  id: string;
+  source: MarkCollectedSource;
+  markPaid?: boolean;
+};
+
+type BackorderUpdate = {
+  collected_at: string;
+  payment_status?: "paid";
+};
+
+/* ---------------------------------------------
+   ADMIN CLIENT
+--------------------------------------------- */
+
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false } }
 );
 
-type MarkCollectedBody = {
-  backorder_id: string;
-  markPaid?: boolean;
-};
-
-type BackorderCollectedUpdate = {
-  collected_at: string;
-  payment_status?: "paid";
-};
+/* ---------------------------------------------
+   ROUTE
+--------------------------------------------- */
 
 export async function POST(req: Request) {
+  console.log("🟢 [MARK COLLECTED] route hit");
+
+  /* ---------------- AUTH ---------------- */
+  const supabase = await supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  console.log("🟢 auth user:", user?.email);
+
+  if (!user) {
+    console.error("🔴 no user");
+    return NextResponse.json(
+      { error: "Unauthenticated" },
+      { status: 401 }
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("users")
+    .select("role")
+    .eq("auth_user_id", user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    console.error("🔴 not admin");
+    return NextResponse.json(
+      { error: "Forbidden" },
+      { status: 403 }
+    );
+  }
+
+  /* ---------------- BODY ---------------- */
+  let body: MarkCollectedBody;
+
   try {
-    console.log("🟢 [MARK COLLECTED] route hit");
+    body = (await req.json()) as MarkCollectedBody;
+  } catch (err) {
+    console.error("🔴 failed to parse JSON body", err);
+    return NextResponse.json(
+      { error: "Invalid JSON" },
+      { status: 400 }
+    );
+  }
 
-    /* -------------------------------------
-       AUTH (admin only)
-    ------------------------------------- */
-    const supabase = await supabaseServer();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const { id, source, markPaid } = body;
 
-    if (!user) {
+  if (!id || !source) {
+    return NextResponse.json(
+      { error: "Missing id or source", received: body },
+      { status: 400 }
+    );
+  }
+
+  const now = new Date().toISOString();
+
+  /* ---------------- APPLY ---------------- */
+
+  if (source === "online") {
+    // 1️⃣ Fetch item
+    const { data: item, error: fetchError } =
+      await supabaseAdmin
+        .from("order_items")
+        .select("id, order_id, collected_at")
+        .eq("id", id)
+        .single();
+
+    if (fetchError || !item) {
       return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      );
-    }
-
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role")
-      .eq("auth_user_id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") {
-      return NextResponse.json(
-        { error: "Forbidden" },
-        { status: 403 }
-      );
-    }
-
-    /* -------------------------------------
-       BODY
-    ------------------------------------- */
-    const body: MarkCollectedBody = await req.json();
-
-    if (!body.backorder_id) {
-      return NextResponse.json(
-        { error: "backorder_id required" },
-        { status: 400 }
-      );
-    }
-
-    const now = new Date().toISOString();
-
-    /* -------------------------------------
-       UPDATE
-    ------------------------------------- */
-    const update: BackorderCollectedUpdate = {
-      collected_at: now,
-    };
-
-    if (body.markPaid) {
-      update.payment_status = "paid";
-    }
-
-    const { error } = await supabaseAdmin
-      .from("customer_backorders")
-      .update(update)
-      .eq("id", body.backorder_id)
-      .is("collected_at", null);
-
-    if (error) {
-      console.error("❌ [MARK COLLECTED] failed", error);
-      return NextResponse.json(
-        { error: "Failed to mark collected" },
+        { error: fetchError },
         { status: 500 }
       );
     }
 
-    console.log("✅ [MARK COLLECTED] success", {
-      backorder_id: body.backorder_id,
-      markPaid: body.markPaid ?? false,
-    });
+    // 2️⃣ Mark collected if needed
+    if (!item.collected_at) {
+      const { error: updateError } =
+        await supabaseAdmin
+          .from("order_items")
+          .update({ collected_at: now })
+          .eq("id", id)
+          .is("collected_at", null);
 
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("🔥 [MARK COLLECTED FATAL]", err);
-    return NextResponse.json(
-      { error: "Unexpected error" },
-      { status: 500 }
-    );
+      if (updateError) {
+        return NextResponse.json(
+          { error: updateError },
+          { status: 500 }
+        );
+      }
+    }
+
+    // 3️⃣ Check remaining items
+    const { data: remainingItems, error: remainingError } =
+      await supabaseAdmin
+        .from("order_items")
+        .select("id")
+        .eq("order_id", item.order_id)
+        .eq("kind", "product")
+        .is("collected_at", null);
+
+    if (remainingError) {
+      return NextResponse.json(
+        { error: remainingError },
+        { status: 500 }
+      );
+    }
+
+    // 4️⃣ Clear ready flag if complete
+    if (!remainingItems || remainingItems.length === 0) {
+      const { error: orderError } =
+        await supabaseAdmin
+          .from("orders")
+          .update({ ready_for_collection_at: null })
+          .eq("id", item.order_id);
+
+      if (orderError) {
+        return NextResponse.json(
+          { error: orderError },
+          { status: 500 }
+        );
+      }
+    }
   }
+
+  if (source === "backorder") {
+    const update: BackorderUpdate = {
+      collected_at: now,
+    };
+
+    if (markPaid) {
+      update.payment_status = "paid";
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("customer_backorders")
+      .update(update)
+      .eq("id", id)
+      .is("collected_at", null)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json(
+        { error },
+        { status: 500 }
+      );
+    }
+  }
+
+  console.log("✅ [MARK COLLECTED] success", { id, source });
+  return NextResponse.json({ success: true });
 }

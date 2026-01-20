@@ -87,24 +87,26 @@ export default async function AdminOperationsPage() {
     (usersRaw ?? []).map((u) => [u.id, u.name])
   );
 
-  const onlineToPick =
-    onlineItemsRaw
-      ?.filter((i) => ordersRaw?.some((o) => o.id === i.order_id))
-      .map((i) => {
-        const order = ordersRaw!.find((o) => o.id === i.order_id)!;
+const onlineToPick =
+  onlineItemsRaw
+    ?.filter((i) => ordersRaw?.some((o) => o.id === i.order_id))
+    .map((i) => {
+      const order = ordersRaw!.find((o) => o.id === i.order_id)!;
 
-        return {
-          source: "online" as const,
-          id: i.id,
-          order_id: i.order_id,
-          quantity: i.quantity,
-          title: i.name ?? "Untitled item",
-          customer_name: order.user_id
-            ? usersById.get(order.user_id) ?? null
-            : null,
-          created_at: order.created_at,
-        };
-      }) ?? [];
+      return {
+        source: "online" as const,
+        id: i.id,
+        order_id: i.order_id,
+        quantity: i.quantity,
+        title: i.name ?? "Untitled item",
+        customer_name: order.user_id
+          ? usersById.get(order.user_id) ?? null
+          : null,
+        created_at: order.created_at,
+        payment_status: "paid" as const,
+      };
+    }) ?? [];
+
 
   // ---------- BACKORDERS TO PICK ----------
   const { data: backordersToPickRaw, error: backordersError } =
