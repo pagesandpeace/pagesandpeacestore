@@ -1,11 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unused-expressions */
 "use client";
 
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import BulkClassifyModal from "@/components/admin/food/BulkClassifyModal";
 
-/* table system */
 import { TableSurface } from "@/components/table/TableSurface";
 import { Table } from "@/components/table/Table";
 import { TableHead } from "@/components/table/TableHead";
@@ -13,80 +10,81 @@ import { TableBody } from "@/components/table/TableBody";
 import { TableRow } from "@/components/table/TableRow";
 import { HeadCell } from "@/components/table/HeadCell";
 import { Cell } from "@/components/table/Cell";
-import { TablePagination } from "@/components/table/TablePagination";
+
+import type { GroupedRow, RowStatus } from "@/types/food-reconciliation";
 
 /* ======================================================
    TYPES
 ====================================================== */
 
-type RowStatus = "unclassified" | "classified" | "ignored";
-
-export type NormalisedRow = {
-  id: string;
-  raw_name: string;
-  quantity: number;
-  status: RowStatus;
-  category: string | null;
+type Props = {
+  grouped: GroupedRow[];
 };
 
-export type GroupedRow = {
-  raw_name: string;
-  rows: NormalisedRow[];
-  eventCount: number;
-  unitCount: number;
-};
+type GroupStatus = RowStatus | "mixed";
 
 /* ======================================================
    HELPERS
 ====================================================== */
 
-function getGroupStatus(group: GroupedRow) {
+function getGroupStatus(group: GroupedRow): GroupStatus {
   const statuses = group.rows.map((r) => r.status);
-  if (statuses.every((s) => s === "ignored")) return "ignored";
-  if (statuses.every((s) => s === "classified")) return "classified";
+
   if (statuses.every((s) => s === "unclassified")) return "unclassified";
+  if (statuses.every((s) => s === "classified")) return "classified";
+  if (statuses.every((s) => s === "ignored")) return "ignored";
+
   return "mixed";
 }
+
+const STATUS_ORDER: Record<GroupStatus, number> = {
+  unclassified: 0,
+  mixed: 1,
+  classified: 2,
+  ignored: 3,
+};
 
 /* ======================================================
    COMPONENT
 ====================================================== */
 
-const PAGE_SIZE = 20;
-
-export default function FoodReconciliationTable({
-  grouped,
-}: {
-  grouped: GroupedRow[];
-}) {
-  const searchParams = useSearchParams();
-  const page = Number(searchParams.get("page") ?? "1");
-
+export default function FoodReconciliationTable({ grouped }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  /* ---------- pagination ---------- */
+  /* -------------------------------
+     SORT
+  -------------------------------- */
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(grouped.length / PAGE_SIZE)
-  );
+  const rows = useMemo(() => {
+    return [...grouped]
+      .map((g) => ({
+        ...g,
+        status: getGroupStatus(g),
+      }))
+      .sort(
+        (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
+      );
+  }, [grouped]);
 
-  const pageRows = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return grouped.slice(start, start + PAGE_SIZE);
-  }, [grouped, page]);
-
-  /* ---------- selection ---------- */
+  /* -------------------------------
+     SELECTION
+  -------------------------------- */
 
   function toggle(rawName: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(rawName) ? next.delete(rawName) : next.add(rawName);
+
+      if (next.has(rawName)) {
+        next.delete(rawName);
+      } else {
+        next.add(rawName);
+      }
+
       return next;
     });
   }
 
-  const selectedSalesEventIds = grouped
+  const selectedSalesEventIds = rows
     .filter((g) => selected.has(g.raw_name))
     .flatMap((g) => g.rows.map((r) => r.id));
 
@@ -105,13 +103,13 @@ export default function FoodReconciliationTable({
     window.location.reload();
   }
 
-  /* ======================================================
+  /* -------------------------------
      RENDER
-  ====================================================== */
+  -------------------------------- */
 
   return (
     <TableSurface>
-      {selectedSalesEventIds.length > 0 ? (
+      {selectedSalesEventIds.length > 0 && (
         <div className="mb-3">
           <button
             onClick={bulkIgnore}
@@ -120,14 +118,12 @@ export default function FoodReconciliationTable({
             🚫 Ignore selected ({selectedSalesEventIds.length})
           </button>
         </div>
-      ) : null}
+      )}
 
       <Table>
         <TableHead>
           <TableRow>
-            <HeadCell>
-              <span className="sr-only">Select</span>
-            </HeadCell>
+            <HeadCell>&nbsp;</HeadCell>
             <HeadCell>Description</HeadCell>
             <HeadCell align="right">Events</HeadCell>
             <HeadCell align="right">Units</HeadCell>
@@ -137,69 +133,36 @@ export default function FoodReconciliationTable({
         </TableHead>
 
         <TableBody>
-          {pageRows.map((group) => {
-            const status = getGroupStatus(group);
+          {rows.map((group) => (
+            <TableRow key={group.raw_name}>
+              <Cell>
+                <input
+                  type="checkbox"
+                  checked={selected.has(group.raw_name)}
+                  onChange={() => toggle(group.raw_name)}
+                />
+              </Cell>
 
-            return (
-              <TableRow key={group.raw_name}>
-                <Cell>
-                  <input
-                    type="checkbox"
-                    checked={selected.has(group.raw_name)}
-                    onChange={() => toggle(group.raw_name)}
+              <Cell strong>{group.raw_name}</Cell>
+
+              <Cell align="right">{group.eventCount}</Cell>
+              <Cell align="right">{group.unitCount}</Cell>
+
+              <Cell>{group.status}</Cell>
+
+              <Cell>
+                {(group.status === "unclassified" ||
+                  group.status === "mixed") && (
+                  <BulkClassifyModal
+                    rawName={group.raw_name}
+                    salesEventIds={group.rows.map((r) => r.id)}
                   />
-                </Cell>
-
-                <Cell strong>{group.raw_name}</Cell>
-
-                <Cell align="right">{group.eventCount}</Cell>
-
-                <Cell align="right">{group.unitCount}</Cell>
-
-                <Cell>
-                  {status === "unclassified" && "🟡 Unclassified"}
-                  {status === "classified" &&
-                    `✅ Classified (${group.rows[0].category})`}
-                  {status === "ignored" && "🚫 Ignored"}
-                  {status === "mixed" && "🟠 Mixed"}
-                </Cell>
-
-                <Cell>
-                  {status === "unclassified" || status === "mixed" ? (
-                    <BulkClassifyModal
-                      rawName={group.raw_name}
-                      salesEventIds={group.rows.map((r) => r.id)}
-                      triggerLabel={
-                        status === "mixed"
-                          ? "Fix classification"
-                          : "Classify"
-                      }
-                      variant={
-                        status === "mixed"
-                          ? "warning"
-                          : "default"
-                      }
-                    />
-                  ) : status === "classified" ? (
-                    <span className="text-xs text-green-700 font-medium">
-                      ✓ Ready for stock
-                    </span>
-                  ) : null}
-                </Cell>
-              </TableRow>
-            );
-          })}
+                )}
+              </Cell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
-
-      {totalPages > 1 ? (
-        <div className="mt-4">
-          <TablePagination
-            page={page}
-            totalPages={totalPages}
-          />
-        </div>
-      ) : null}
     </TableSurface>
   );
 }

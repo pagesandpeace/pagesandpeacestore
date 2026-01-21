@@ -1,195 +1,233 @@
 import { createClient } from "@supabase/supabase-js";
-import ApplySalesButton from "@/components/admin/food/ApplySalesButton";
 import FoodReconciliationTable from "@/components/admin/food/FoodReconciliationTable";
+import type {
+  GroupedRow,
+  NormalisedRow,
+  RowStatus,
+} from "@/types/food-reconciliation";
 
 /* ======================================================
-   SERVER CONFIG
+   CONFIG
 ====================================================== */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const supabaseAdmin = createClient(
+const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false } }
 );
 
+const PAGE_SIZE = 50;
+
+type StatusTab = "unclassified" | "classified" | "ignored" | "all";
+
 /* ======================================================
    TYPES
 ====================================================== */
 
-type RowStatus = "unclassified" | "classified" | "ignored";
-
-export type NormalisedRow = {
+type SalesEventRow = {
   id: string;
   raw_name: string;
   quantity: number;
-  status: RowStatus;
-  category: string | null;
-};
-
-export type GroupedRow = {
-  raw_name: string;
-  rows: NormalisedRow[];
-  eventCount: number;
-  unitCount: number;
-};
-
-type SalesClassification = {
-  category: string | null;
-  ignored: boolean;
-};
-
-type RawSalesRow = {
-  id: string;
-  sale_day: string;
-  raw_name: string;
-  quantity: number;
-  sales_classifications:
-    | SalesClassification
-    | SalesClassification[]
-    | null;
+  sales_classifications: {
+    category: string | null;
+    ignored: boolean;
+  }[] | null;
 };
 
 /* ======================================================
-   SERVER PAGE
+   HELPERS
 ====================================================== */
 
-export default async function FoodReconciliationPage() {
+function normaliseAndGroup(rows: SalesEventRow[]): GroupedRow[] {
+  const map = new Map<string, NormalisedRow[]>();
+
+  for (const row of rows) {
+    let status: RowStatus = "unclassified";
+
+    if (row.sales_classifications && row.sales_classifications.length > 0) {
+      status = row.sales_classifications.some((c) => c.ignored)
+        ? "ignored"
+        : "classified";
+    }
+
+    const normalised: NormalisedRow = {
+      id: row.id,
+      raw_name: row.raw_name,
+      quantity: row.quantity,
+      status,
+      category: row.sales_classifications?.[0]?.category ?? null,
+    };
+
+    if (!map.has(row.raw_name)) {
+      map.set(row.raw_name, []);
+    }
+
+    map.get(row.raw_name)!.push(normalised);
+  }
+
+  return Array.from(map.entries()).map(([raw_name, rows]) => ({
+    raw_name,
+    rows,
+    eventCount: rows.length,
+    unitCount: rows.reduce((sum, r) => sum + r.quantity, 0),
+  }));
+}
+
+/* ======================================================
+   PAGE
+====================================================== */
+
+export default async function FoodReconciliationPage(props: {
+  searchParams?: Promise<{
+    status?: StatusTab;
+    page?: string;
+  }>;
+}) {
+  const searchParams = (await props.searchParams) ?? {};
+
+  const status: StatusTab = searchParams.status ?? "unclassified";
+  const page = Math.max(Number(searchParams.page ?? "1"), 1);
+
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
   /* --------------------------------------------------
-     LOAD SALES
+     COUNTS
   -------------------------------------------------- */
 
-  const { data: allSales } = await supabaseAdmin
+  const { data: countsRows, error: countsError } =
+    await supabase.rpc("get_sales_reconciliation_counts");
+
+  if (countsError || !countsRows?.[0]) {
+    throw new Error("Failed to load reconciliation counts");
+  }
+
+  const counts = countsRows[0];
+
+  /* --------------------------------------------------
+     FILTER
+  -------------------------------------------------- */
+
+  let whereClause = "true";
+
+  if (status === "unclassified") {
+    whereClause = "sc.sales_event_id is null";
+  } else if (status === "classified") {
+    whereClause = "sc.sales_event_id is not null and sc.ignored = false";
+  } else if (status === "ignored") {
+    whereClause = "sc.ignored = true";
+  }
+
+  /* --------------------------------------------------
+     IDS + PAGING
+  -------------------------------------------------- */
+
+  const { data: ids } = await supabase.rpc("filtered_sales_ids", {
+    where_clause: whereClause,
+  });
+
+  const pageIds = (ids ?? []).slice(from, to + 1);
+
+  const { data: rows } = await supabase
     .from("sales_events")
-    .select(`
+    .select(
+      `
       id,
-      sale_day,
       raw_name,
       quantity,
       sales_classifications (
         category,
         ignored
       )
-    `)
+    `
+    )
+    .in("id", pageIds)
     .order("sale_day", { ascending: true });
 
-  if (!allSales || allSales.length === 0) {
-    return <div className="p-6">No sales data.</div>;
-  }
+  const grouped = normaliseAndGroup((rows ?? []) as SalesEventRow[]);
 
-  const typedSales = allSales as RawSalesRow[];
+  const totalForTab =
+    status === "unclassified"
+      ? counts.unclassified
+      : status === "classified"
+      ? counts.classified
+      : status === "ignored"
+      ? counts.ignored
+      : counts.total;
 
-  /* --------------------------------------------------
-     FIND FIRST INCOMPLETE DAY
-  -------------------------------------------------- */
-
-  let startDay: string | null = null;
-
-  for (const row of typedSales) {
-    const c = Array.isArray(row.sales_classifications)
-      ? row.sales_classifications[0]
-      : row.sales_classifications;
-
-    if (!c || (!c.ignored && !c.category)) {
-      startDay = row.sale_day;
-      break;
-    }
-  }
-
-  if (!startDay) {
-    return <div className="p-6">🎉 All sales are fully reconciled.</div>;
-  }
-
-  /* --------------------------------------------------
-     BATCH WINDOW (7 DAYS)
-  -------------------------------------------------- */
-
-  const start = new Date(startDay);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  const endDay = end.toISOString().slice(0, 10);
-
-  const batch = typedSales.filter(
-    (r) => r.sale_day >= startDay! && r.sale_day <= endDay
-  );
-
-  /* --------------------------------------------------
-     NORMALISE
-  -------------------------------------------------- */
-
-  const rows: NormalisedRow[] = batch.map((r) => {
-    const c = Array.isArray(r.sales_classifications)
-      ? r.sales_classifications[0]
-      : r.sales_classifications;
-
-    let status: RowStatus = "unclassified";
-    if (c?.ignored) status = "ignored";
-    else if (c?.category) status = "classified";
-
-    return {
-      id: r.id,
-      raw_name: r.raw_name,
-      quantity: r.quantity,
-      status,
-      category: c?.category ?? null,
-    };
-  });
-
-  /* --------------------------------------------------
-     GROUP BY RAW NAME
-  -------------------------------------------------- */
-
-  const grouped: GroupedRow[] = Object.values(
-    rows.reduce<Record<string, GroupedRow>>((acc, r) => {
-      acc[r.raw_name] ??= {
-        raw_name: r.raw_name,
-        rows: [],
-        eventCount: 0,
-        unitCount: 0,
-      };
-
-      acc[r.raw_name].rows.push(r);
-      acc[r.raw_name].eventCount += 1;
-      acc[r.raw_name].unitCount += r.quantity;
-
-      return acc;
-    }, {})
-  );
-
-  /* --------------------------------------------------
-     READY TO APPLY
-  -------------------------------------------------- */
-
-  const readyToApply = rows.filter(
-    (r) =>
-      r.status === "classified" &&
-      ["food", "drink", "book", "merch"].includes(r.category ?? "")
-  );
+  const totalPages = Math.max(1, Math.ceil(totalForTab / PAGE_SIZE));
 
   /* --------------------------------------------------
      RENDER
   -------------------------------------------------- */
 
   return (
-    <div className="p-6 max-w-6xl space-y-6">
-      <h1 className="text-xl font-semibold">Reconciliation queue</h1>
+    <div className="p-6 max-w-7xl space-y-6">
+      <h1 className="text-xl font-semibold">Sales Reconciliation</h1>
 
-      <div className="text-sm text-muted-foreground">
-        Showing sales from <strong>{startDay}</strong> →{" "}
-        <strong>{endDay}</strong>
+      <p className="text-sm text-muted-foreground">
+        Viewing <strong>{status}</strong> sales
+      </p>
+
+      <div className="flex gap-4 text-sm">
+        <Tab label="Unclassified" count={counts.unclassified} status="unclassified" />
+        <Tab label="Classified" count={counts.classified} status="classified" />
+        <Tab label="Ignored" count={counts.ignored} status="ignored" />
+        <Tab label="All" count={counts.total} status="all" />
       </div>
 
-      {readyToApply.length > 0 && (
-        <ApplySalesButton
-          fromDay={startDay}
-          toDay={endDay}
-          disabled={readyToApply.length === 0}
-        />
-      )}
-
       <FoodReconciliationTable grouped={grouped} />
+
+      {/* Pagination */}
+      <div className="flex items-center gap-4 text-sm">
+        {page > 1 && (
+          <a
+            href={`/admin/food/reconciliation?status=${status}&page=${page - 1}`}
+            className="underline"
+          >
+            ← Previous
+          </a>
+        )}
+
+        <span>
+          Page {page} of {totalPages}
+        </span>
+
+        {page < totalPages && (
+          <a
+            href={`/admin/food/reconciliation?status=${status}&page=${page + 1}`}
+            className="underline"
+          >
+            Next →
+          </a>
+        )}
+      </div>
     </div>
+  );
+}
+
+/* ======================================================
+   TAB LINK
+====================================================== */
+
+function Tab({
+  label,
+  count,
+  status,
+}: {
+  label: string;
+  count: number;
+  status: StatusTab;
+}) {
+  return (
+    <a
+      href={`/admin/food/reconciliation?status=${status}&page=1`}
+      className="underline"
+    >
+      {label} ({count})
+    </a>
   );
 }
