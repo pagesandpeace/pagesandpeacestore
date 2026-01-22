@@ -165,10 +165,21 @@ export default function FoodInsightsClient({
     [chartData]
   );
 
-  /* ---------------- AXIS DOMAIN ---------------- */
+  /* ---------------- AXIS DOMAINS ---------------- */
 
-  const maxStockIn = useMemo(
-    () => Math.max(1, ...chartData.map((r) => r.stock_in)),
+  const maxUnits = useMemo(
+    () =>
+      Math.max(
+        1,
+        ...chartData.map((r) =>
+          Math.max(r.stock_in, r.sales)
+        )
+      ),
+    [chartData]
+  );
+
+  const maxWaste = useMemo(
+    () => Math.max(1, ...chartData.map((r) => r.waste)),
     [chartData]
   );
 
@@ -209,7 +220,7 @@ export default function FoodInsightsClient({
         </div>
       </div>
 
-      {/* SUPPLIER FILTER */}
+      {/* FILTERS */}
       <div className="flex gap-2">
         <button
           onClick={() => setSupplierFilter("all")}
@@ -265,16 +276,19 @@ export default function FoodInsightsClient({
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="label" />
 
+              {/* PRIMARY AXIS — UNITS */}
               <YAxis
                 yAxisId="units"
                 allowDecimals={false}
-                domain={[0, maxStockIn]}
+                domain={[0, maxUnits]}
               />
 
+              {/* SECONDARY AXIS — WASTE */}
               <YAxis
-                yAxisId="flow"
+                yAxisId="waste"
                 orientation="right"
                 allowDecimals={false}
+                domain={[0, maxWaste]}
               />
 
               <Tooltip />
@@ -291,7 +305,7 @@ export default function FoodInsightsClient({
               />
 
               <Line
-                yAxisId="flow"
+                yAxisId="units"
                 type="monotone"
                 dataKey="sales"
                 name="Units sold"
@@ -302,7 +316,7 @@ export default function FoodInsightsClient({
               />
 
               <Line
-                yAxisId="flow"
+                yAxisId="waste"
                 type="monotone"
                 dataKey="waste"
                 name="Units wasted"
