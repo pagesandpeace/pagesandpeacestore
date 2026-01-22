@@ -31,6 +31,9 @@ type SalesEventRow = {
   id: string;
   raw_name: string;
   quantity: number;
+  gross_amount_pence: number | null;
+  sale_day: string | null;
+  created_at: string;
   sales_classifications: {
     category: string | null;
     ignored: boolean;
@@ -53,12 +56,20 @@ function normaliseAndGroup(rows: SalesEventRow[]): GroupedRow[] {
         : "classified";
     }
 
+    const unit_price =
+      row.gross_amount_pence !== null && row.quantity > 0
+        ? row.gross_amount_pence / 100 / row.quantity
+        : null;
+
     const normalised: NormalisedRow = {
       id: row.id,
       raw_name: row.raw_name,
       quantity: row.quantity,
       status,
       category: row.sales_classifications?.[0]?.category ?? null,
+      unit_price,
+      sale_day: row.sale_day,
+      created_at: row.created_at,
     };
 
     if (!map.has(row.raw_name)) {
@@ -98,14 +109,10 @@ export default async function FoodReconciliationPage(props: {
      COUNTS
   -------------------------------------------------- */
 
-  const { data: countsRows, error: countsError } =
+  const { data: countsRows } =
     await supabase.rpc("get_sales_reconciliation_counts");
 
-  if (countsError || !countsRows?.[0]) {
-    throw new Error("Failed to load reconciliation counts");
-  }
-
-  const counts = countsRows[0];
+  const counts = countsRows?.[0];
 
   /* --------------------------------------------------
      FILTER
@@ -131,13 +138,20 @@ export default async function FoodReconciliationPage(props: {
 
   const pageIds = (ids ?? []).slice(from, to + 1);
 
-  const { data: rows } = await supabase
+  /* --------------------------------------------------
+     DATA FETCH (REAL SCHEMA)
+  -------------------------------------------------- */
+
+  const { data: rows, error } = await supabase
     .from("sales_events")
     .select(
       `
       id,
       raw_name,
       quantity,
+      gross_amount_pence,
+      sale_day,
+      created_at,
       sales_classifications (
         category,
         ignored
@@ -146,6 +160,10 @@ export default async function FoodReconciliationPage(props: {
     )
     .in("id", pageIds)
     .order("sale_day", { ascending: true });
+
+  if (error) {
+    console.error("❌ sales_events query failed:", error);
+  }
 
   const grouped = normaliseAndGroup((rows ?? []) as SalesEventRow[]);
 

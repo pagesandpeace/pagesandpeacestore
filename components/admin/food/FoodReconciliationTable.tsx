@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import BulkClassifyModal from "@/components/admin/food/BulkClassifyModal";
+import FoodReconciliationDetailsModal from "@/components/admin/food/FoodReconciliationDetailsModal";
 
 import { TableSurface } from "@/components/table/TableSurface";
 import { Table } from "@/components/table/Table";
@@ -50,9 +51,10 @@ const STATUS_ORDER: Record<GroupStatus, number> = {
 
 export default function FoodReconciliationTable({ grouped }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openGroup, setOpenGroup] = useState<GroupedRow | null>(null);
 
   /* -------------------------------
-     SORT
+     SORT (status used internally)
   -------------------------------- */
 
   const rows = useMemo(() => {
@@ -61,9 +63,7 @@ export default function FoodReconciliationTable({ grouped }: Props) {
         ...g,
         status: getGroupStatus(g),
       }))
-      .sort(
-        (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
-      );
+      .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
   }, [grouped]);
 
   /* -------------------------------
@@ -108,61 +108,76 @@ export default function FoodReconciliationTable({ grouped }: Props) {
   -------------------------------- */
 
   return (
-    <TableSurface>
-      {selectedSalesEventIds.length > 0 && (
-        <div className="mb-3">
-          <button
-            onClick={bulkIgnore}
-            className="px-3 py-1 text-xs rounded bg-red-100 text-red-800"
-          >
-            🚫 Ignore selected ({selectedSalesEventIds.length})
-          </button>
-        </div>
-      )}
+    <>
+      <TableSurface>
+        {selectedSalesEventIds.length > 0 ? (
+          <div className="mb-3">
+            <button
+              onClick={bulkIgnore}
+              className="px-3 py-1 text-xs rounded bg-red-100 text-red-800"
+            >
+              🚫 Ignore selected ({selectedSalesEventIds.length})
+            </button>
+          </div>
+        ) : null}
 
-      <Table>
-        <TableHead>
-          <TableRow>
-            <HeadCell>&nbsp;</HeadCell>
-            <HeadCell>Description</HeadCell>
-            <HeadCell align="right">Events</HeadCell>
-            <HeadCell align="right">Units</HeadCell>
-            <HeadCell>Status</HeadCell>
-            <HeadCell>Action</HeadCell>
-          </TableRow>
-        </TableHead>
-
-        <TableBody>
-          {rows.map((group) => (
-            <TableRow key={group.raw_name}>
-              <Cell>
-                <input
-                  type="checkbox"
-                  checked={selected.has(group.raw_name)}
-                  onChange={() => toggle(group.raw_name)}
-                />
-              </Cell>
-
-              <Cell strong>{group.raw_name}</Cell>
-
-              <Cell align="right">{group.eventCount}</Cell>
-              <Cell align="right">{group.unitCount}</Cell>
-
-              <Cell>{group.status}</Cell>
-
-              <Cell>
-                {(group.status === "unclassified" ||
-                  group.status === "mixed") && (
-                  <BulkClassifyModal
-                    rawName={group.raw_name}
-                    salesEventIds={group.rows.map((r) => r.id)}
-                  />
-                )}
-              </Cell>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <HeadCell>&nbsp;</HeadCell>
+              <HeadCell>Description</HeadCell>
+              <HeadCell align="right">Events</HeadCell>
+              <HeadCell align="right">Units</HeadCell>
+              <HeadCell>Actions</HeadCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableSurface>
+          </TableHead>
+
+          <TableBody>
+            {rows.map((group) => (
+              <TableRow key={group.raw_name}>
+                <Cell>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(group.raw_name)}
+                    onChange={() => toggle(group.raw_name)}
+                  />
+                </Cell>
+
+                <Cell strong>{group.raw_name}</Cell>
+
+                <Cell align="right">{group.eventCount}</Cell>
+                <Cell align="right">{group.unitCount}</Cell>
+
+                <Cell>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setOpenGroup(group)}
+                      className="text-xs underline text-blue-600"
+                    >
+                      See details
+                    </button>
+
+                    {(group.status === "unclassified" ||
+                      group.status === "mixed") && (
+                      <BulkClassifyModal
+                        rawName={group.raw_name}
+                        salesEventIds={group.rows.map((r) => r.id)}
+                      />
+                    )}
+                  </div>
+                </Cell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableSurface>
+
+      {openGroup ? (
+        <FoodReconciliationDetailsModal
+          group={openGroup}
+          onClose={() => setOpenGroup(null)}
+        />
+      ) : null}
+    </>
   );
 }
