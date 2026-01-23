@@ -4,8 +4,11 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import slugify from "slugify";
+import cloudinary from "@/lib/cloudinary";
 
 const DEFAULT_MARKUP_PERCENT = 30;
+const FALLBACK_IMAGE =
+  "https://res.cloudinary.com/dadinnds6/image/upload/v1767755489/Fallback_image_cxsiwb.png";
 
 /* --------------------------------------------------
    HELPERS
@@ -19,13 +22,23 @@ function normaliseFormat(binding?: string | null): string | null {
   return null;
 }
 
+function gardnersJacketUrl(isbn13: string) {
+  const clean = isbn13.replace(/-/g, "");
+  return `https://jackets.dmmserver.com/media/640/${clean.slice(
+    0,
+    7
+  )}/${clean}.jpg`;
+}
+
+/* --------------------------------------------------
+   ROUTE
+-------------------------------------------------- */
+
 export async function POST(req: Request) {
   try {
     const supabase = await supabaseServer();
 
-    /* -------------------------
-       AUTH (ADMIN)
-    ------------------------- */
+    /* AUTH */
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -41,11 +54,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Admins only" }, { status: 403 });
     }
 
-    /* -------------------------
-       INPUT
-    ------------------------- */
+    /* INPUT */
     const { supplier, supplier_ref } = await req.json();
-
     if (!supplier || !supplier_ref) {
       return NextResponse.json(
         { error: "supplier and supplier_ref required" },
@@ -53,18 +63,14 @@ export async function POST(req: Request) {
       );
     }
 
-    /* -------------------------
-       SERVICE ROLE CLIENT
-    ------------------------- */
+    /* SERVICE ROLE */
     const admin = createClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { persistSession: false } }
     );
 
-    /* -------------------------
-       FETCH SUPPLIER PRODUCT
-    ------------------------- */
+    /* FETCH SUPPLIER PRODUCT */
     const { data: sp, error: spError } = await admin
       .from("supplier_products")
       .select("*")
@@ -79,9 +85,7 @@ export async function POST(req: Request) {
       );
     }
 
-    /* -------------------------
-       PREVENT DUPLICATE LINK
-    ------------------------- */
+    /* PREVENT DUPLICATE */
     const { data: existingLink } = await admin
       .from("product_supplier_links")
       .select("id")
@@ -96,23 +100,17 @@ export async function POST(req: Request) {
       );
     }
 
-    /* -------------------------
-       PRICE CALCULATION
-    ------------------------- */
+    /* PRICE */
     const supplierPrice = Number(sp.supplier_price);
     const retailPrice = Number(
       (supplierPrice * (1 + DEFAULT_MARKUP_PERCENT / 100)).toFixed(2)
     );
 
-    /* -------------------------
-       FORMAT + LANGUAGE
-    ------------------------- */
+    /* FORMAT */
     const format = normaliseFormat(sp.binding);
     const language = "English";
 
-    /* -------------------------
-       CREATE PRODUCT
-    ------------------------- */
+    /* CREATE PRODUCT */
     const slug =
       slugify(sp.display_title ?? sp.title, {
         lower: true,
@@ -150,68 +148,53 @@ export async function POST(req: Request) {
         language,
 
         supplier_name: supplier,
-        isbn_13: supplier_ref,
+        isbn_13: supplier_ref.replace(/-/g, ""),
         supplier_import_batch_id: sp.import_batch_id,
-        image_url:
-      "https://res.cloudinary.com/dadinnds6/image/upload/v1767755489/Fallback_image_cxsiwb.png",
+
+        image_url: FALLBACK_IMAGE,
       })
       .select("id")
       .single();
 
-    if (productError || !product) {
-      throw productError;
+    if (productError || !product) throw productError;
+
+    /* TRY FETCH JACKET */
+    try {
+      const cleanIsbn = supplier_ref.replace(/-/g, "");
+      const upload = await cloudinary.uploader.upload(
+        gardnersJacketUrl(cleanIsbn),
+        {
+          folder: "products/books",
+          public_id: `isbn_${cleanIsbn}`,
+          overwrite: false,
+          resource_type: "image",
+        }
+      );
+
+      if (upload?.secure_url) {
+        await admin
+          .from("products")
+          .update({ image_url: upload.secure_url })
+          .eq("id", product.id);
+      }
+    } catch {
+      console.log("⚠️ Gardners jacket not available");
     }
 
-    /* -------------------------
-       SUPPLIER LINK (IMMUTABLE)
-    ------------------------- */
-    const { error: linkError } = await admin
-      .from("product_supplier_links")
-      .insert({
-        product_id: product.id,
-        supplier,
-        supplier_ref,
-        supplier_import_batch_id: sp.import_batch_id,
+    /* SUPPLIER LINK */
+    await admin.from("product_supplier_links").insert({
+      product_id: product.id,
+      supplier,
+      supplier_ref,
+      supplier_import_batch_id: sp.import_batch_id,
+      supplier_price_at_creation: supplierPrice,
+      supplier_title_at_creation: sp.display_title,
+      supplier_author_at_creation: sp.author,
+      supplier_binding_at_creation: sp.binding,
+      created_by: auth.user.id,
+      supplier_product_id: sp.id,
+    });
 
-        supplier_price_at_creation: supplierPrice,
-        supplier_title_at_creation: sp.display_title,
-        supplier_author_at_creation: sp.author,
-        supplier_binding_at_creation: sp.binding,
-
-        created_by: auth.user.id,
-        supplier_product_id: sp.id,
-      });
-
-    if (linkError) throw linkError;
-
-    /* ==================================================
-       ✅ INSERT PRODUCT RANKING (OPTION B – FIX)
-    ================================================== */
-    if (sp.rank_pos && sp.import_month) {
-      // Ensure idempotency
-      await admin
-        .from("product_rankings")
-        .delete()
-        .eq("product_id", product.id)
-        .eq("supplier_name", supplier)
-        .eq("import_month", sp.import_month);
-
-      const { error: rankingError } = await admin
-        .from("product_rankings")
-        .insert({
-          product_id: product.id,
-          isbn_13: supplier_ref,
-          supplier_name: supplier,
-          rank: sp.rank_pos,
-          import_month: sp.import_month,
-        });
-
-      if (rankingError) throw rankingError;
-    }
-
-    /* -------------------------
-       DONE
-    ------------------------- */
     return NextResponse.json({
       product_id: product.id,
       retail_price: retailPrice,

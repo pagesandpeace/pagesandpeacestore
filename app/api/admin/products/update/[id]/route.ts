@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import cloudinary from "@/lib/cloudinary";
 
 /* ------------------------------------------
    Helper: upsert supplier link (manual)
@@ -44,6 +45,55 @@ async function upsertProductSupplier({
   }
 
   console.log("🟢 [SUPPLIER LINK] upserted");
+}
+
+/* ------------------------------------------
+   Helper: proxy fetch Gardners jacket
+------------------------------------------ */
+async function fetchGardnersJacketToCloudinary(
+  isbn13: string
+): Promise<string | null> {
+  const clean = isbn13.replace(/-/g, "");
+
+  const candidates = [
+    // Most common (your working example)
+    `https://jackets.dmmserver.com/media/640/${clean.slice(0, 8)}/${clean}.jpg`,
+    `https://jackets.dmmserver.com/media/640/${clean.slice(0, 7)}/${clean}.jpg`,
+    `https://jackets.dmmserver.com/media/640/${clean.slice(0, 6)}/${clean}.jpg`,
+
+    // Smaller fallback sizes
+    `https://jackets.dmmserver.com/media/356/${clean.slice(0, 8)}/${clean}.jpg`,
+    `https://jackets.dmmserver.com/media/356/${clean.slice(0, 7)}/${clean}.jpg`,
+    `https://jackets.dmmserver.com/media/356/${clean.slice(0, 6)}/${clean}.jpg`,
+  ];
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+
+      const buffer = Buffer.from(await res.arrayBuffer());
+
+      const upload = await cloudinary.uploader.upload(
+        `data:image/jpeg;base64,${buffer.toString("base64")}`,
+        {
+          folder: "products/books",
+          public_id: `isbn_${clean}`,
+          overwrite: false,
+          resource_type: "image",
+        }
+      );
+
+      if (upload?.secure_url) {
+        console.log("🟢 [JACKET] Attached from:", url);
+        return upload.secure_url;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return null;
 }
 
 export async function POST(
@@ -99,7 +149,7 @@ export async function POST(
       "markup_percent",
       "image_url",
 
-      // 👇 CRITICAL
+      // 👇 critical
       "isbn_13",
 
       "author_id",
@@ -124,7 +174,7 @@ export async function POST(
 
     console.log("🟢 [PRODUCT UPDATE] FINAL updateData:", updateData);
 
-    /* ---------- WRITE ---------- */
+    /* ---------- WRITE PRODUCT ---------- */
     if (Object.keys(updateData).length > 0) {
       const { error } = await supabase
         .from("products")
@@ -138,8 +188,31 @@ export async function POST(
           { status: 500 }
         );
       }
-    } else {
-      console.log("🟡 [PRODUCT UPDATE] nothing to update");
+    }
+
+    /* -------------------------------------------------
+       🆕 AUTO-FETCH JACKET WHEN ISBN IS ADDED
+    ------------------------------------------------- */
+    if (
+      typeof updateData.isbn_13 === "string" &&
+      (!body.image_url || body.image_url.includes("Fallback"))
+    ) {
+      try {
+        const cloudinaryUrl = await fetchGardnersJacketToCloudinary(
+          updateData.isbn_13
+        );
+
+        if (cloudinaryUrl) {
+          await supabase
+            .from("products")
+            .update({ image_url: cloudinaryUrl })
+            .eq("id", productId);
+
+          console.log("🟢 [JACKET] Cloudinary image attached");
+        }
+      } catch (err) {
+        console.log("🟡 [JACKET] Gardners fetch failed:", err);
+      }
     }
 
     /* ---------- INVENTORY ---------- */
@@ -154,6 +227,7 @@ export async function POST(
       });
     }
 
+    /* ---------- SUPPLIER LINK ---------- */
     await upsertProductSupplier({
       supabase,
       productId,

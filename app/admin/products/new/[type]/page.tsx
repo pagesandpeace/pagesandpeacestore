@@ -4,8 +4,10 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Image from "next/image";
 
+import DescriptionEditor from "@/components/admin/DescriptionEditor";
+import ClassificationSuggestions from "@/components/admin/ClassificationSuggestions";
+
 import { Input } from "@/components/ui/Input";
-import { TextArea } from "@/components/ui/TextArea";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 
@@ -46,6 +48,25 @@ function looksLikeISBN(value: string) {
   return /^[0-9]{10}([0-9]{3})?$/.test(value.replace(/-/g, ""));
 }
 
+async function fetchCoverFromISBN(isbn: string) {
+  const clean = isbn.replace(/-/g, "");
+
+  const res = await fetch("/api/admin/products/fetch-cover-from-isbn", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isbn: clean }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok || !data.image_url) {
+    throw new Error("No cover found");
+  }
+
+  return data.image_url as string;
+}
+
 /* ---------------------------------------------------
    COMPONENT
 --------------------------------------------------- */
@@ -71,31 +92,30 @@ export default function AdminCreateProductPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
-  // 🔹 supplier link (NEW)
+  // supplier
   const [supplier, setSupplier] = useState("");
   const [supplierRef, setSupplierRef] = useState("");
 
   // pricing
-  const [supplierPrice, setSupplierPrice] = useState<number>(0);
-  const [markupPercent, setMarkupPercent] =
-    useState<number>(DEFAULT_MARKUP_PERCENT);
-  const [price, setPrice] = useState<number>(0);
+  const [supplierPrice, setSupplierPrice] = useState(0);
+  const [markupPercent, setMarkupPercent] = useState(DEFAULT_MARKUP_PERCENT);
+  const [price, setPrice] = useState(0);
 
   // fulfilment
   const [fulfilmentMode, setFulfilmentMode] =
     useState<FulfilmentMode>("made_to_order");
-  const [inventoryCount, setInventoryCount] = useState<number>(0);
+  const [inventoryCount, setInventoryCount] = useState(0);
 
   // commercial
   const [commercialModel, setCommercialModel] =
     useState<CommercialModel>("wholesale");
 
-  // out of stock behaviour
   const [outOfStockBehavior, setOutOfStockBehavior] =
     useState<OutOfStockBehavior>("stop_selling");
 
-  // book / blind-date
+  // book
   const [authorId, setAuthorId] = useState<string | null>(null);
+  const [authorName, setAuthorName] = useState("");
   const [format, setFormat] = useState("Paperback");
   const [language, setLanguage] = useState("English");
 
@@ -108,7 +128,7 @@ export default function AdminCreateProductPage() {
   const [vibes, setVibes] = useState<CategoryOption[]>([]);
   const [themes, setThemes] = useState<CategoryOption[]>([]);
 
-  // image upload
+  // image
   const [imageUrl, setImageUrl] = useState("");
   const [uploading, setUploading] = useState(false);
 
@@ -141,37 +161,6 @@ export default function AdminCreateProductPage() {
   }, [isBookLike]);
 
   /* -------------------------------
-     Image upload
-  -------------------------------- */
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    setErrorMsg(null);
-
-    const form = new FormData();
-    form.append("file", file);
-
-    const res = await fetch("/api/admin/products/upload-image", {
-      method: "POST",
-      body: form,
-      credentials: "include",
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setUploading(false);
-      setErrorMsg(data.error || "Image upload failed.");
-      return;
-    }
-
-    setImageUrl(data.url);
-    setUploading(false);
-  }
-
-  /* -------------------------------
      Submit
   -------------------------------- */
   async function handleSubmit() {
@@ -184,54 +173,52 @@ export default function AdminCreateProductPage() {
       return;
     }
 
-    if (isBookLike && (!genreId || !vibeId || !themeId)) {
-      setSubmitting(false);
-      setErrorMsg("Genre, vibe and theme are required for books.");
-      return;
-    }
-
     const payload: Record<string, unknown> = {
-  name,
-  description,
-  product_type: productType,
-  image_url: imageUrl || null,
+      name,
+      description,
+      product_type: productType,
+      image_url: imageUrl || null,
 
-  supplier_price: supplierPrice || null,
-  markup_percent: markupPercent,
-  price,
+      supplier_price: supplierPrice || null,
+      markup_percent: markupPercent,
+      price,
 
-  fulfilment_mode: fulfilmentMode,
-  commercial_model: commercialModel,
-  supply_source:
-    fulfilmentMode === "made_to_order" ? "supplier" : "stock",
+      fulfilment_mode: fulfilmentMode,
+      commercial_model: commercialModel,
+      supply_source:
+        fulfilmentMode === "made_to_order" ? "supplier" : "stock",
 
-  out_of_stock_behavior: outOfStockBehavior,
-  inventory_count:
-    fulfilmentMode === "physical" ? inventoryCount : 0,
+      out_of_stock_behavior: outOfStockBehavior,
+      inventory_count:
+        fulfilmentMode === "physical" ? inventoryCount : 0,
 
-  // 🔹 supplier link
-  supplier,
-  supplier_ref: supplierRef || null,
+      supplier,
+      supplier_ref: supplierRef || null,
+    };
 
-  // ✅ NEW: write ISBN ONLY for independent books
-  isbn_13:
-    isBookLike &&
-    supplier === "independent" &&
-    supplierRef &&
-    looksLikeISBN(supplierRef)
-      ? supplierRef.replace(/-/g, "")
-      : null,
-};
-
+    if (supplierRef && looksLikeISBN(supplierRef)) {
+      payload.isbn_13 = supplierRef.replace(/-/g, "");
+    }
 
     if (isBookLike) {
-      payload.author_id = authorId || null;
-      payload.format = format || null;
-      payload.language = language || null;
-      payload.genre_id = genreId;
-      payload.vibe_id = vibeId;
-      payload.theme_id = themeId;
-    }
+  payload.author_id = authorId || null;
+
+  // ✅ ALWAYS populate author TEXT for search
+  if (authorId) {
+    // backend will resolve name from author_id
+    payload.author = "__FROM_AUTHOR_ID__";
+  } else if (authorName.trim()) {
+    payload.author = authorName.trim();
+  }
+
+  payload.format = format;
+  payload.language = language;
+
+  if (genreId) payload.genre_id = genreId;
+  if (vibeId) payload.vibe_id = vibeId;
+  if (themeId) payload.theme_id = themeId;
+}
+
 
     const res = await fetch("/api/admin/products/create", {
       method: "POST",
@@ -248,7 +235,8 @@ export default function AdminCreateProductPage() {
     router.push("/admin/products");
   }
 
-  /* -------------------------------
+
+    /* -------------------------------
      UI
   -------------------------------- */
   return (
@@ -259,49 +247,101 @@ export default function AdminCreateProductPage() {
 
       {errorMsg && <Alert type="error" message={errorMsg} />}
 
+      {/* NAME */}
       <div>
         <label className="block mb-1 text-sm font-medium">Name *</label>
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </div>
 
-      <div>
-        <label className="block mb-1 text-sm font-medium">Description</label>
-        <TextArea
-          rows={4}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </div>
+      {/* DESCRIPTION */}
+      <DescriptionEditor
+        mode="draft"
+        value={description}
+        onChange={setDescription}
+        onError={setErrorMsg}
+        context={{ name, supplierRef, format, language }}
+      />
 
       {/* IMAGE */}
-      <div>
-        <label className="block mb-1 text-sm font-medium">Product Image</label>
-        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition">
-          <input
-            type="file"
-            className="hidden"
-            accept="image/*"
-            onChange={handleUpload}
-          />
-          <span className="text-sm text-gray-500">
-            {uploading ? "Uploading…" : "Click to upload image"}
-          </span>
+      <div className="space-y-2">
+        <label className="block mb-1 text-sm font-medium">
+          Product Image
         </label>
 
-        {imageUrl && (
-          <div className="mt-3">
-            <Image
-              src={imageUrl}
-              alt="Preview"
-              width={300}
-              height={300}
-              className="object-cover rounded-lg border shadow"
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="neutral"
+            disabled={!looksLikeISBN(supplierRef)}
+            onClick={async () => {
+              try {
+                const url = await fetchCoverFromISBN(supplierRef);
+                setImageUrl(url);
+              } catch {
+                setErrorMsg("No cover image found for this ISBN.");
+              }
+            }}
+          >
+            Use ISBN cover
+          </Button>
+
+          <label className="inline-flex items-center">
+            <input
+              type="file"
+              className="hidden"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+
+                setUploading(true);
+                setErrorMsg(null);
+
+                const form = new FormData();
+                form.append("file", file);
+
+                const res = await fetch(
+                  "/api/admin/products/upload-image",
+                  {
+                    method: "POST",
+                    body: form,
+                    credentials: "include",
+                  }
+                );
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                  setUploading(false);
+                  setErrorMsg(
+                    data.error || "Image upload failed."
+                  );
+                  return;
+                }
+
+                setImageUrl(data.url);
+                setUploading(false);
+              }}
             />
-          </div>
+            <Button size="sm" variant="neutral">
+              Upload image
+            </Button>
+          </label>
+        </div>
+
+        {imageUrl && (
+          <Image
+            src={imageUrl}
+            alt="Preview"
+            width={240}
+            height={240}
+            className="rounded border mt-2"
+          />
         )}
       </div>
 
-      {/* SUPPLIER (NEW) */}
+      {/* SUPPLIER */}
       <SupplierLinkSection
         supplier={supplier}
         supplierRef={supplierRef}
@@ -314,18 +354,24 @@ export default function AdminCreateProductPage() {
 
       {/* FULFILMENT */}
       <div>
-        <label className="block mb-1 text-sm font-medium">Fulfilment</label>
+        <label className="block mb-1 text-sm font-medium">
+          Fulfilment
+        </label>
         <select
           className="w-full border rounded-md px-3 py-2 text-sm"
           value={fulfilmentMode}
           onChange={(e) =>
-            setFulfilmentMode(e.target.value as FulfilmentMode)
+            setFulfilmentMode(
+              e.target.value as FulfilmentMode
+            )
           }
         >
           <option value="made_to_order">
-            Made to order (supplier fulfilment)
+            Made to order (supplier)
           </option>
-          <option value="physical">Physical stock (in shop)</option>
+          <option value="physical">
+            Physical stock (shop)
+          </option>
         </select>
       </div>
 
@@ -338,7 +384,9 @@ export default function AdminCreateProductPage() {
           className="w-full border rounded-md px-3 py-2 text-sm"
           value={commercialModel}
           onChange={(e) =>
-            setCommercialModel(e.target.value as CommercialModel)
+            setCommercialModel(
+              e.target.value as CommercialModel
+            )
           }
         >
           <option value="wholesale">Supplier / trade</option>
@@ -356,7 +404,9 @@ export default function AdminCreateProductPage() {
           className="w-full border rounded-md px-3 py-2 text-sm"
           value={outOfStockBehavior}
           onChange={(e) =>
-            setOutOfStockBehavior(e.target.value as OutOfStockBehavior)
+            setOutOfStockBehavior(
+              e.target.value as OutOfStockBehavior
+            )
           }
         >
           <option value="stop_selling">Stop selling</option>
@@ -381,105 +431,211 @@ export default function AdminCreateProductPage() {
         </div>
       )}
 
-      {/* PRICING (REPLACED) */}
+      {/* PRICING */}
       <PricingAssistant
         supplierPrice={supplierPrice}
         markupPercent={markupPercent}
         price={price}
         onSupplierPriceChange={(v) => {
           setSupplierPrice(v);
-          setPrice(calculateRetailPrice(v, markupPercent));
+          setPrice(
+            calculateRetailPrice(v, markupPercent)
+          );
         }}
         onMarkupChange={(v) => {
           setMarkupPercent(v);
-          setPrice(calculateRetailPrice(supplierPrice, v));
+          setPrice(
+            calculateRetailPrice(supplierPrice, v)
+          );
         }}
         onPriceChange={setPrice}
       />
-
-      {/* BOOK */}
+            {/* BOOK / BLIND-DATE */}
       {isBookLike && (
-        <>
-          <div>
-            <label className="block mb-1 text-sm font-medium">Author</label>
-            <AuthorSearchSelect value={authorId} onChange={setAuthorId} />
+        <div className="space-y-6 border-t pt-6">
+          {/* AUTHOR */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">
+              Author
+            </label>
+
+            <AuthorSearchSelect
+              value={authorId}
+              onChange={(id) => {
+                setAuthorId(id);
+                if (id) setAuthorName("");
+              }}
+            />
+
+            {!authorId && (
+              <Input
+                placeholder="Author name (manual)"
+                value={authorName}
+                onChange={(e) =>
+                  setAuthorName(e.target.value)
+                }
+              />
+            )}
+
+            <p className="text-xs text-neutral-500">
+              If the author does not exist yet, enter the
+              name manually.
+            </p>
+
+            {!authorId && authorName.trim() && (
+  <div className="flex items-center gap-3">
+    <p className="text-xs text-neutral-600">
+      This author does not exist yet.
+    </p>
+
+    <Button
+      size="sm"
+      variant="neutral"
+      onClick={async () => {
+        try {
+          const res = await fetch("/api/admin/authors/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              name: authorName.trim(),
+            }),
+          });
+
+          const data = await res.json();
+
+          if (!res.ok || !data.author) {
+            throw new Error(data.error || "Author creation failed");
+          }
+
+          // ✅ select newly created author
+          setAuthorId(data.author.id);
+          setAuthorName("");
+        } catch (err) {
+          setErrorMsg(
+            err instanceof Error
+              ? err.message
+              : "Failed to create author"
+          );
+        }
+      }}
+    >
+      Create author
+    </Button>
+  </div>
+)}
+
           </div>
 
+          {/* AI CLASSIFICATION */}
+          <ClassificationSuggestions
+            draft={{ name, description }}
+            genres={genres}
+            vibes={vibes}
+            themes={themes}
+            genreId={genreId}
+            vibeId={vibeId}
+            themeId={themeId}
+            onSelect={(type, id) => {
+              if (type === "genre") setGenreId(id);
+              if (type === "vibe") setVibeId(id);
+              if (type === "theme") setThemeId(id);
+            }}
+            onCreated={(type, option) => {
+              if (type === "genre") {
+                setGenres((g) => [...g, option]);
+                setGenreId(option.id);
+              }
+              if (type === "vibe") {
+                setVibes((v) => [...v, option]);
+                setVibeId(option.id);
+              }
+              if (type === "theme") {
+                setThemes((t) => [...t, option]);
+                setThemeId(option.id);
+              }
+            }}
+          />
+
+          {/* LANGUAGE */}
           <div>
-            <label className="block mb-1 text-sm font-medium">Language</label>
+            <label className="block mb-1 text-sm font-medium">
+              Language
+            </label>
             <Input
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onChange={(e) =>
+                setLanguage(e.target.value)
+              }
             />
           </div>
 
+          {/* FORMAT */}
           <div>
-            <label className="block mb-1 text-sm font-medium">Format</label>
+            <label className="block mb-1 text-sm font-medium">
+              Format
+            </label>
             <Input
               value={format}
               onChange={(e) => setFormat(e.target.value)}
             />
           </div>
 
-          <div>
-  <label className="block mb-1 text-sm font-medium">Genre *</label>
-  <select
-    className="w-full border rounded-md px-3 py-2"
-    value={genreId}
-    onChange={(e) => setGenreId(e.target.value)}
-  >
-    <option value="">Select genre</option>
-    {genres.map((g) => (
-      <option key={g.id} value={g.id}>
-        {g.name}
-      </option>
-    ))}
-  </select>
-</div>
+          {/* MANUAL CLASSIFICATION (OVERRIDE) */}
+          <div className="grid grid-cols-1 gap-3">
+            <select
+              className="w-full border rounded-md px-3 py-2"
+              value={genreId}
+              onChange={(e) => setGenreId(e.target.value)}
+            >
+              <option value="">Select genre</option>
+              {genres.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
 
-<div>
-  <label className="block mb-1 text-sm font-medium">Vibe *</label>
-  <select
-    className="w-full border rounded-md px-3 py-2"
-    value={vibeId}
-    onChange={(e) => setVibeId(e.target.value)}
-  >
-    <option value="">Select vibe</option>
-    {vibes.map((v) => (
-      <option key={v.id} value={v.id}>
-        {v.name}
-      </option>
-    ))}
-  </select>
-</div>
+            <select
+              className="w-full border rounded-md px-3 py-2"
+              value={vibeId}
+              onChange={(e) => setVibeId(e.target.value)}
+            >
+              <option value="">Select vibe</option>
+              {vibes.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
 
-<div>
-  <label className="block mb-1 text-sm font-medium">Theme *</label>
-  <select
-    className="w-full border rounded-md px-3 py-2"
-    value={themeId}
-    onChange={(e) => setThemeId(e.target.value)}
-  >
-    <option value="">Select theme</option>
-    {themes.map((t) => (
-      <option key={t.id} value={t.id}>
-        {t.name}
-      </option>
-    ))}
-  </select>
-</div>
-
-        </>
+            <select
+              className="w-full border rounded-md px-3 py-2"
+              value={themeId}
+              onChange={(e) => setThemeId(e.target.value)}
+            >
+              <option value="">Select theme</option>
+              {themes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       )}
 
-      <div className="flex gap-4 pt-4">
+      {/* ACTIONS */}
+      <div className="flex gap-4 pt-6">
         <Button onClick={handleSubmit} disabled={submitting}>
           {submitting ? "Creating…" : "Create Product"}
         </Button>
 
         <Button
           variant="neutral"
-          onClick={() => router.push("/admin/products/new")}
+          onClick={() =>
+            router.push("/admin/products/new")
+          }
         >
           Cancel
         </Button>

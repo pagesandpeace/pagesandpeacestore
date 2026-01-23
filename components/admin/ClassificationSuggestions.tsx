@@ -15,7 +15,14 @@ type Suggestion = {
 };
 
 type Props = {
-  productId: string;
+  /** Only required in edit mode */
+  productId?: string;
+
+  /** Draft context for create page */
+  draft?: {
+    name?: string;
+    description?: string;
+  };
 
   genres: Option[];
   vibes: Option[];
@@ -38,6 +45,7 @@ type Props = {
 
 export default function ClassificationSuggestions({
   productId,
+  draft,
   genres,
   vibes,
   themes,
@@ -68,10 +76,7 @@ export default function ClassificationSuggestions({
       : themes;
   }
 
-  function resolveName(
-    list: Option[],
-    id: string | null
-  ): string {
+  function resolveName(list: Option[], id: string | null): string {
     if (!id) return "—";
     const found = list.find((o) => o.id === id);
     return found ? found.name : "—";
@@ -93,12 +98,24 @@ export default function ClassificationSuggestions({
     setError(null);
 
     try {
-      const res = await fetch(
-        `/api/admin/products/${productId}/suggest-classification`,
-        { method: "POST", credentials: "include" }
-      );
+      const res =
+        productId
+          ? await fetch(
+              `/api/admin/products/${productId}/suggest-classification`,
+              { method: "POST", credentials: "include" }
+            )
+          : await fetch(
+              `/api/admin/products/suggest-classification/draft`,
+              {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(draft ?? {}),
+              }
+            );
 
       const json = await res.json();
+
       if (!res.ok) {
         throw new Error(json.error || "AI request failed");
       }
@@ -131,13 +148,11 @@ export default function ClassificationSuggestions({
       (o) => o.name.toLowerCase().trim() === normalized
     );
 
-    // ✅ Exists → select
     if (existing) {
       onSelect(type, existing.id);
       return;
     }
 
-    // ❌ Missing → create
     const confirmCreate = confirm(
       `"${value}" does not exist.\n\nCreate new ${type}?`
     );
@@ -229,7 +244,6 @@ export default function ClassificationSuggestions({
           );
         })}
 
-      {/* READ-ONLY FEEDBACK */}
       <div className="text-xs text-neutral-600 pt-2 border-t space-y-1">
         <p>Selected genre: {selectedNames.genre}</p>
         <p>Selected vibe: {selectedNames.vibe}</p>

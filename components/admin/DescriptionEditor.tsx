@@ -5,17 +5,38 @@ import { TextArea } from "@/components/ui/TextArea";
 import { Button } from "@/components/ui/Button";
 
 type DescriptionEditorProps = {
-  productId: string;
+  /** Only required in edit mode */
+  productId?: string;
+
+  /** Draft or persisted product */
+  mode?: "product" | "draft";
+
+  /** Existing description */
   value: string;
+
+  /** Update parent state */
   onChange: (value: string) => void;
+
+  /** Optional error handler */
   onError?: (msg: string) => void;
+
+  /** Optional context for draft AI generation */
+  context?: {
+    name?: string;
+    supplierRef?: string;
+    authorId?: string | null;
+    format?: string;
+    language?: string;
+  };
 };
 
 export default function DescriptionEditor({
   productId,
+  mode = "product",
   value,
   onChange,
   onError,
+  context,
 }: DescriptionEditorProps) {
   const [generating, setGenerating] = useState(false);
 
@@ -23,13 +44,24 @@ export default function DescriptionEditor({
     setGenerating(true);
 
     try {
-      const res = await fetch(
-        `/api/admin/products/${productId}/generate-description`,
-        {
-          method: "POST",
-          credentials: "include",
-        }
-      );
+      const res =
+        mode === "product" && productId
+          ? await fetch(
+              `/api/admin/products/${productId}/generate-description`,
+              {
+                method: "POST",
+                credentials: "include",
+              }
+            )
+          : await fetch(
+              `/api/admin/products/generate-description/draft`,
+              {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(context ?? {}),
+              }
+            );
 
       const data = await res.json();
 

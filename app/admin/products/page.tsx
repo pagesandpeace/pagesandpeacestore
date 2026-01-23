@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { supabaseServer } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
+import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 
@@ -34,6 +34,7 @@ type ProductRow = {
   id: string;
   name: string;
   display_title: string | null;
+  image_url: string | null; // 👈 ADD THIS
   price: number;
   inventory_count: number | null;
   fulfilment_mode: "physical" | "made_to_order";
@@ -225,9 +226,32 @@ export default async function AdminProductsPage({
 
               return (
                 <TableRow key={p.id}>
-                  <Cell strong>
-                    {p.display_title || p.name}
-                  </Cell>
+                  <Cell>
+  <div className="flex items-center gap-3">
+    <div className="w-10 h-14 relative shrink-0">
+      <Image
+        src={
+          p.image_url ||
+          "https://res.cloudinary.com/dadinnds6/image/upload/v1767755489/Fallback_image_cxsiwb.png"
+        }
+        alt={p.display_title || p.name}
+        fill
+        className="object-cover rounded-md border"
+        sizes="40px"
+      />
+    </div>
+
+    <div className="leading-tight">
+      <div className="font-medium">
+        {p.display_title || p.name}
+      </div>
+      <div className="text-xs text-neutral-500">
+        {p.product_type}
+      </div>
+    </div>
+  </div>
+</Cell>
+
 
                   <Cell>
                     £{Number(p.price).toFixed(2)}

@@ -111,6 +111,7 @@ export default function AdminProductEditPage({
 
   /* BOOK */
   const [authorId, setAuthorId] = useState<string | null>(null);
+  const [authorName, setAuthorName] = useState("");
   const [genreId, setGenreId] = useState("");
   const [format, setFormat] = useState("");
   const [language, setLanguage] = useState("");
@@ -240,16 +241,17 @@ setLoading(false);
   supplier,
   supplier_ref: supplierRef,
 
-  // ✅ THIS IS THE MISSING LINE
-  isbn_13:
-    supplier === "independent" && supplierRef
-      ? supplierRef
-      : null,
-
   supplier_price: supplierPrice,
   markup_percent: markupPercent,
 };
 
+// ✅ ISBN: supplier-independent
+if (
+  supplierRef &&
+  /^[0-9]{10}([0-9]{3})?$/.test(supplierRef.replace(/-/g, ""))
+) {
+  payload.isbn_13 = supplierRef.replace(/-/g, "");
+}
 
     payload.inventory_count =
   fulfilmentMode === "made_to_order" ? 0 : inventoryCount;
@@ -353,7 +355,77 @@ setLoading(false);
             </div>
           )}
 
-          <AuthorSearchSelect value={authorId} onChange={setAuthorId} />
+{/* AUTHOR */}
+<div className="space-y-2">
+  <label className="block text-sm font-medium">
+    Author
+  </label>
+
+  <AuthorSearchSelect
+    value={authorId}
+    onChange={(id) => {
+      setAuthorId(id);
+      if (id) setAuthorName("");
+    }}
+  />
+
+  {!authorId && (
+    <Input
+      placeholder="Author name (manual)"
+      value={authorName}
+      onChange={(e) => setAuthorName(e.target.value)}
+    />
+  )}
+
+  {!authorId && authorName.trim() && (
+    <div className="flex items-center gap-3">
+      <p className="text-xs text-neutral-600">
+        This author does not exist yet.
+      </p>
+
+      <Button
+        size="sm"
+        variant="neutral"
+        onClick={async () => {
+          try {
+            const res = await fetch("/api/admin/authors/create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                name: authorName.trim(),
+              }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.author) {
+              throw new Error(
+                data.error || "Author creation failed"
+              );
+            }
+
+            // ✅ immediately select new author
+            setAuthorId(data.author.id);
+            setAuthorName("");
+          } catch (err) {
+            setErrorMsg(
+              err instanceof Error
+                ? err.message
+                : "Failed to create author"
+            );
+          }
+        }}
+      >
+        Create author
+      </Button>
+    </div>
+  )}
+
+  <p className="text-xs text-neutral-500">
+    Search for an existing author or create a new one.
+  </p>
+</div>
 
           <ClassificationSuggestions
   productId={product.id}

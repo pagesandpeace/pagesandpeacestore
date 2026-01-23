@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import slugify from "slugify";
+import cloudinary from "@/lib/cloudinary";
 
 /* ------------------------------------------
    Helper: link product to supplier (manual)
@@ -41,6 +42,17 @@ async function upsertProductSupplier({
   }
 }
 
+/* ------------------------------------------
+   Helper: Gardners jacket URL
+------------------------------------------ */
+function gardnersJacketUrl(isbn13: string) {
+  const clean = isbn13.replace(/-/g, "");
+  return `https://jackets.dmmserver.com/media/640/${clean.slice(
+    0,
+    7
+  )}/${clean}.jpg`;
+}
+
 export async function POST(req: Request) {
   try {
     console.log("🛍 [CREATE PRODUCT] Incoming request");
@@ -74,6 +86,7 @@ export async function POST(req: Request) {
 
       // book fields
       author_id = null,
+      author = null,
       format = null,
       language = null,
 
@@ -82,11 +95,11 @@ export async function POST(req: Request) {
       vibe_id = null,
       theme_id = null,
 
-      // 🔹 supplier link
+      // supplier link
       supplier = null,
       supplier_ref = null,
 
-      // ✅ NEW: ISBN (manual entry)
+      // ISBN
       isbn_13 = null,
     } = body;
 
@@ -157,39 +170,37 @@ export async function POST(req: Request) {
 
     /* -------------------------------------------------
        INVENTORY NORMALISATION
+       (ledger will apply this later)
     ------------------------------------------------- */
     const normalisedInventory =
       fulfilment_mode === "physical" ? Number(inventory_count) : 0;
 
     /* -------------------------------------------------
        PRODUCT PAYLOAD
+       ⚠️ inventory_count MUST be 0 on insert
     ------------------------------------------------- */
     const productPayload: Record<string, unknown> = {
       name,
-      display_title: name,
+      display_title: body.display_title ?? name,
       slug,
       description,
       product_type,
       image_url,
 
-      // ✅ ISBN IS NOW PERSISTED
       isbn_13,
 
-      // pricing
       supplier_price,
       markup_percent,
       price: Number(price).toFixed(2),
 
-      // fulfilment + supply
       fulfilment_mode,
       supply_source,
       commercial_model,
 
-      // inventory + behaviour
+      // ✅ NEVER write stock directly
       inventory_count: 0,
       out_of_stock_behavior,
 
-      // consignment
       consignment_split_percent,
       consignment_notes,
     };
@@ -207,6 +218,19 @@ export async function POST(req: Request) {
       productPayload.genre_id = genre_id;
       productPayload.vibe_id = vibe_id;
       productPayload.theme_id = theme_id;
+
+      // Author text for search
+      if (author_id) {
+        const { data: authorRow } = await supabaseAdmin
+          .from("authors")
+          .select("name")
+          .eq("id", author_id)
+          .single();
+
+        productPayload.author = authorRow?.name ?? null;
+      } else if (author) {
+        productPayload.author = author;
+      }
     }
 
     console.log("📦 [CREATE PRODUCT] Insert payload:", productPayload);
@@ -228,9 +252,42 @@ export async function POST(req: Request) {
     console.log("✅ Product created:", product.id);
 
     /* -------------------------------------------------
+       ISBN JACKET (NON-BLOCKING)
+    ------------------------------------------------- */
+    if (isbn_13 && !image_url) {
+      try {
+        const cleanIsbn = isbn_13.replace(/-/g, "");
+
+        const upload = await cloudinary.uploader.upload(
+          gardnersJacketUrl(cleanIsbn),
+          {
+            folder: "products/books",
+            public_id: `isbn_${cleanIsbn}`,
+            overwrite: false,
+            resource_type: "image",
+          }
+        );
+
+        if (upload?.secure_url) {
+          await supabaseAdmin
+            .from("products")
+            .update({ image_url: upload.secure_url })
+            .eq("id", product.id);
+        }
+      } catch {
+        console.log("⚠️ No Gardners jacket found for ISBN:", isbn_13);
+      }
+    }
+
+    /* -------------------------------------------------
        INITIAL STOCK (LEDGER-SAFE)
     ------------------------------------------------- */
     if (normalisedInventory > 0) {
+      console.log(
+        "📦 Applying initial stock via ledger:",
+        normalisedInventory
+      );
+
       await supabaseAdmin.rpc("adjust_product_inventory", {
         p_product_id: product.id,
         p_new_quantity: normalisedInventory,
@@ -240,22 +297,14 @@ export async function POST(req: Request) {
     }
 
     /* -------------------------------------------------
-       LINK SUPPLIER (OPTIONAL)
+       LINK SUPPLIER
     ------------------------------------------------- */
-    try {
-      await upsertProductSupplier({
-        supabase: supabaseAdmin,
-        productId: product.id,
-        supplier,
-        supplierRef: supplier_ref,
-      });
-    } catch (err) {
-      console.error("❌ Supplier link failed:", err);
-      return NextResponse.json(
-        { error: "Product created but supplier link failed" },
-        { status: 500 }
-      );
-    }
+    await upsertProductSupplier({
+      supabase: supabaseAdmin,
+      productId: product.id,
+      supplier,
+      supplierRef: supplier_ref,
+    });
 
     return NextResponse.json({ success: true, product });
   } catch (err) {
