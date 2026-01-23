@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import cloudinary from "@/lib/cloudinary";
 
 /* ------------------------------------------
@@ -94,7 +94,9 @@ export async function POST(
     const { id: productId } = await params;
     const body = await req.json();
 
+    /* ---------- USER CLIENT (RLS) ---------- */
     const supabase = await supabaseServer();
+
     const { data: auth } = await supabase.auth.getUser();
 
     if (!auth?.user) {
@@ -116,6 +118,13 @@ export async function POST(
         { status: 403 }
       );
     }
+
+    /* ---------- SERVICE ROLE CLIENT ---------- */
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } }
+    );
 
     /* ---------- INVENTORY INPUT ---------- */
     let inventory_count: number | undefined;
@@ -216,9 +225,9 @@ export async function POST(
       });
     }
 
-    /* ---------- SUPPLIER LINK ---------- */
+    /* ---------- SUPPLIER LINK (SERVICE ROLE) ---------- */
     await upsertProductSupplier({
-      supabase,
+      supabase: supabaseAdmin, // 🔑 FIX
       productId,
       supplier: body.supplier,
       supplierRef: body.supplier_ref,
