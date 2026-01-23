@@ -13,7 +13,6 @@ import { Alert } from "@/components/ui/Alert";
 
 import AuthorSearchSelect from "@/components/admin/AuthorSearchSelect";
 import SupplierLinkSection from "@/components/admin/SupplierLinkSection";
-import PricingAssistant from "@/components/admin/PricingAssistant";
 
 /* ---------------------------------------------------
    TYPES
@@ -31,18 +30,11 @@ type CategoryOption = {
 /* ---------------------------------------------------
    CONFIG
 --------------------------------------------------- */
-const DEFAULT_MARKUP_PERCENT = 30;
 
 /* ---------------------------------------------------
    HELPERS
 --------------------------------------------------- */
-function calculateRetailPrice(
-  supplierPrice: number,
-  markupPercent: number
-) {
-  if (supplierPrice <= 0 || markupPercent < 0) return 0;
-  return Math.ceil(supplierPrice * (1 + markupPercent / 100));
-}
+
 
 function looksLikeISBN(value: string) {
   return /^[0-9]{10}([0-9]{3})?$/.test(value.replace(/-/g, ""));
@@ -97,9 +89,8 @@ export default function AdminCreateProductPage() {
   const [supplierRef, setSupplierRef] = useState("");
 
   // pricing
-  const [supplierPrice, setSupplierPrice] = useState(0);
-  const [markupPercent, setMarkupPercent] = useState(DEFAULT_MARKUP_PERCENT);
   const [price, setPrice] = useState(0);
+  const [rrp, setRrp] = useState<number | null>(null);
 
   // fulfilment
   const [fulfilmentMode, setFulfilmentMode] =
@@ -179,9 +170,9 @@ export default function AdminCreateProductPage() {
       product_type: productType,
       image_url: imageUrl || null,
 
-      supplier_price: supplierPrice || null,
-      markup_percent: markupPercent,
+      
       price,
+      rrp,
 
       fulfilment_mode: fulfilmentMode,
       commercial_model: commercialModel,
@@ -430,26 +421,35 @@ export default function AdminCreateProductPage() {
           />
         </div>
       )}
-
       {/* PRICING */}
-      <PricingAssistant
-        supplierPrice={supplierPrice}
-        markupPercent={markupPercent}
-        price={price}
-        onSupplierPriceChange={(v) => {
-          setSupplierPrice(v);
-          setPrice(
-            calculateRetailPrice(v, markupPercent)
-          );
-        }}
-        onMarkupChange={(v) => {
-          setMarkupPercent(v);
-          setPrice(
-            calculateRetailPrice(supplierPrice, v)
-          );
-        }}
-        onPriceChange={setPrice}
-      />
+<div className="space-y-4">
+  <div>
+    <label className="block mb-1 text-sm font-medium">
+      Retail price (£)
+    </label>
+    <Input
+      type="number"
+      step="0.01"
+      value={price}
+      onChange={(e) => setPrice(Number(e.target.value))}
+    />
+  </div>
+
+  <div>
+    <label className="block mb-1 text-sm font-medium">
+      RRP (£)
+    </label>
+    <Input
+      type="number"
+      step="0.01"
+      value={rrp ?? ""}
+      onChange={(e) =>
+        setRrp(e.target.value === "" ? null : Number(e.target.value))
+      }
+    />
+  </div>
+</div>
+
             {/* BOOK / BLIND-DATE */}
       {isBookLike && (
         <div className="space-y-6 border-t pt-6">

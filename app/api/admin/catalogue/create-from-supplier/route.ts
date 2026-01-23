@@ -6,7 +6,6 @@ import { createClient } from "@supabase/supabase-js";
 import slugify from "slugify";
 import cloudinary from "@/lib/cloudinary";
 
-const DEFAULT_MARKUP_PERCENT = 30;
 const FALLBACK_IMAGE =
   "https://res.cloudinary.com/dadinnds6/image/upload/v1767755489/Fallback_image_cxsiwb.png";
 
@@ -41,7 +40,10 @@ export async function POST(req: Request) {
     /* AUTH */
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      );
     }
 
     const { data: profile } = await supabase
@@ -51,7 +53,10 @@ export async function POST(req: Request) {
       .single();
 
     if (!profile || profile.role !== "admin") {
-      return NextResponse.json({ error: "Admins only" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Admins only" },
+        { status: 403 }
+      );
     }
 
     /* INPUT */
@@ -100,17 +105,17 @@ export async function POST(req: Request) {
       );
     }
 
-    /* PRICE */
-    const supplierPrice = Number(sp.supplier_price);
-    const retailPrice = Number(
-      (supplierPrice * (1 + DEFAULT_MARKUP_PERCENT / 100)).toFixed(2)
-    );
-
-    /* FORMAT */
+    /* FORMAT / METADATA */
     const format = normaliseFormat(sp.binding);
     const language = "English";
 
-    /* CREATE PRODUCT */
+    /* PRICING LOGIC (NEW) */
+    const supplierRrp =
+      sp.rrp != null ? Number(sp.rrp) : null;
+
+    const sellingPrice = supplierRrp; // may be null
+
+    /* SLUG */
     const slug =
       slugify(sp.display_title ?? sp.title, {
         lower: true,
@@ -119,6 +124,7 @@ export async function POST(req: Request) {
       "-" +
       supplier_ref.slice(-6);
 
+    /* CREATE PRODUCT */
     const { data: product, error: productError } = await admin
       .from("products")
       .insert({
@@ -128,20 +134,18 @@ export async function POST(req: Request) {
 
         product_type: "book",
 
-        price: retailPrice,
-        retail_price: retailPrice,
-        supplier_price: supplierPrice,
-        price_strategy: "markup",
-        markup_percent: DEFAULT_MARKUP_PERCENT,
+        // 🔑 Pricing
+        price: sellingPrice ?? 0,
+        rrp: supplierRrp,
 
+        // Stock / fulfilment
         inventory_count: 0,
-        is_subscription: false,
-        is_test: false,
-
-        commercial_model: "supplier",
         fulfilment_mode: "made_to_order",
         supply_source: "supplier",
         out_of_stock_behavior: "stop_selling",
+
+        commercial_model: "supplier",
+        requires_procurement: true,
 
         author: sp.author,
         format,
@@ -181,23 +185,26 @@ export async function POST(req: Request) {
       console.log("⚠️ Gardners jacket not available");
     }
 
-    /* SUPPLIER LINK */
+    /* SUPPLIER LINK (AUDIT ONLY) */
     await admin.from("product_supplier_links").insert({
       product_id: product.id,
       supplier,
       supplier_ref,
       supplier_import_batch_id: sp.import_batch_id,
-      supplier_price_at_creation: supplierPrice,
+
+      supplier_rrp_at_creation: supplierRrp,
       supplier_title_at_creation: sp.display_title,
       supplier_author_at_creation: sp.author,
       supplier_binding_at_creation: sp.binding,
+
       created_by: auth.user.id,
       supplier_product_id: sp.id,
     });
 
     return NextResponse.json({
       product_id: product.id,
-      retail_price: retailPrice,
+      price: sellingPrice,
+      rrp: supplierRrp,
     });
   } catch (err) {
     console.error("❌ CREATE FROM SUPPLIER FAILED:", err);

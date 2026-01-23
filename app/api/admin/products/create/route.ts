@@ -17,8 +17,8 @@ async function upsertProductSupplier({
 }: {
   supabase: SupabaseClient;
   productId: string;
-  supplier?: string;
-  supplierRef?: string;
+  supplier?: string | null;
+  supplierRef?: string | null;
 }) {
   if (!supplier || !supplierRef) return;
 
@@ -32,9 +32,7 @@ async function upsertProductSupplier({
         confidence: "manual",
         active: true,
       },
-      {
-        onConflict: "product_id,supplier",
-      }
+      { onConflict: "product_id,supplier" }
     );
 
   if (error) {
@@ -53,6 +51,9 @@ function gardnersJacketUrl(isbn13: string) {
   )}/${clean}.jpg`;
 }
 
+/* ------------------------------------------
+   ROUTE
+------------------------------------------ */
 export async function POST(req: Request) {
   try {
     console.log("🛍 [CREATE PRODUCT] Incoming request");
@@ -62,14 +63,14 @@ export async function POST(req: Request) {
 
     const {
       name,
+      display_title,
       description = "",
       product_type = "merch",
       image_url = null,
 
-      // pricing
-      supplier_price = null,
-      markup_percent = null,
+      // pricing (NEW MODEL)
       price,
+      rrp = null,
 
       // fulfilment + supply
       fulfilment_mode,
@@ -106,27 +107,9 @@ export async function POST(req: Request) {
     /* -------------------------------------------------
        BASIC VALIDATION
     ------------------------------------------------- */
-    if (!name || !price || !fulfilment_mode) {
+    if (!name || price == null || !fulfilment_mode) {
       return NextResponse.json(
-        { error: "Name, price and fulfilment_mode are required." },
-        { status: 400 }
-      );
-    }
-
-    if (!supply_source || !commercial_model) {
-      return NextResponse.json(
-        { error: "supply_source and commercial_model are required." },
-        { status: 400 }
-      );
-    }
-
-    if (
-      !["stop_selling", "switch_to_made_to_order"].includes(
-        out_of_stock_behavior
-      )
-    ) {
-      return NextResponse.json(
-        { error: "Invalid out_of_stock_behavior" },
+        { error: "name, price and fulfilment_mode are required" },
         { status: 400 }
       );
     }
@@ -170,39 +153,35 @@ export async function POST(req: Request) {
 
     /* -------------------------------------------------
        INVENTORY NORMALISATION
-       (ledger will apply this later)
     ------------------------------------------------- */
     const normalisedInventory =
       fulfilment_mode === "physical" ? Number(inventory_count) : 0;
 
     /* -------------------------------------------------
-       PRODUCT PAYLOAD
-       ⚠️ inventory_count MUST be 0 on insert
+       PRODUCT PAYLOAD (NEW TRUTH)
     ------------------------------------------------- */
     const productPayload: Record<string, unknown> = {
       name,
-      display_title: body.display_title ?? name,
+      display_title: display_title ?? name,
       slug,
       description,
       product_type,
       image_url,
 
-      isbn_13,
-
-      supplier_price,
-      markup_percent,
-      price: Number(price).toFixed(2),
+      price: Number(price),
+      rrp,
 
       fulfilment_mode,
       supply_source,
       commercial_model,
 
-      // ✅ NEVER write stock directly
-      inventory_count: 0,
+      inventory_count: 0, // ledger-controlled
       out_of_stock_behavior,
 
       consignment_split_percent,
       consignment_notes,
+
+      isbn_13,
     };
 
     /* -------------------------------------------------
@@ -219,7 +198,6 @@ export async function POST(req: Request) {
       productPayload.vibe_id = vibe_id;
       productPayload.theme_id = theme_id;
 
-      // Author text for search
       if (author_id) {
         const { data: authorRow } = await supabaseAdmin
           .from("authors")
@@ -232,8 +210,6 @@ export async function POST(req: Request) {
         productPayload.author = author;
       }
     }
-
-    console.log("📦 [CREATE PRODUCT] Insert payload:", productPayload);
 
     /* -------------------------------------------------
        INSERT PRODUCT
@@ -249,22 +225,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    console.log("✅ Product created:", product.id);
-
     /* -------------------------------------------------
        ISBN JACKET (NON-BLOCKING)
     ------------------------------------------------- */
     if (isbn_13 && !image_url) {
       try {
-        const cleanIsbn = isbn_13.replace(/-/g, "");
-
         const upload = await cloudinary.uploader.upload(
-          gardnersJacketUrl(cleanIsbn),
+          gardnersJacketUrl(isbn_13),
           {
             folder: "products/books",
-            public_id: `isbn_${cleanIsbn}`,
+            public_id: `isbn_${isbn_13}`,
             overwrite: false,
-            resource_type: "image",
           }
         );
 
@@ -275,19 +246,14 @@ export async function POST(req: Request) {
             .eq("id", product.id);
         }
       } catch {
-        console.log("⚠️ No Gardners jacket found for ISBN:", isbn_13);
+        console.log("⚠️ No jacket found for ISBN:", isbn_13);
       }
     }
 
     /* -------------------------------------------------
-       INITIAL STOCK (LEDGER-SAFE)
+       INITIAL STOCK (LEDGER)
     ------------------------------------------------- */
     if (normalisedInventory > 0) {
-      console.log(
-        "📦 Applying initial stock via ledger:",
-        normalisedInventory
-      );
-
       await supabaseAdmin.rpc("adjust_product_inventory", {
         p_product_id: product.id,
         p_new_quantity: normalisedInventory,
@@ -297,7 +263,7 @@ export async function POST(req: Request) {
     }
 
     /* -------------------------------------------------
-       LINK SUPPLIER
+       SUPPLIER LINK (REFERENCE ONLY)
     ------------------------------------------------- */
     await upsertProductSupplier({
       supabase: supabaseAdmin,
@@ -308,7 +274,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, product });
   } catch (err) {
-    console.error("🔥 CREATE PRODUCT ROUTE FAILED:", err);
+    console.error("🔥 CREATE PRODUCT FAILED:", err);
     return NextResponse.json(
       { error: "Server error creating product" },
       { status: 500 }

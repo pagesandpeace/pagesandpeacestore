@@ -10,7 +10,6 @@ import { Alert } from "@/components/ui/Alert";
 
 import AuthorSearchSelect from "@/components/admin/AuthorSearchSelect";
 import SupplierLinkSection from "@/components/admin/SupplierLinkSection";
-import PricingAssistant from "@/components/admin/PricingAssistant";
 import DescriptionEditor from "@/components/admin/DescriptionEditor";
 import FulfilmentSettings from "@/components/admin/FulfilmentSettings";
 import ClassificationSuggestions from "@/components/admin/ClassificationSuggestions";
@@ -24,7 +23,8 @@ interface Product {
   display_title: string | null;
   slug: string;
   description: string | null;
-  price: string;
+  price: number;
+  rrp: number | null;
   image_url: string | null;
 
   inventory_count: number;
@@ -45,8 +45,6 @@ interface Product {
 
   supplier?: string | null;
   supplier_ref?: string | null;
-  supplier_price?: number | null;
-  markup_percent?: number | null;
 }
 
 interface MetaItem {
@@ -63,18 +61,9 @@ interface StockMovement {
 /* ---------------------------------------------------
    HELPERS
 --------------------------------------------------- */
-function calculateRetailPrice(
-  supplierPrice: number,
-  markupPercent: number
-) {
-  if (supplierPrice <= 0 || markupPercent < 0) return 0;
-  return Math.ceil(supplierPrice * (1 + markupPercent / 100));
-}
-
 function looksLikeISBN(value: string) {
   return /^[0-9]{10}([0-9]{3})?$/.test(value.replace(/-/g, ""));
 }
-
 
 /* ---------------------------------------------------
    COMPONENT
@@ -98,14 +87,13 @@ export default function AdminProductEditPage({
   const [name, setName] = useState("");
   const [displayTitle, setDisplayTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
+  const [price, setPrice] = useState<number>(0);
+  const [rrp, setRrp] = useState<number | null>(null);
   const [imageUrl, setImageUrl] = useState("");
 
   /* SUPPLIER */
   const [supplier, setSupplier] = useState("");
   const [supplierRef, setSupplierRef] = useState("");
-  const [supplierPrice, setSupplierPrice] = useState(0);
-  const [markupPercent, setMarkupPercent] = useState(30);
 
   /* FULFILMENT */
   const [fulfilmentMode, setFulfilmentMode] =
@@ -147,7 +135,8 @@ export default function AdminProductEditPage({
       setName(data.name);
       setDisplayTitle(data.display_title ?? "");
       setDescription(data.description ?? "");
-      setPrice(data.price);
+      setPrice(Number(data.price));
+      setRrp(data.rrp ?? null);
       setImageUrl(data.image_url ?? "");
 
       setFulfilmentMode(data.fulfilment_mode);
@@ -156,13 +145,8 @@ export default function AdminProductEditPage({
 
       setSupplier(data.supplier ?? "");
       setSupplierRef(data.supplier_ref ?? "");
-      setSupplierPrice(data.supplier_price ?? 0);
-      setMarkupPercent(data.markup_percent ?? 30);
 
-      if (
-        data.product_type === "book" ||
-        data.product_type === "blind-date"
-      ) {
+      if (isBook) {
         setAuthorId(data.author_id ?? null);
         setGenreId(data.genre_id ?? "");
         setFormat(data.format ?? "");
@@ -178,27 +162,26 @@ export default function AdminProductEditPage({
       const meta = await metaRes.json();
 
       setGenres(meta.genres);
-setVibes(meta.vibes);
-setThemes(meta.themes);
+      setVibes(meta.vibes);
+      setThemes(meta.themes);
 
-const stockRes = await fetch(
-  `/api/admin/products/${id}/stock-movements`,
-  { credentials: "include", cache: "no-store" }
-);
+      const stockRes = await fetch(
+        `/api/admin/products/${id}/stock-movements`,
+        { credentials: "include", cache: "no-store" }
+      );
 
-if (stockRes.ok) {
-  const movements = await stockRes.json();
-  setStockMovements(movements);
-}
+      if (stockRes.ok) {
+        const movements = await stockRes.json();
+        setStockMovements(movements);
+      }
 
-setLoading(false);
-
+      setLoading(false);
     }
 
     load();
   }, [id]);
 
-  /* ---------------------------------------------------
+    /* ---------------------------------------------------
      IMAGE UPLOAD
   --------------------------------------------------- */
   async function handleUpload(
@@ -232,35 +215,33 @@ setLoading(false);
     if (!product) return;
 
     setSaving(true);
+    setErrorMsg(null);
 
     const payload: Record<string, unknown> = {
-  name,
-  display_title: displayTitle || null,
-  description,
-  price,
-  image_url: imageUrl || null,
+      name,
+      display_title: displayTitle || null,
+      description,
+      price,              // ✅ authoritative selling price
+      rrp,                // ✅ optional supplier RRP reference
+      image_url: imageUrl || null,
 
-  fulfilment_mode: fulfilmentMode,
-  out_of_stock_behavior: outOfStockBehavior,
+      fulfilment_mode: fulfilmentMode,
+      out_of_stock_behavior: outOfStockBehavior,
 
-  supplier,
-  supplier_ref: supplierRef,
+      supplier,
+      supplier_ref: supplierRef || null,
 
-  supplier_price: supplierPrice,
-  markup_percent: markupPercent,
-};
+      inventory_count:
+        fulfilmentMode === "made_to_order" ? 0 : inventoryCount,
+    };
 
-// ✅ ISBN: supplier-independent
-if (
-  supplierRef &&
-  /^[0-9]{10}([0-9]{3})?$/.test(supplierRef.replace(/-/g, ""))
-) {
-  payload.isbn_13 = supplierRef.replace(/-/g, "");
-}
-
-    payload.inventory_count =
-  fulfilmentMode === "made_to_order" ? 0 : inventoryCount;
-
+    // ISBN is supplier-independent
+    if (
+      supplierRef &&
+      /^[0-9]{10}([0-9]{3})?$/.test(supplierRef.replace(/-/g, ""))
+    ) {
+      payload.isbn_13 = supplierRef.replace(/-/g, "");
+    }
 
     if (isBook) {
       payload.author_id = authorId || null;
@@ -271,16 +252,25 @@ if (
       payload.theme_id = themeId || null;
     }
 
-    await fetch(`/api/admin/products/update/${product.id}`, {
-      method: "POST",
-      credentials: "include",
-      body: JSON.stringify(payload),
-    });
+    const res = await fetch(
+      `/api/admin/products/update/${product.id}`,
+      {
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!res.ok) {
+      setErrorMsg("Failed to save product.");
+      setSaving(false);
+      return;
+    }
 
     router.push(`/admin/products/${product.id}`);
   }
 
-  /* ---------------------------------------------------
+    /* ---------------------------------------------------
      RENDER
   --------------------------------------------------- */
   if (loading || !product) {
@@ -298,15 +288,20 @@ if (
       {errorMsg && <Alert type="error" message={errorMsg} />}
 
       <div className="space-y-5">
+        {/* TITLES */}
         <Input
+          placeholder="Display title (optional)"
           value={displayTitle}
           onChange={(e) => setDisplayTitle(e.target.value)}
         />
+
         <Input
+          placeholder="Internal name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
+        {/* DESCRIPTION */}
         <DescriptionEditor
           productId={product.id}
           value={description}
@@ -314,6 +309,7 @@ if (
           onError={setErrorMsg}
         />
 
+        {/* SUPPLIER */}
         <SupplierLinkSection
           supplier={supplier}
           supplierRef={supplierRef}
@@ -322,21 +318,7 @@ if (
           }
         />
 
-        <PricingAssistant
-          supplierPrice={supplierPrice}
-          markupPercent={markupPercent}
-          price={Number(price)}
-          onSupplierPriceChange={(v) => {
-            setSupplierPrice(v);
-            setPrice(calculateRetailPrice(v, markupPercent).toString());
-          }}
-          onMarkupChange={(v) => {
-            setMarkupPercent(v);
-            setPrice(calculateRetailPrice(supplierPrice, v).toString());
-          }}
-          onPriceChange={(v) => setPrice(v.toString())}
-        />
-
+        {/* FULFILMENT */}
         <FulfilmentSettings
           fulfilmentMode={fulfilmentMode}
           onFulfilmentModeChange={setFulfilmentMode}
@@ -346,245 +328,187 @@ if (
           onOutOfStockBehaviorChange={setOutOfStockBehavior}
         />
 
-        {/* IMAGE */}
-<div className="space-y-2">
-  <label className="block text-sm font-medium">Product image</label>
+        {/* PRICING */}
+        <div className="space-y-4 border rounded-lg p-4 bg-gray-50">
+          <h3 className="font-semibold">Pricing</h3>
 
-  <div className="flex gap-2 items-center">
-    <Button
-      type="button"
-      size="sm"
-      variant="neutral"
-      disabled={!looksLikeISBN(supplierRef)}
-      onClick={async () => {
-        try {
-          setErrorMsg(null);
+          <div>
+            <label className="block mb-1 text-sm font-medium">
+              Selling price (£)
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </div>
 
-          await fetch(`/api/admin/products/update/${product.id}`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              isbn_13: supplierRef.replace(/-/g, ""),
-            }),
-          });
-
-          // 🔁 reload product to pick up new image_url
-          const res = await fetch(
-            `/api/admin/products/get/${product.id}`,
-            { credentials: "include", cache: "no-store" }
-          );
-
-          const updated = await res.json();
-          setImageUrl(updated.image_url ?? "");
-        } catch {
-          setErrorMsg("No ISBN cover found for this product.");
-        }
-      }}
-    >
-      Use ISBN cover
-    </Button>
-
-    <label className="inline-flex items-center">
-      <input
-        type="file"
-        className="hidden"
-        accept="image/*"
-        onChange={handleUpload}
-      />
-      <Button size="sm" variant="neutral">
-        Upload image
-      </Button>
-    </label>
-  </div>
-
-  {imageUrl && (
-    <Image
-      src={imageUrl}
-      alt="preview"
-      width={200}
-      height={200}
-      className="rounded border mt-2"
-    />
-  )}
-</div>
-
-      </div>
-
-      {isBook && (
-        <div className="space-y-5">
-          {product.supplier_author && (
-            <div className="bg-yellow-50 border p-3">
-              {product.supplier_author}
-            </div>
-          )}
-
-{/* AUTHOR */}
-<div className="space-y-2">
-  <label className="block text-sm font-medium">
-    Author
-  </label>
-
-  <AuthorSearchSelect
-    value={authorId}
-    onChange={(id) => {
-      setAuthorId(id);
-      if (id) setAuthorName("");
-    }}
-  />
-
-  {!authorId && (
-    <Input
-      placeholder="Author name (manual)"
-      value={authorName}
-      onChange={(e) => setAuthorName(e.target.value)}
-    />
-  )}
-
-  {!authorId && authorName.trim() && (
-    <div className="flex items-center gap-3">
-      <p className="text-xs text-neutral-600">
-        This author does not exist yet.
-      </p>
-
-      <Button
-        size="sm"
-        variant="neutral"
-        onClick={async () => {
-          try {
-            const res = await fetch("/api/admin/authors/create", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "include",
-              body: JSON.stringify({
-                name: authorName.trim(),
-              }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok || !data.author) {
-              throw new Error(
-                data.error || "Author creation failed"
-              );
-            }
-
-            // ✅ immediately select new author
-            setAuthorId(data.author.id);
-            setAuthorName("");
-          } catch (err) {
-            setErrorMsg(
-              err instanceof Error
-                ? err.message
-                : "Failed to create author"
-            );
-          }
-        }}
-      >
-        Create author
-      </Button>
-    </div>
-  )}
-
-  <p className="text-xs text-neutral-500">
-    Search for an existing author or create a new one.
-  </p>
-</div>
-
-          <ClassificationSuggestions
-  productId={product.id}
-  genres={genres}
-  vibes={vibes}
-  themes={themes}
-  genreId={genreId}
-  vibeId={vibeId}
-  themeId={themeId}
-  onSelect={(type, id) => {
-    if (type === "genre") setGenreId(id);
-    if (type === "vibe") setVibeId(id);
-    if (type === "theme") setThemeId(id);
-  }}
-  onCreated={(type, option) => {
-    if (type === "genre") setGenres((g) => [...g, option]);
-    if (type === "vibe") setVibes((v) => [...v, option]);
-    if (type === "theme") setThemes((t) => [...t, option]);
-
-    if (type === "genre") setGenreId(option.id);
-    if (type === "vibe") setVibeId(option.id);
-    if (type === "theme") setThemeId(option.id);
-  }}
-/>
-
-
-          {/* MANUAL OVERRIDE */}
-          <div className="space-y-3">
-            <select
-              value={genreId}
-              onChange={(e) => setGenreId(e.target.value)}
-              className="border p-2 rounded w-full"
-            >
-              <option value="">Genre</option>
-              {genres.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={vibeId}
-              onChange={(e) => setVibeId(e.target.value)}
-              className="border p-2 rounded w-full"
-            >
-              <option value="">Vibe</option>
-              {vibes.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={themeId}
-              onChange={(e) => setThemeId(e.target.value)}
-              className="border p-2 rounded w-full"
-            >
-              <option value="">Theme</option>
-              {themes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+          <div>
+            <label className="block mb-1 text-sm font-medium">
+              Supplier RRP (£) <span className="text-xs text-gray-500">(optional)</span>
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={rrp ?? ""}
+              onChange={(e) =>
+                setRrp(e.target.value === "" ? null : Number(e.target.value))
+              }
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Reference only. Selling price always uses the value above.
+            </p>
           </div>
         </div>
-      )}
-<div className="border rounded p-4 bg-gray-50">
-  <h2 className="font-semibold mb-3">Stock history</h2>
 
-  {stockMovements.length === 0 ? (
-    <p className="text-sm text-gray-500">No stock movements yet.</p>
-  ) : (
-    <ul className="space-y-2 text-sm">
-      {stockMovements.map((m, idx) => (
-        <li key={idx} className="flex justify-between">
-          <span>
-            <strong
-              className={m.change > 0 ? "text-green-600" : "text-red-600"}
+        {/* IMAGE */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium">Product image</label>
+
+          <div className="flex gap-2 items-center">
+            <Button
+              type="button"
+              size="sm"
+              variant="neutral"
+              disabled={!looksLikeISBN(supplierRef)}
+              onClick={async () => {
+                try {
+                  setErrorMsg(null);
+
+                  await fetch(
+                    `/api/admin/products/update/${product.id}`,
+                    {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        isbn_13: supplierRef.replace(/-/g, ""),
+                      }),
+                    }
+                  );
+
+                  const res = await fetch(
+                    `/api/admin/products/get/${product.id}`,
+                    { credentials: "include", cache: "no-store" }
+                  );
+
+                  const updated = await res.json();
+                  setImageUrl(updated.image_url ?? "");
+                } catch {
+                  setErrorMsg("No ISBN cover found.");
+                }
+              }}
             >
-              {m.change > 0 ? `+${m.change}` : m.change}
-            </strong>{" "}
-            {m.reason}
-          </span>
-          <span className="text-gray-400">
-            {new Date(m.created_at).toLocaleString()}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )}
-</div>
+              Use ISBN cover
+            </Button>
 
+            <label className="inline-flex items-center">
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={handleUpload}
+              />
+              <Button size="sm" variant="neutral">
+                Upload image
+              </Button>
+            </label>
+          </div>
+
+          {imageUrl && (
+            <Image
+              src={imageUrl}
+              alt="preview"
+              width={200}
+              height={200}
+              className="rounded border mt-2"
+            />
+          )}
+        </div>
+      </div>
+
+      {/* BOOK METADATA */}
+      {isBook && (
+        <div className="space-y-5">
+          {/* AUTHOR */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Author</label>
+
+            <AuthorSearchSelect
+              value={authorId}
+              onChange={(id) => {
+                setAuthorId(id);
+                if (id) setAuthorName("");
+              }}
+            />
+
+            {!authorId && (
+              <Input
+                placeholder="Author name (manual)"
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+              />
+            )}
+          </div>
+
+          {/* CLASSIFICATION */}
+          <ClassificationSuggestions
+            productId={product.id}
+            genres={genres}
+            vibes={vibes}
+            themes={themes}
+            genreId={genreId}
+            vibeId={vibeId}
+            themeId={themeId}
+            onSelect={(type, id) => {
+              if (type === "genre") setGenreId(id);
+              if (type === "vibe") setVibeId(id);
+              if (type === "theme") setThemeId(id);
+            }}
+            onCreated={(type, option) => {
+              if (type === "genre") setGenres((g) => [...g, option]);
+              if (type === "vibe") setVibes((v) => [...v, option]);
+              if (type === "theme") setThemes((t) => [...t, option]);
+
+              if (type === "genre") setGenreId(option.id);
+              if (type === "vibe") setVibeId(option.id);
+              if (type === "theme") setThemeId(option.id);
+            }}
+          />
+        </div>
+      )}
+
+      {/* STOCK HISTORY */}
+      <div className="border rounded p-4 bg-gray-50">
+        <h2 className="font-semibold mb-3">Stock history</h2>
+
+        {stockMovements.length === 0 ? (
+          <p className="text-sm text-gray-500">No stock movements yet.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {stockMovements.map((m, idx) => (
+              <li key={idx} className="flex justify-between">
+                <span>
+                  <strong
+                    className={
+                      m.change > 0 ? "text-green-600" : "text-red-600"
+                    }
+                  >
+                    {m.change > 0 ? `+${m.change}` : m.change}
+                  </strong>{" "}
+                  {m.reason}
+                </span>
+                <span className="text-gray-400">
+                  {new Date(m.created_at).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* ACTIONS */}
       <div className="flex gap-4">
         <Button disabled={saving} onClick={saveChanges}>
           Save Changes

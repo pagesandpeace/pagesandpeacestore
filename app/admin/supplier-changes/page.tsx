@@ -37,27 +37,39 @@ export default async function SupplierChangesPage() {
 
   return (
     <main className="p-6 space-y-6">
+      {/* HEADER */}
       <Card>
         <CardHeader>
-          <CardTitle>Supplier Changes</CardTitle>
+          <CardTitle>Supplier Reference Changes</CardTitle>
         </CardHeader>
 
-        <CardBody className="space-y-4 text-sm text-muted-foreground">
+        <CardBody className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Supplier-detected changes for admin review.
-            Supplier costs update automatically; retail pricing decisions
-            should be reviewed on the product page.
+            Changes detected from supplier data feeds (e.g. Gardners).
+          </p>
+
+          <p>
+            These alerts indicate a change to the <strong>publisher
+            recommended retail price (RRP)</strong> or other reference
+            metadata.
+          </p>
+
+          <p>
+            <strong>No selling prices are changed automatically.</strong>{" "}
+            Review each product and decide whether you want to update
+            your store price.
           </p>
         </CardBody>
       </Card>
 
+      {/* TABLE */}
       <div className="border rounded-lg bg-white overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="px-4 py-3 text-left">Product</th>
-              <th className="px-4 py-3">Field</th>
-              <th className="px-4 py-3">Old</th>
+              <th className="px-4 py-3">Change type</th>
+              <th className="px-4 py-3">Previous</th>
               <th className="px-4 py-3">New</th>
               <th className="px-4 py-3">Detected</th>
               <th className="px-4 py-3 text-right">Action</th>
@@ -83,15 +95,19 @@ export default async function SupplierChangesPage() {
                 </td>
 
                 <td className="px-4 py-3">
-                  <Badge>{c.field}</Badge>
+                  <Badge>
+                    {c.field === "rrp" ? "RRP update" : c.field}
+                  </Badge>
                 </td>
 
                 <td className="px-4 py-3">
-                  {c.old_value ?? "—"}
+                  {c.old_value
+                    ? `£${Number(c.old_value).toFixed(2)}`
+                    : "—"}
                 </td>
 
                 <td className="px-4 py-3 font-semibold">
-                  {c.new_value}
+                  £{Number(c.new_value).toFixed(2)}
                 </td>
 
                 <td className="px-4 py-3 text-xs text-neutral-500">
@@ -104,7 +120,7 @@ export default async function SupplierChangesPage() {
                     method="post"
                   >
                     <Button size="sm">
-                      View product
+                      Review product
                     </Button>
                   </form>
                 </td>

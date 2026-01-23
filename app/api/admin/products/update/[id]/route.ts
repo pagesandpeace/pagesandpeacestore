@@ -17,8 +17,8 @@ async function upsertProductSupplier({
 }: {
   supabase: SupabaseClient;
   productId: string;
-  supplier?: string;
-  supplierRef?: string;
+  supplier?: string | null;
+  supplierRef?: string | null;
 }) {
   console.log("🟡 [SUPPLIER LINK] input:", { supplier, supplierRef });
 
@@ -48,7 +48,7 @@ async function upsertProductSupplier({
 }
 
 /* ------------------------------------------
-   Helper: proxy fetch Gardners jacket
+   Helper: fetch Gardners jacket → Cloudinary
 ------------------------------------------ */
 async function fetchGardnersJacketToCloudinary(
   isbn13: string
@@ -56,15 +56,10 @@ async function fetchGardnersJacketToCloudinary(
   const clean = isbn13.replace(/-/g, "");
 
   const candidates = [
-    // Most common (your working example)
     `https://jackets.dmmserver.com/media/640/${clean.slice(0, 8)}/${clean}.jpg`,
     `https://jackets.dmmserver.com/media/640/${clean.slice(0, 7)}/${clean}.jpg`,
-    `https://jackets.dmmserver.com/media/640/${clean.slice(0, 6)}/${clean}.jpg`,
-
-    // Smaller fallback sizes
     `https://jackets.dmmserver.com/media/356/${clean.slice(0, 8)}/${clean}.jpg`,
     `https://jackets.dmmserver.com/media/356/${clean.slice(0, 7)}/${clean}.jpg`,
-    `https://jackets.dmmserver.com/media/356/${clean.slice(0, 6)}/${clean}.jpg`,
   ];
 
   for (const url of candidates) {
@@ -96,6 +91,9 @@ async function fetchGardnersJacketToCloudinary(
   return null;
 }
 
+/* ------------------------------------------
+   ROUTE
+------------------------------------------ */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -105,18 +103,19 @@ export async function POST(
     console.log("🟢 [PRODUCT UPDATE] ROUTE HIT");
 
     const { id: productId } = await params;
-    console.log("🟢 [PRODUCT UPDATE] productId:", productId);
-
     const body = await req.json();
+
+    console.log("🟢 [PRODUCT UPDATE] productId:", productId);
     console.log("🟢 [PRODUCT UPDATE] RAW BODY:", body);
 
     const supabase = await supabaseServer();
-
     const { data: auth } = await supabase.auth.getUser();
-    console.log("🟢 [PRODUCT UPDATE] auth:", auth?.user?.email);
 
     if (!auth?.user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      );
     }
 
     const { data: profile } = await supabase
@@ -125,31 +124,32 @@ export async function POST(
       .eq("auth_user_id", auth.user.id)
       .single();
 
-    console.log("🟢 [PRODUCT UPDATE] role:", profile?.role);
-
     if (!profile || profile.role !== "admin") {
-      return NextResponse.json({ error: "Admins only" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Admins only" },
+        { status: 403 }
+      );
     }
 
-    /* ---------- INVENTORY ---------- */
+    /* ---------- INVENTORY INPUT ---------- */
     let inventory_count: number | undefined;
     if (typeof body.inventory_count === "number") {
       inventory_count = body.inventory_count;
     }
 
-    /* ---------- BUILD UPDATE ---------- */
+    /* ---------- BUILD SAFE UPDATE ---------- */
     const updateData: Record<string, unknown> = {};
 
     const allowed = [
       "name",
       "display_title",
       "description",
-      "price",
-      "supplier_price",
-      "markup_percent",
-      "image_url",
 
-      // 👇 critical
+      // ✅ pricing (NEW MODEL)
+      "price",
+      "rrp",
+
+      "image_url",
       "isbn_13",
 
       "author_id",
@@ -158,6 +158,7 @@ export async function POST(
       "genre_id",
       "vibe_id",
       "theme_id",
+
       "fulfilment_mode",
       "supply_source",
       "commercial_model",
@@ -190,32 +191,25 @@ export async function POST(
       }
     }
 
-    /* -------------------------------------------------
-       🆕 AUTO-FETCH JACKET WHEN ISBN IS ADDED
-    ------------------------------------------------- */
+    /* ---------- AUTO-FETCH JACKET ---------- */
     if (
       typeof updateData.isbn_13 === "string" &&
       (!body.image_url || body.image_url.includes("Fallback"))
     ) {
-      try {
-        const cloudinaryUrl = await fetchGardnersJacketToCloudinary(
-          updateData.isbn_13
-        );
+      const cloudinaryUrl =
+        await fetchGardnersJacketToCloudinary(updateData.isbn_13);
 
-        if (cloudinaryUrl) {
-          await supabase
-            .from("products")
-            .update({ image_url: cloudinaryUrl })
-            .eq("id", productId);
+      if (cloudinaryUrl) {
+        await supabase
+          .from("products")
+          .update({ image_url: cloudinaryUrl })
+          .eq("id", productId);
 
-          console.log("🟢 [JACKET] Cloudinary image attached");
-        }
-      } catch (err) {
-        console.log("🟡 [JACKET] Gardners fetch failed:", err);
+        console.log("🟢 [JACKET] Cloudinary image attached");
       }
     }
 
-    /* ---------- INVENTORY ---------- */
+    /* ---------- INVENTORY (LEDGER) ---------- */
     if (typeof inventory_count === "number") {
       console.log("🟢 [INVENTORY] adjusting:", inventory_count);
 

@@ -17,7 +17,10 @@ export async function POST(
   const { data: auth } = await supabaseUser.auth.getUser();
 
   if (!auth?.user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Not authenticated" },
+      { status: 401 }
+    );
   }
 
   /* -------------------------
@@ -39,52 +42,47 @@ export async function POST(
     .single();
 
   if (!change || change.status !== "pending") {
-    return NextResponse.json({ error: "Invalid change" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid or already processed change" },
+      { status: 400 }
+    );
   }
 
   /* -------------------------
-     LOAD PRODUCT
+     LOAD PRODUCT (REFERENCE ONLY)
   ------------------------- */
   const { data: product } = await supabaseAdmin
     .from("products")
-    .select("supplier_price, price, markup_percent")
+    .select("id, rrp")
     .eq("id", change.product_id)
     .single();
 
   if (!product) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Product not found" },
+      { status: 404 }
+    );
   }
 
-  const newSupplierPrice = Number(change.new_value);
-
   /* -------------------------
-     CALCULATE NEW RETAIL PRICE
-     (preserve existing markup)
+     APPLY CHANGE (RRP ONLY)
   ------------------------- */
-  const markupPercent =
-    product.markup_percent != null
-      ? Number(product.markup_percent)
-      : 30; // safe fallback
+  if (change.field === "rrp") {
+    const newRrp = Number(change.new_value);
 
-  const newRetailPrice = Number(
-    (newSupplierPrice * (1 + markupPercent / 100)).toFixed(2)
-  );
-
-  /* -------------------------
-     APPLY CHANGE
-  ------------------------- */
-  await supabaseAdmin
-    .from("products")
-    .update({
-      supplier_price: newSupplierPrice,
-      price: newRetailPrice,
-      retail_price: newRetailPrice,
-      supplier_last_updated: new Date().toISOString(),
-    })
-    .eq("id", change.product_id);
+    if (Number.isFinite(newRrp)) {
+      await supabaseAdmin
+        .from("products")
+        .update({
+          rrp: newRrp,
+          supplier_last_updated: new Date().toISOString(),
+        })
+        .eq("id", product.id);
+    }
+  }
 
   /* -------------------------
-     MARK RESOLVED
+     MARK CHANGE RESOLVED
   ------------------------- */
   await supabaseAdmin
     .from("supplier_changes")
@@ -95,6 +93,9 @@ export async function POST(
     .eq("id", id);
 
   return NextResponse.redirect(
-    new URL("/admin/supplier-changes", process.env.NEXT_PUBLIC_SITE_URL)
+    new URL(
+      "/admin/supplier-changes",
+      process.env.NEXT_PUBLIC_SITE_URL
+    )
   );
 }

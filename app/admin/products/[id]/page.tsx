@@ -10,19 +10,22 @@ import {
   CardContent,
 } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Alert } from "@/components/ui/Alert";
 
 type PageProps = {
   params: Promise<{ id: string }>;
 };
 
-export default async function AdminProductDetailPage({ params }: PageProps) {
+export default async function AdminProductDetailPage({
+  params,
+}: PageProps) {
   const { id } = await params;
   const supabase = await supabaseServer();
 
   /* --------------------------------------------
      FETCH PRODUCT
   -------------------------------------------- */
-  const { data: product, error: productError } = await supabase
+  const { data: product, error } = await supabase
     .from("products")
     .select(`
       *,
@@ -35,7 +38,7 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
     .neq("product_type", "event")
     .single();
 
-  if (productError || !product) {
+  if (error || !product) {
     return (
       <main className="max-w-5xl mx-auto py-12 space-y-6">
         <h1 className="text-2xl font-bold">Product not accessible</h1>
@@ -51,44 +54,25 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
   -------------------------------------------- */
   const { data: supplierLink } = await supabase
     .from("product_supplier_links")
-    .select(`
-      supplier,
-      supplier_ref,
-      supplier_price_at_creation,
-      created_at
-    `)
+    .select("supplier, supplier_ref")
     .eq("product_id", id)
+    .maybeSingle();
+
+  /* --------------------------------------------
+     FETCH PENDING SUPPLIER CHANGES (RRP)
+  -------------------------------------------- */
+  const { data: pendingChange } = await supabase
+    .from("supplier_changes")
+    .select("id, field, old_value, new_value, detected_at")
+    .eq("product_id", id)
+    .eq("status", "pending")
     .maybeSingle();
 
   /* --------------------------------------------
      DERIVED VALUES
   -------------------------------------------- */
   const title = product.display_title || product.name;
-
-  const retailPrice = Number(product.price);
-
-  const supplierPrice =
-    product.supplier_price != null
-      ? Number(product.supplier_price)
-      : null;
-
-  const supplierPriceAtCreation =
-    supplierLink?.supplier_price_at_creation != null
-      ? Number(supplierLink.supplier_price_at_creation)
-      : null;
-
-  const supplierPriceUpdated =
-    supplierPriceAtCreation != null &&
-    supplierPrice != null &&
-    supplierPriceAtCreation !== supplierPrice;
-
-  const markupPercent =
-    supplierPrice && supplierPrice > 0
-      ? Math.round(((retailPrice / supplierPrice) - 1) * 100)
-      : null;
-
-  const grossMargin =
-    supplierPrice != null ? retailPrice - supplierPrice : null;
+  const sellingPrice = Number(product.price);
 
   const displayAuthor =
     product.author_rel?.name ?? product.author ?? null;
@@ -120,6 +104,20 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
         </div>
       </div>
 
+      {/* SUPPLIER ALERT */}
+      {pendingChange && pendingChange.field === "supplier_price" && (
+        <Alert
+          type="warning"
+          message={
+            `Supplier reference update detected.\n\n` +
+            `Previous RRP: £${Number(pendingChange.old_value).toFixed(2)}\n` +
+            `New RRP: £${Number(pendingChange.new_value).toFixed(2)}\n\n` +
+            `This does NOT change your selling price automatically. ` +
+            `Review and update pricing manually if required.`
+          }
+        />
+      )}
+
       {/* GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* PRODUCT DETAILS */}
@@ -143,6 +141,7 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
             </div>
 
             <Row label="Format" value={product.format} />
+            <Row label="Language" value={product.language} />
             <Row label="ISBN" value={product.isbn_13} />
             <Row label="Slug" value={product.slug} small />
           </CardContent>
@@ -159,10 +158,10 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
 
             <div>
               <span className="block text-xs uppercase text-muted-foreground">
-                Confidence
+                Link status
               </span>
               {supplierLink ? (
-                <Badge color="green">exact</Badge>
+                <Badge color="green">linked</Badge>
               ) : (
                 <span>—</span>
               )}
@@ -177,48 +176,24 @@ export default async function AdminProductDetailPage({ params }: PageProps) {
           </CardHeader>
           <CardContent className="space-y-3">
             <Row
-              label="Retail price"
-              value={`£${retailPrice.toFixed(2)}`}
+              label="Selling price"
+              value={`£${sellingPrice.toFixed(2)}`}
               strong
             />
 
-            <div>
-              <span className="block text-xs uppercase text-muted-foreground">
-                Supplier cost
-              </span>
-
-              <div className="flex items-center gap-2">
-                <span>
-                  {supplierPrice != null
-                    ? `£${supplierPrice.toFixed(2)}`
-                    : "—"}
-                </span>
-
-                {supplierPriceUpdated && (
-                  <Badge color="yellow">updated</Badge>
-                )}
-              </div>
-
-              {supplierPriceUpdated && supplierPriceAtCreation != null && (
-                <p className="text-xs text-muted-foreground">
-                  Previously £{supplierPriceAtCreation.toFixed(2)}
-                </p>
-              )}
-            </div>
-
             <Row
-              label="Markup"
-              value={markupPercent != null ? `${markupPercent}%` : "—"}
-            />
-
-            <Row
-              label="Gross margin"
+              label="Supplier RRP"
               value={
-                grossMargin != null
-                  ? `£${grossMargin.toFixed(2)}`
+                product.rrp != null
+                  ? `£${Number(product.rrp).toFixed(2)}`
                   : "—"
               }
             />
+
+            <p className="text-xs text-muted-foreground">
+              Supplier RRPs are reference-only. Actual purchase
+              cost is determined at order time.
+            </p>
           </CardContent>
         </Card>
       </div>

@@ -42,18 +42,7 @@ export async function POST(
     return NextResponse.json({ error: "Change not found" }, { status: 404 });
   }
 
-  /* -------------------------
-     MARK AS ACCEPTED (VIEWED)
-  ------------------------- */
-  if (change.status === "pending") {
-    await supabaseAdmin
-      .from("supplier_changes")
-      .update({
-        status: "accepted",
-        resolved_at: new Date().toISOString(),
-      })
-      .eq("id", id);
-  }
+
 
   /* -------------------------
      REDIRECT TO PRODUCT EDIT
