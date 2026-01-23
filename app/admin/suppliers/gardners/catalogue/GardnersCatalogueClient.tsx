@@ -13,6 +13,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Alert } from "@/components/ui/Alert";
 import Link from "next/link";
 
+/* -------------------------------------------
+   TYPES
+------------------------------------------- */
+
 type Row = {
   id: string;
   supplier: string;
@@ -21,7 +25,7 @@ type Row = {
   display_title: string;
   author: string | null;
   binding: string | null;
-  supplier_price: number;
+  supplier_price: number | null;
   rank_pos: number | null;
 
   product_supplier_links?: {
@@ -29,6 +33,19 @@ type Row = {
     product_id: string;
   }[] | null;
 };
+
+/* -------------------------------------------
+   HELPERS
+------------------------------------------- */
+
+function formatGBP(value: number | null | undefined) {
+  if (typeof value !== "number") return "—";
+  return `£${value.toFixed(2)}`;
+}
+
+/* -------------------------------------------
+   COMPONENT
+------------------------------------------- */
 
 export default function GardnersCatalogueClient({
   rows,
@@ -55,6 +72,7 @@ export default function GardnersCatalogueClient({
   /* -------------------------------------------
      URL UPDATE
   ------------------------------------------- */
+
   const update = (key: string, value: string | null) => {
     const q = new URLSearchParams(params.toString());
 
@@ -68,6 +86,7 @@ export default function GardnersCatalogueClient({
   /* -------------------------------------------
      CREATE PRODUCT
   ------------------------------------------- */
+
   async function handleCreate(row: Row) {
     const confirmed = confirm(
       `Create catalogue product?\n\n${row.display_title}\n\nThis cannot be undone.`
@@ -102,6 +121,7 @@ export default function GardnersCatalogueClient({
   /* -------------------------------------------
      RENDER
   ------------------------------------------- */
+
   return (
     <div className="space-y-6">
       <Card>
@@ -145,7 +165,10 @@ export default function GardnersCatalogueClient({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-neutral-500">
+                <td
+                  colSpan={7}
+                  className="px-4 py-6 text-center text-neutral-500"
+                >
                   No supplier titles match this filter.
                 </td>
               </tr>
@@ -166,11 +189,14 @@ export default function GardnersCatalogueClient({
                   <td className="px-4 py-3 font-medium">
                     {row.display_title}
                   </td>
+
                   <td className="px-4 py-3">{row.author ?? "—"}</td>
                   <td className="px-4 py-3">{row.binding ?? "—"}</td>
+
                   <td className="px-4 py-3 text-right">
-                    £{row.supplier_price.toFixed(2)}
+                    {formatGBP(row.supplier_price)}
                   </td>
+
                   <td className="px-4 py-3 text-right">
                     {row.rank_pos ?? "—"}
                   </td>
