@@ -71,6 +71,11 @@ function calculateRetailPrice(
   return Math.ceil(supplierPrice * (1 + markupPercent / 100));
 }
 
+function looksLikeISBN(value: string) {
+  return /^[0-9]{10}([0-9]{3})?$/.test(value.replace(/-/g, ""));
+}
+
+
 /* ---------------------------------------------------
    COMPONENT
 --------------------------------------------------- */
@@ -341,10 +346,69 @@ if (
           onOutOfStockBehaviorChange={setOutOfStockBehavior}
         />
 
-        {imageUrl && (
-          <Image src={imageUrl} alt="preview" width={200} height={200} />
-        )}
-        <input type="file" onChange={handleUpload} />
+        {/* IMAGE */}
+<div className="space-y-2">
+  <label className="block text-sm font-medium">Product image</label>
+
+  <div className="flex gap-2 items-center">
+    <Button
+      type="button"
+      size="sm"
+      variant="neutral"
+      disabled={!looksLikeISBN(supplierRef)}
+      onClick={async () => {
+        try {
+          setErrorMsg(null);
+
+          await fetch(`/api/admin/products/update/${product.id}`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              isbn_13: supplierRef.replace(/-/g, ""),
+            }),
+          });
+
+          // 🔁 reload product to pick up new image_url
+          const res = await fetch(
+            `/api/admin/products/get/${product.id}`,
+            { credentials: "include", cache: "no-store" }
+          );
+
+          const updated = await res.json();
+          setImageUrl(updated.image_url ?? "");
+        } catch {
+          setErrorMsg("No ISBN cover found for this product.");
+        }
+      }}
+    >
+      Use ISBN cover
+    </Button>
+
+    <label className="inline-flex items-center">
+      <input
+        type="file"
+        className="hidden"
+        accept="image/*"
+        onChange={handleUpload}
+      />
+      <Button size="sm" variant="neutral">
+        Upload image
+      </Button>
+    </label>
+  </div>
+
+  {imageUrl && (
+    <Image
+      src={imageUrl}
+      alt="preview"
+      width={200}
+      height={200}
+      className="rounded border mt-2"
+    />
+  )}
+</div>
+
       </div>
 
       {isBook && (
