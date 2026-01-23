@@ -20,12 +20,7 @@ async function upsertProductSupplier({
   supplier?: string | null;
   supplierRef?: string | null;
 }) {
-  console.log("🟡 [SUPPLIER LINK] input:", { supplier, supplierRef });
-
-  if (!supplier || !supplierRef) {
-    console.log("🟡 [SUPPLIER LINK] skipped");
-    return;
-  }
+  if (!supplier || !supplierRef) return;
 
   const { error } = await supabase
     .from("product_suppliers")
@@ -43,8 +38,6 @@ async function upsertProductSupplier({
   if (error) {
     throw new Error(`Supplier link failed: ${error.message}`);
   }
-
-  console.log("🟢 [SUPPLIER LINK] upserted");
 }
 
 /* ------------------------------------------
@@ -80,7 +73,6 @@ async function fetchGardnersJacketToCloudinary(
       );
 
       if (upload?.secure_url) {
-        console.log("🟢 [JACKET] Attached from:", url);
         return upload.secure_url;
       }
     } catch {
@@ -99,14 +91,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("🟢 [PRODUCT UPDATE] ROUTE HIT");
-
     const { id: productId } = await params;
     const body = await req.json();
-
-    console.log("🟢 [PRODUCT UPDATE] productId:", productId);
-    console.log("🟢 [PRODUCT UPDATE] RAW BODY:", body);
 
     const supabase = await supabaseServer();
     const { data: auth } = await supabase.auth.getUser();
@@ -137,7 +123,7 @@ export async function POST(
       inventory_count = body.inventory_count;
     }
 
-    /* ---------- BUILD SAFE UPDATE ---------- */
+    /* ---------- SAFE UPDATE FIELDS ---------- */
     const updateData: Record<string, unknown> = {};
 
     const allowed = [
@@ -145,14 +131,16 @@ export async function POST(
       "display_title",
       "description",
 
-      // ✅ pricing (NEW MODEL)
       "price",
       "rrp",
 
       "image_url",
       "isbn_13",
 
+      // 🔑 AUTHOR (PARITY WITH CREATE)
+      "author",
       "author_id",
+
       "format",
       "language",
       "genre_id",
@@ -173,7 +161,19 @@ export async function POST(
       }
     }
 
-    console.log("🟢 [PRODUCT UPDATE] FINAL updateData:", updateData);
+    /* ---------- RESOLVE AUTHOR SENTINEL ---------- */
+    if (
+      updateData.author === "__FROM_AUTHOR_ID__" &&
+      typeof updateData.author_id === "string"
+    ) {
+      const { data: authorRow } = await supabase
+        .from("authors")
+        .select("name")
+        .eq("id", updateData.author_id)
+        .single();
+
+      updateData.author = authorRow?.name ?? null;
+    }
 
     /* ---------- WRITE PRODUCT ---------- */
     if (Object.keys(updateData).length > 0) {
@@ -183,7 +183,6 @@ export async function POST(
         .eq("id", productId);
 
       if (error) {
-        console.error("🔴 UPDATE FAILED:", error);
         return NextResponse.json(
           { error: "Product update failed" },
           { status: 500 }
@@ -204,15 +203,11 @@ export async function POST(
           .from("products")
           .update({ image_url: cloudinaryUrl })
           .eq("id", productId);
-
-        console.log("🟢 [JACKET] Cloudinary image attached");
       }
     }
 
-    /* ---------- INVENTORY (LEDGER) ---------- */
+    /* ---------- INVENTORY LEDGER ---------- */
     if (typeof inventory_count === "number") {
-      console.log("🟢 [INVENTORY] adjusting:", inventory_count);
-
       await supabase.rpc("adjust_product_inventory", {
         p_product_id: productId,
         p_new_quantity: inventory_count,
@@ -229,12 +224,8 @@ export async function POST(
       supplierRef: body.supplier_ref,
     });
 
-    console.log("🟢 [PRODUCT UPDATE] DONE");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("🔥 PRODUCT UPDATE CRASHED:", err);
     return NextResponse.json(
       { error: "Server error", detail: String(err) },
       { status: 500 }

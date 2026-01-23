@@ -248,13 +248,22 @@ export default function AdminProductEditPage({
     }
 
     if (isBook) {
-      payload.author_id = authorId || null;
-      payload.genre_id = genreId || null;
-      payload.format = format || null;
-      payload.language = language || null;
-      payload.vibe_id = vibeId || null;
-      payload.theme_id = themeId || null;
-    }
+  payload.author_id = authorId || null;
+
+  // ✅ ensure text author stays in sync
+  if (authorId) {
+    payload.author = "__FROM_AUTHOR_ID__";
+  } else if (authorName.trim()) {
+    payload.author = authorName.trim();
+  }
+
+  payload.genre_id = genreId || null;
+  payload.format = format || null;
+  payload.language = language || null;
+  payload.vibe_id = vibeId || null;
+  payload.theme_id = themeId || null;
+}
+
 
     const res = await fetch(
       `/api/admin/products/update/${product.id}`,
@@ -450,13 +459,60 @@ export default function AdminProductEditPage({
               }}
             />
 
-            {!authorId && (
-              <Input
-                placeholder="Author name (manual)"
-                value={authorName}
-                onChange={(e) => setAuthorName(e.target.value)}
-              />
-            )}
+          {!authorId && (
+  <>
+    <Input
+      placeholder="Author name (manual)"
+      value={authorName}
+      onChange={(e) => setAuthorName(e.target.value)}
+    />
+
+    {authorName.trim() && (
+      <div className="flex items-center gap-3">
+        <p className="text-xs text-neutral-600">
+          This author does not exist yet.
+        </p>
+
+        <Button
+          size="sm"
+          variant="neutral"
+          onClick={async () => {
+            try {
+              const res = await fetch("/api/admin/authors/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  name: authorName.trim(),
+                }),
+              });
+
+              const data = await res.json();
+
+              if (!res.ok || !data.author) {
+                throw new Error(
+                  data.error || "Author creation failed"
+                );
+              }
+
+              setAuthorId(data.author.id);
+              setAuthorName("");
+            } catch (err) {
+              setErrorMsg(
+                err instanceof Error
+                  ? err.message
+                  : "Failed to create author"
+              );
+            }
+          }}
+        >
+          Create author
+        </Button>
+      </div>
+    )}
+  </>
+)}
+
           </div>
 
           {/* CLASSIFICATION */}
