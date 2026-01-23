@@ -19,12 +19,11 @@ export async function GET() {
       .slice(0, 10);
 
     /* ------------------------------------------
-       FETCH TOP 50 BESTSELLERS (OPTION B)
+       FETCH TOP 50 BESTSELLERS
     ------------------------------------------ */
     const { data, error } = await supabase
       .from("product_rankings")
-      .select(
-        `
+      .select(`
         rank,
         products (
           id,
@@ -35,8 +34,7 @@ export async function GET() {
           image_url,
           author
         )
-      `
-      )
+      `)
       .eq("supplier_name", "gardners")
       .eq("import_month", importMonth)
       .order("rank", { ascending: true })
@@ -51,19 +49,35 @@ export async function GET() {
     }
 
     /* ------------------------------------------
-       NORMALISE FOR FRONTEND
+       FILTER + LOG GHOST ROWS
+    ------------------------------------------ */
+    const ghostRows = data?.filter((row) => !row.products) ?? [];
+
+    if (ghostRows.length > 0) {
+      console.warn("⚠️ BESTSELLERS: ghost ranking rows detected", {
+        import_month: importMonth,
+        count: ghostRows.length,
+        ranks: ghostRows.map((r) => r.rank),
+      });
+    }
+
+    /* ------------------------------------------
+       NORMALISE FOR FRONTEND (SAFE)
     ------------------------------------------ */
     const items =
-      data?.map((row) => ({
-        ...row.products,
-        bestseller_rank: row.rank,
-      })) ?? [];
+      data
+        ?.filter((row) => row.products && row.products.id)
+        .map((row) => ({
+          ...row.products!,
+          bestseller_rank: row.rank,
+        })) ?? [];
 
     return NextResponse.json({
       items,
       source: "gardners",
       import_month: importMonth,
       limit: 50,
+      dropped_rows: ghostRows.length,
     });
   } catch (err) {
     console.error("❌ BESTSELLERS API ERROR", err);
