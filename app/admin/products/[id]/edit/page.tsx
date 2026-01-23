@@ -146,14 +146,18 @@ export default function AdminProductEditPage({
       setSupplier(data.supplier ?? "");
       setSupplierRef(data.supplier_ref ?? "");
 
-      if (isBook) {
-        setAuthorId(data.author_id ?? null);
-        setGenreId(data.genre_id ?? "");
-        setFormat(data.format ?? "");
-        setLanguage(data.language ?? "");
-        setVibeId(data.vibe_id ?? "");
-        setThemeId(data.theme_id ?? "");
-      }
+      if (
+  data.product_type === "book" ||
+  data.product_type === "blind-date"
+) {
+  setAuthorId(data.author_id ?? null);
+  setGenreId(data.genre_id ?? "");
+  setFormat(data.format ?? "");
+  setLanguage(data.language ?? "");
+  setVibeId(data.vibe_id ?? "");
+  setThemeId(data.theme_id ?? "");
+}
+
 
       const metaRes = await fetch(
         "/api/admin/products/supporting-data",
@@ -337,11 +341,14 @@ export default function AdminProductEditPage({
               Selling price (£)
             </label>
             <Input
-              type="number"
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
+  type="number"
+  step="0.01"
+  value={price}
+  onChange={(e) =>
+    setPrice(e.target.value === "" ? 0 : Number(e.target.value))
+  }
+/>
+
           </div>
 
           <div>
