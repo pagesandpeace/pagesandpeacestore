@@ -51,7 +51,10 @@ export async function GET() {
     /* ------------------------------------------
        FILTER + LOG GHOST ROWS
     ------------------------------------------ */
-    const ghostRows = data?.filter((row) => !row.products) ?? [];
+    const ghostRows =
+      data?.filter(
+        (row) => !row.products || row.products.length === 0
+      ) ?? [];
 
     if (ghostRows.length > 0) {
       console.warn("⚠️ BESTSELLERS: ghost ranking rows detected", {
@@ -66,11 +69,16 @@ export async function GET() {
     ------------------------------------------ */
     const items =
       data
-        ?.filter((row) => row.products && row.products.id)
-        .map((row) => ({
-          ...row.products!,
-          bestseller_rank: row.rank,
-        })) ?? [];
+        ?.map((row) => {
+          const product = row.products?.[0];
+          if (!product?.id) return null;
+
+          return {
+            ...product,
+            bestseller_rank: row.rank,
+          };
+        })
+        .filter(Boolean) ?? [];
 
     return NextResponse.json({
       items,
