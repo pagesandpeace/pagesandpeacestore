@@ -110,17 +110,16 @@ export default function LogWasteModal({ onClose }: Props) {
   ------------------------------ */
   return (
     <Modal onClose={onClose}>
-      {/* 🔑 THIS WRAPPER IS THE FIX */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg mx-auto">
-        <div className="space-y-6">
-          <h2 className="text-xl font-semibold">
-            Log Food Waste
-          </h2>
+      <div className="w-full max-w-lg space-y-6">
+        <h2 className="text-xl font-semibold">
+          Log Food Waste
+        </h2>
 
-          {/* ADD ITEM */}
-<div className="grid grid-cols-[1fr_80px_auto] gap-2 items-center">
+        {/* ADD ITEM */}
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex-1 min-w-[220px]">
             <select
-              className="flex-1 border rounded px-2 py-1"
+              className="w-full border rounded px-3 py-2"
               value={productId}
               onChange={(e) => setProductId(e.target.value)}
             >
@@ -131,90 +130,85 @@ export default function LogWasteModal({ onClose }: Props) {
                 </option>
               ))}
             </select>
-
-            <input
-              type="number"
-              min={1}
-              className="w-20 border rounded px-2 py-1"
-              value={quantity}
-              onChange={(e) =>
-                setQuantity(Number(e.target.value))
-              }
-            />
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={addItem}
-              disabled={!productId}
-            >
-              Add
-            </Button>
           </div>
 
-          {/* DRAFT TABLE */}
-          {draftItems.length > 0 && (
-            <div className="border rounded">
-              {draftItems.map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0"
-                >
-                  <div className="flex-1">
-                    {item.product_name}
-                  </div>
+          <input
+            type="number"
+            min={1}
+            className="w-20 border rounded px-3 py-2"
+            value={quantity}
+            onChange={(e) => setQuantity(Number(e.target.value))}
+          />
 
-                  <input
-                    type="number"
-                    min={1}
-                    className="w-20 border rounded px-2 py-1"
-                    value={item.quantity}
-                    onChange={(e) =>
-                      updateQuantity(
-                        i,
-                        Number(e.target.value)
-                      )
-                    }
-                  />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addItem}
+            disabled={!productId}
+          >
+            Add
+          </Button>
+        </div>
 
-                  <button
-                    onClick={() => removeItem(i)}
-                    className="text-red-600 font-semibold"
-                    title="Remove"
-                  >
-                    ✕
-                  </button>
+        {/* DRAFT LIST */}
+        {draftItems.length > 0 && (
+          <div className="border rounded-lg divide-y">
+            {draftItems.map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 px-3 py-2"
+              >
+                <div className="flex-1 truncate">
+                  {item.product_name}
                 </div>
-              ))}
-            </div>
-          )}
 
-          {/* ERROR */}
-          {error && (
-            <p className="text-sm text-red-600">
-              {error}
-            </p>
-          )}
+                <input
+                  type="number"
+                  min={1}
+                  className="w-20 border rounded px-2 py-1"
+                  value={item.quantity}
+                  onChange={(e) =>
+                    updateQuantity(i, Number(e.target.value))
+                  }
+                />
 
-          {/* ACTIONS */}
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="neutral"
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-
-            <Button
-              type="button"
-              onClick={submit}
-              disabled={draftItems.length === 0 || saving}
-            >
-              {saving ? "Saving…" : "Submit waste"}
-            </Button>
+                <button
+                  onClick={() => removeItem(i)}
+                  className="text-red-600 font-semibold hover:opacity-70"
+                  title="Remove"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
           </div>
+        )}
+
+        {/* ERROR */}
+        {error && (
+          <p className="text-sm text-red-600">
+            {error}
+          </p>
+        )}
+
+        {/* ACTIONS */}
+        <div className="flex justify-end gap-3 pt-2">
+          <Button
+            variant="neutral"
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            type="button"
+            onClick={submit}
+            disabled={draftItems.length === 0 || saving}
+          >
+            {saving ? "Saving…" : "Submit waste"}
+          </Button>
         </div>
       </div>
     </Modal>
