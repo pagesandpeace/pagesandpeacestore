@@ -23,7 +23,10 @@ export async function GET(req: Request) {
       display_title,
       product_type,
       supplier_name,
-      inventory_count
+      inventory_count,
+      price,
+      retail_price,
+      retail_price_override
     `)
     .neq("product_type", "event")
     .ilike("search_text", `%${q}%`)
@@ -42,6 +45,11 @@ export async function GET(req: Request) {
       product_type: p.product_type,
       supplier: p.supplier_name,
       inventory_count: p.inventory_count ?? 0,
+
+      // passed through for POS / in-store sales
+      price: p.price,
+      retail_price: p.retail_price,
+      retail_price_override: p.retail_price_override,
     }))
   );
 }

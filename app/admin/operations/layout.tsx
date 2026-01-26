@@ -33,14 +33,19 @@ function Tab({ href, active, children }: TabProps) {
 export default function OperationsLayout({ children }: Props) {
   const pathname = usePathname();
 
-  // ✅ Robust route matching
-  const isActiveTab = pathname === "/admin/operations";
-  const isSuppliersTab = pathname.startsWith(
-    "/admin/operations/suppliers"
-  );
-  const isClosedTab = pathname.startsWith(
-    "/admin/operations/closed"
-  );
+  /* ---------------- TAB MATCHING (EXACT) ---------------- */
+
+  const isActiveTab =
+    pathname === "/admin/operations";
+
+  const isClosedTab =
+    pathname === "/admin/operations/closed";
+
+  const isPhysicalTab =
+    pathname === "/admin/operations/physical";
+
+  const isPhysicalHistoryTab =
+    pathname === "/admin/operations/physical-history";
 
   return (
     <div className="space-y-6">
@@ -50,13 +55,16 @@ export default function OperationsLayout({ children }: Props) {
           Operations
         </h1>
         <p className="text-sm text-muted-foreground">
-          Picking, supplier orders, and completed collections
+          Picking, supplier orders, and physical sales
         </p>
       </div>
 
       {/* TABS */}
-      <nav className="flex gap-2 border-b border-muted pb-3">
-        <Tab href="/admin/operations" active={isActiveTab}>
+      <nav className="flex flex-wrap gap-2 border-b border-muted pb-3">
+        <Tab
+          href="/admin/operations"
+          active={isActiveTab}
+        >
           Active
         </Tab>
 
@@ -65,6 +73,20 @@ export default function OperationsLayout({ children }: Props) {
           active={isClosedTab}
         >
           Closed
+        </Tab>
+
+        <Tab
+          href="/admin/operations/physical"
+          active={isPhysicalTab}
+        >
+          Physical sales
+        </Tab>
+
+        <Tab
+          href="/admin/operations/physical-history"
+          active={isPhysicalHistoryTab}
+        >
+          Physical sales history
         </Tab>
       </nav>
 
