@@ -17,7 +17,7 @@ import {
    TYPES
 --------------------------------------------- */
 
-type Granularity = "daily" | "weekly" | "annual";
+type Granularity = "daily" | "weekly" | "quarterly" | "annual";
 
 export type FoodFlowRow = {
   day: string;
@@ -61,26 +61,39 @@ function formatWeekLabel(weekStart: string): string {
   })}`;
 }
 
+function getQuarterKey(day: string): string {
+  const d = new Date(day + "T12:00:00");
+  const year = d.getFullYear();
+  const quarter = Math.floor(d.getMonth() / 3) + 1;
+  return `${year}-Q${quarter}`;
+}
+
+function formatQuarterLabel(key: string): string {
+  const [year, q] = key.split("-Q");
+  return `Q${q} ${year}`;
+}
+
 /* ---------------------------------------------
    COMPONENT
 --------------------------------------------- */
 
 export default function FoodInsightsClient({
-  rows = [],
+  rows,
 }: {
-  rows?: FoodFlowRow[];
+  rows: FoodFlowRow[];
 }) {
   /* ---------------- NORMALISE ---------------- */
 
   const safeRows = useMemo<FoodFlowRow[]>(() => {
-    if (!Array.isArray(rows)) return [];
-    return rows.map((r) => ({
-      day: r.day,
-      supplier_id: r.supplier_id ?? null,
-      stock_in: Number(r.stock_in ?? 0),
-      sales: Number(r.sales ?? 0),
-      waste: Number(r.waste ?? 0),
-    }));
+    return rows
+      .filter((r) => !!r.day)
+      .map((r) => ({
+        day: r.day,
+        supplier_id: r.supplier_id ?? null,
+        stock_in: Number(r.stock_in ?? 0),
+        sales: Number(r.sales ?? 0),
+        waste: Number(r.waste ?? 0),
+      }));
   }, [rows]);
 
   /* ---------------- STATE ---------------- */
@@ -98,6 +111,7 @@ export default function FoodInsightsClient({
 
   const filteredRows = useMemo(() => {
     if (supplierFilter === "all") return safeRows;
+
     return safeRows.filter(
       (r) => r.supplier_id === FOUR_EYES_SUPPLIER_ID
     );
@@ -124,6 +138,9 @@ export default function FoodInsightsClient({
       } else if (granularity === "weekly") {
         key = getWeekStart(r.day);
         label = formatWeekLabel(key);
+      } else if (granularity === "quarterly") {
+        key = getQuarterKey(r.day);
+        label = formatQuarterLabel(key);
       } else {
         key = r.day.slice(0, 4);
         label = key;
@@ -144,9 +161,20 @@ export default function FoodInsightsClient({
       row.waste += r.waste;
     }
 
-    return Array.from(map.entries())
+    let result = Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v);
+
+    // 🔁 rolling windows
+    if (
+      granularity === "daily" ||
+      granularity === "weekly" ||
+      granularity === "quarterly"
+    ) {
+      result = result.slice(-7);
+    }
+
+    return result;
   }, [filteredRows, granularity]);
 
   /* ---------------- TOTALS ---------------- */
@@ -201,21 +229,15 @@ export default function FoodInsightsClient({
         <div className="text-right text-xs leading-5">
           <div>
             <span className="text-gray-500">Stock in:</span>{" "}
-            <span className="font-medium">
-              {totals.stock_in}
-            </span>
+            <span className="font-medium">{totals.stock_in}</span>
           </div>
           <div>
             <span className="text-gray-500">Units sold:</span>{" "}
-            <span className="font-medium">
-              {totals.sales}
-            </span>
+            <span className="font-medium">{totals.sales}</span>
           </div>
           <div>
             <span className="text-gray-500">Waste:</span>{" "}
-            <span className="font-medium">
-              {totals.waste}
-            </span>
+            <span className="font-medium">{totals.waste}</span>
           </div>
         </div>
       </div>
@@ -247,21 +269,21 @@ export default function FoodInsightsClient({
 
       {/* GRANULARITY */}
       <div className="flex gap-2">
-        {(["daily", "weekly", "annual"] as Granularity[]).map(
-          (g) => (
-            <button
-              key={g}
-              onClick={() => setGranularity(g)}
-              className={`px-3 py-1.5 rounded text-sm border ${
-                granularity === g
-                  ? "bg-black text-white border-black"
-                  : "bg-white text-gray-700"
-              }`}
-            >
-              {g[0].toUpperCase() + g.slice(1)}
-            </button>
-          )
-        )}
+        {(
+          ["daily", "weekly", "quarterly", "annual"] as Granularity[]
+        ).map((g) => (
+          <button
+            key={g}
+            onClick={() => setGranularity(g)}
+            className={`px-3 py-1.5 rounded text-sm border ${
+              granularity === g
+                ? "bg-black text-white border-black"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            {g[0].toUpperCase() + g.slice(1)}
+          </button>
+        ))}
       </div>
 
       {/* CHART */}
@@ -276,14 +298,12 @@ export default function FoodInsightsClient({
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="label" />
 
-              {/* PRIMARY AXIS — UNITS */}
               <YAxis
                 yAxisId="units"
                 allowDecimals={false}
                 domain={[0, maxUnits]}
               />
 
-              {/* SECONDARY AXIS — WASTE */}
               <YAxis
                 yAxisId="waste"
                 orientation="right"

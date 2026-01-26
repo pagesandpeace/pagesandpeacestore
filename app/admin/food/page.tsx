@@ -77,7 +77,7 @@ function isDrinkProductRow(
 export default async function FoodOverviewPage() {
   /* ---------- FOOD FLOW ---------- */
   const { data: foodData, error: foodError } =
-    await supabaseAdmin.rpc("get_food_flow_daily");
+    await supabaseAdmin.rpc("get_food_flow");
 
   if (foodError) {
     console.error("❌ FOOD FLOW RPC ERROR:", foodError);
