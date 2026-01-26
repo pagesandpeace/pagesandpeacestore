@@ -157,7 +157,7 @@ export default function AdminSidebar({
                 onClick={() => handleNav("/admin/backorders")}
                 className="text-left hover:text-[#5DA865]"
               >
-                📚 Sales & Backorders
+                📚 Backorders
               </button>
 
               <button
