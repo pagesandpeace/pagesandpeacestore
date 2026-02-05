@@ -68,17 +68,24 @@ export async function GET() {
        NORMALISE FOR FRONTEND (SAFE)
     ------------------------------------------ */
     const items =
-      data
-        ?.map((row) => {
-          const product = row.products?.[0];
-          if (!product?.id) return null;
+  data
+    ?.map((row) => {
+      const product = Array.isArray(row.products)
+        ? row.products[0]
+        : row.products;
 
-          return {
-            ...product,
-            bestseller_rank: row.rank,
-          };
-        })
-        .filter(Boolean) ?? [];
+      if (!product?.id) return null;
+
+      return {
+        ...product,
+        bestseller_rank: row.rank,
+        import_month: importMonth,
+      };
+    })
+    .filter(Boolean) ?? [];
+
+
+
 
     return NextResponse.json({
       items,
