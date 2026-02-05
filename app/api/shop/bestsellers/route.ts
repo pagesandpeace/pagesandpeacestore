@@ -11,12 +11,24 @@ export async function GET() {
     /* ------------------------------------------
        CURRENT MONTH (UTC, YYYY-MM-01)
     ------------------------------------------ */
-    const now = new Date();
-    const importMonth = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
-    )
-      .toISOString()
-      .slice(0, 10);
+    const { data: latestImport, error: monthError } = await supabase
+  .from("product_rankings")
+  .select("import_month")
+  .eq("supplier_name", "gardners")
+  .order("import_month", { ascending: false })
+  .limit(1)
+  .single();
+
+if (monthError || !latestImport) {
+  console.error("❌ No import month found", monthError);
+  return NextResponse.json(
+    { error: "No bestseller data available" },
+    { status: 404 }
+  );
+}
+
+const importMonth = latestImport.import_month;
+
 
     /* ------------------------------------------
        FETCH TOP 50 BESTSELLERS
