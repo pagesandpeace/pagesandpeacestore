@@ -5,10 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 import Link from "next/link";
 import StartEventCheckout from "@/components/events/StartEventCheckout";
-import InterestButton from "@/components/events/InterestButton";
-import AttendButton from "@/components/events/AttendButton";
-import CancelInterestButton from "@/components/events/CancelInterestButton";
-import CancelAttendanceButton from "@/components/events/CancelAttendanceButton";
+import EventCTAClient from "@/components/events/EventCTAClient"; // ✅ NEW
 
 export default async function EventDetailPage(props: {
   params: Promise<{ id: string }>;
@@ -75,7 +72,7 @@ export default async function EventDetailPage(props: {
     );
   }
 
-  /* ---------------------- SERVICE ROLE ---------------------- */
+  /* ---------------------- ADMIN CLIENT ---------------------- */
   const supabaseAdmin = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -96,37 +93,35 @@ export default async function EventDetailPage(props: {
   const soldOut =
     bookingType === "ticketed" && remainingSeats <= 0;
 
-  /* ---------------------- USER STATE (ROBUST FIX) ---------------------- */
+  /* ---------------------- USER STATE (KEEP YOUR FIX) ---------------------- */
 
-// get profile id
-const { data: profile } = await supabaseAdmin
-  .from("users")
-  .select("id")
-  .eq("auth_user_id", user.id)
-  .single();
+  const { data: profile } = await supabaseAdmin
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .single();
 
-const profileId = profile?.id;
+  const profileId = profile?.id;
 
-// check BOTH ids
-const [{ data: interestRows }, { data: attendanceRows }] =
-  await Promise.all([
-    supabaseAdmin
-      .from("event_interest")
-      .select("id")
-      .eq("event_id", eventId)
-      .in("user_id", [user.id, profileId].filter(Boolean)) // 🔥 KEY FIX
-      .limit(1),
+  const [{ data: interestRows }, { data: attendanceRows }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("event_interest")
+        .select("id")
+        .eq("event_id", eventId)
+        .in("user_id", [user.id, profileId].filter(Boolean))
+        .limit(1),
 
-    supabaseAdmin
-      .from("event_attendance")
-      .select("id")
-      .eq("event_id", eventId)
-      .in("user_id", [user.id, profileId].filter(Boolean)) // 🔥 KEY FIX
-      .limit(1),
-  ]);
+      supabaseAdmin
+        .from("event_attendance")
+        .select("id")
+        .eq("event_id", eventId)
+        .in("user_id", [user.id, profileId].filter(Boolean))
+        .limit(1),
+    ]);
 
-const isInterested = !!interestRows?.length;
-const isAttending = !!attendanceRows?.length;
+  const isInterested = !!interestRows?.length;
+  const isAttending = !!attendanceRows?.length;
 
   const formattedDate = new Date(event.date).toLocaleString("en-GB", {
     weekday: "long",
@@ -139,6 +134,7 @@ const isAttending = !!attendanceRows?.length;
   /* ---------------------- UI ---------------------- */
   return (
     <main className="min-h-screen bg-[#FAF6F1]">
+
       {/* HERO */}
       <div className="relative w-full h-[50vh] min-h-[300px]">
         <Image
@@ -154,6 +150,7 @@ const isAttending = !!attendanceRows?.length;
       </div>
 
       <div className="max-w-3xl mx-auto px-6 mt-10 space-y-10">
+
         {/* INFO */}
         <section className="space-y-6 text-neutral-700 text-lg">
           <div>
@@ -208,46 +205,17 @@ const isAttending = !!attendanceRows?.length;
               </button>
             ) : (
               <StartEventCheckout
-  eventId={eventId}
-  ticketTypes={ticketTypes ?? []} // ✅ FIX
-  maxQuantity={remainingSeats}
-/>
+                eventId={eventId}
+                ticketTypes={ticketTypes ?? []}
+                maxQuantity={remainingSeats}
+              />
             )
           ) : (
-            <div className="space-y-3">
-
-              {/* ATTENDING */}
-              {isAttending && (
-  <div className="space-y-3">
-    <button
-      disabled
-      className="w-full bg-green-600 text-black py-3 rounded-lg font-semibold"
-    >
-      ✓ You are attending
-    </button>
-
-    {/* 🔥 THIS WAS MISSING */}
-    <CancelAttendanceButton eventId={event.id} />
-  </div>
-)}
-
-              {/* INTERESTED */}
-              {!isAttending && isInterested && (
-                <>
-                  <div className="text-sm text-blue-700 text-center">
-                    ✓ You are interested
-                  </div>
-
-                  <AttendButton eventId={event.id} />
-                  <CancelInterestButton eventId={event.id} />
-                </>
-              )}
-
-              {/* NONE */}
-              {!isAttending && !isInterested && (
-                <InterestButton eventId={event.id} />
-              )}
-            </div>
+            <EventCTAClient
+              eventId={event.id}
+              initialInterested={isInterested}
+              initialAttending={isAttending}
+            />
           )}
 
           <Link
@@ -257,6 +225,7 @@ const isAttending = !!attendanceRows?.length;
             Booking Terms & Conditions
           </Link>
         </section>
+
       </div>
     </main>
   );

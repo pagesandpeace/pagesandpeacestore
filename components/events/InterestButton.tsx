@@ -3,7 +3,13 @@
 import { useState } from "react";
 import AuthPromptModal from "@/components/ui/AuthPromptModal";
 
-export default function InterestButton({ eventId }: { eventId: string }) {
+export default function InterestButton({
+  eventId,
+  onSuccess,
+}: {
+  eventId: string;
+  onSuccess?: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
@@ -32,7 +38,7 @@ export default function InterestButton({ eventId }: { eventId: string }) {
     });
 
     if (r.ok) {
-      window.location.reload();
+      onSuccess?.();
     } else {
       alert("Something went wrong.");
     }

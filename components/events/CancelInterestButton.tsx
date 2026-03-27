@@ -3,7 +3,13 @@
 import { useState } from "react";
 import AuthPromptModal from "@/components/ui/AuthPromptModal";
 
-export default function CancelInterestButton({ eventId }: { eventId: string }) {
+export default function CancelInterestButton({
+  eventId,
+  onSuccess,
+}: {
+  eventId: string;
+  onSuccess?: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
@@ -28,10 +34,11 @@ export default function CancelInterestButton({ eventId }: { eventId: string }) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ eventId }),
+      credentials: "include",
     });
 
     if (r.ok) {
-      window.location.reload();
+      onSuccess?.();
     } else {
       alert("Failed to cancel interest");
     }

@@ -4,7 +4,13 @@ import { useState } from "react";
 import AuthPromptModal from "@/components/ui/AuthPromptModal";
 import { Button } from "@/components/ui/Button";
 
-export default function AttendButton({ eventId }: { eventId: string }) {
+export default function AttendButton({
+  eventId,
+  onSuccess,
+}: {
+  eventId: string;
+  onSuccess?: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
@@ -33,7 +39,7 @@ export default function AttendButton({ eventId }: { eventId: string }) {
     });
 
     if (r.ok) {
-      window.location.reload();
+      onSuccess?.();
     } else {
       alert("Something went wrong.");
     }
@@ -43,13 +49,9 @@ export default function AttendButton({ eventId }: { eventId: string }) {
 
   return (
     <>
-      <Button
-  onClick={handleClick}
-  disabled={loading}
-  className="w-full"
->
-  {loading ? "Saving…" : "Attend event"}
-</Button>
+      <Button onClick={handleClick} disabled={loading} className="w-full">
+        {loading ? "Saving…" : "Attend event"}
+      </Button>
 
       <AuthPromptModal
         open={showAuthPrompt}

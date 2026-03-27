@@ -6,10 +6,7 @@ import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import BookNowButton from "@/components/events/BookNowButton";
-import InterestButton from "@/components/events/InterestButton";
-import AttendButton from "@/components/events/AttendButton";
-import CancelAttendanceButton from "@/components/events/CancelAttendanceButton";
-import CancelInterestButton from "@/components/events/CancelInterestButton";
+import EventCTAClient from "@/components/events/EventCTAClient"; // ✅ NEW
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -77,7 +74,7 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
     { auth: { persistSession: false } }
   );
 
-  /* ---------------------- USER STATE (MATCH DASHBOARD) ---------------------- */
+  /* ---------------------- USER STATE ---------------------- */
   let isInterested = false;
   let isAttending = false;
 
@@ -237,37 +234,11 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
               />
             )
           ) : (
-            <div className="space-y-4">
-
-              {/* ATTENDING */}
-              {isAttending && (
-                <div className="space-y-3">
-                  <div className="w-full border-2 border-[var(--secondary)] bg-[var(--accent)] text-[var(--background)] py-3 rounded-full font-semibold text-center">
-                    ✓ You&#39;re attending
-                  </div>
-
-                  <CancelAttendanceButton eventId={event.id} />
-                </div>
-              )}
-
-              {/* INTERESTED */}
-              {!isAttending && isInterested && (
-                <div className="space-y-3">
-                  <div className="w-full border-2 border-[var(--secondary)] bg-light-green text-[var(--accent)] py-3 rounded-full font-semibold text-center">
-                    ✓ You&#39;re on the list
-                  </div>
-
-                  <AttendButton eventId={event.id} />
-                  <CancelInterestButton eventId={event.id} />
-                </div>
-              )}
-
-              {/* NONE */}
-              {!isAttending && !isInterested && (
-                <InterestButton eventId={event.id} />
-              )}
-
-            </div>
+            <EventCTAClient
+              eventId={event.id}
+              initialInterested={isInterested}
+              initialAttending={isAttending}
+            />
           )}
 
           <Link

@@ -1,42 +1,46 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import AuthPromptModal from "@/components/ui/AuthPromptModal";
 
-export default function CancelAttendanceButton({ eventId }: { eventId: string }) {
+export default function CancelAttendanceButton({
+  eventId,
+  onSuccess,
+}: {
+  eventId: string;
+  onSuccess?: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
   const handleCancel = async () => {
     setLoading(true);
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    // ✅ USE COOKIE AUTH (correct)
+    const res = await fetch("/api/me", {
+      cache: "no-store",
+      credentials: "include",
+    });
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const me = await res.json();
 
-    if (!session) {
+    if (!me?.id) {
       setShowAuthPrompt(true);
       setLoading(false);
       return;
     }
 
-    const res = await fetch("/api/events/cancel-attendance", {
+    const r = await fetch("/api/events/cancel-attendance", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({ eventId }),
+      credentials: "include", // 🔥 important
     });
 
-    if (res.ok) {
-      window.location.reload();
+    if (r.ok) {
+      onSuccess?.();
     } else {
       alert("Something went wrong");
     }
@@ -47,6 +51,7 @@ export default function CancelAttendanceButton({ eventId }: { eventId: string })
   return (
     <>
       <button
+        type="button"
         onClick={handleCancel}
         disabled={loading}
         className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold"
