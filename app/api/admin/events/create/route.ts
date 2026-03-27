@@ -20,6 +20,7 @@ export async function POST(req: Request) {
       image_url,
       store_id,
       published,
+      booking_type = "ticketed", // ✅ NEW
     } = body;
 
     if (!title || !date || !store_id) {
@@ -39,41 +40,42 @@ export async function POST(req: Request) {
       "-" +
       Date.now().toString().slice(-6);
 
-    // Convert pence → decimal string for products table
-    const priceString = (price_pence / 100).toFixed(2);
+    let product = null;
 
     /* -------------------------------------------------
-       1️⃣ CREATE EVENT PRODUCT (DEFAULT TICKET PRODUCT)
+       1️⃣ CREATE PRODUCT (ONLY IF TICKETED)
     ------------------------------------------------- */
+    if (booking_type === "ticketed") {
+      const productPayload = {
+        name: `${title} – General Admission`,
+        slug: `${slug}-general`,
+        description: subtitle || short_description || "",
+        price: (price_pence / 100).toFixed(2),
+        image_url,
+        product_type: "event",
+        inventory_count: capacity,
+      };
 
-    const productPayload = {
-      name: `${title} – General Admission`,
-      slug: `${slug}-general`,
-      description: subtitle || short_description || "",
-      price: priceString,
-      image_url,
-      product_type: "event",
-      inventory_count: capacity,
-    };
+      const { data: productData, error: productError } = await supabase
+        .from("products")
+        .insert(productPayload)
+        .select()
+        .single();
 
-    const { data: product, error: productError } = await supabase
-      .from("products")
-      .insert(productPayload)
-      .select()
-      .single();
+      if (productError) {
+        console.error("❌ PRODUCT ERROR:", productError);
+        return NextResponse.json(
+          { error: productError.message },
+          { status: 500 }
+        );
+      }
 
-    if (productError) {
-      console.error("❌ PRODUCT ERROR:", productError);
-      return NextResponse.json(
-        { error: productError.message },
-        { status: 500 }
-      );
+      product = productData;
     }
 
     /* -------------------------------------------------
        2️⃣ CREATE EVENT
     ------------------------------------------------- */
-
     const eventPayload = {
       title,
       subtitle,
@@ -86,7 +88,8 @@ export async function POST(req: Request) {
       store_id,
       published,
       slug,
-      product_id: product.id,
+      product_id: product?.id ?? null, // ✅ safe
+      booking_type, // ✅ NEW
     };
 
     const { data: event, error: eventError } = await supabase
@@ -104,39 +107,34 @@ export async function POST(req: Request) {
     }
 
     /* -------------------------------------------------
-       3️⃣ CREATE DEFAULT TICKET TYPE
+       3️⃣ CREATE TICKET TYPE (ONLY IF TICKETED)
     ------------------------------------------------- */
+    if (booking_type === "ticketed") {
+      const ticketPayload = {
+        event_id: event.id,
+        name: "General Admission",
+        description: null,
+        price_pence,
+        inventory_count: capacity,
+        product_id: product.id,
+        is_default: true,
+        is_active: true,
+      };
 
-    const ticketPayload = {
-      event_id: event.id,
-      name: "General Admission",
-      description: null,
-      price_pence,
-      inventory_count: capacity,
-      product_id: product.id,
-      is_default: true,
-      is_active: true,
-    };
+      const { error: ticketError } = await supabase
+        .from("event_ticket_types")
+        .insert(ticketPayload);
 
-    const { data: ticketRow, error: ticketError } = await supabase
-  .from("event_ticket_types")
-  .insert(ticketPayload)
-  .select()
-  .single();
-
-console.log("🎟 ticketRow:", ticketRow);
-console.log("🎟 ticketError:", ticketError);
-
-
-    if (ticketError) {
-      console.error("❌ TICKET TYPE ERROR:", ticketError);
-      return NextResponse.json(
-        { error: ticketError.message },
-        { status: 500 }
-      );
+      if (ticketError) {
+        console.error("❌ TICKET ERROR:", ticketError);
+        return NextResponse.json(
+          { error: ticketError.message },
+          { status: 500 }
+        );
+      }
     }
 
-    console.log("🎉 Event + default ticket created successfully");
+    console.log("🎉 Event created successfully");
 
     return NextResponse.json({ success: true, event });
   } catch (err) {

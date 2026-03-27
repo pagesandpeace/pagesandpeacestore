@@ -9,13 +9,20 @@ export type EventCardType = {
   slug: string;
   title: string;
   date: string;
-  defaultPricePence: number;
+
+  // ✅ UPDATED
+  defaultPricePence: number | null;
+
   imageUrl?: string | null;
   remaining: number;
+
+  // ✅ NEW
+  bookingType: "ticketed" | "interest";
 };
 
 export default function EventCard({ event }: { event: EventCardType }) {
-  const soldOut = event.remaining <= 0;
+  const soldOut =
+    event.bookingType === "ticketed" && event.remaining <= 0;
 
   const dateFormatted = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
@@ -26,7 +33,10 @@ export default function EventCard({ event }: { event: EventCardType }) {
     hour12: false,
   }).format(new Date(event.date));
 
-  const price = (event.defaultPricePence / 100).toFixed(2);
+  const price =
+    event.defaultPricePence !== null
+      ? (event.defaultPricePence / 100).toFixed(2)
+      : null;
 
   return (
     <Link
@@ -47,7 +57,7 @@ export default function EventCard({ event }: { event: EventCardType }) {
           className={`object-cover ${soldOut ? "opacity-60" : ""}`}
         />
 
-        {/* SOLD OUT BANNER */}
+        {/* SOLD OUT BANNER (ticketed only) */}
         {soldOut && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
             <span className="text-white text-xl font-bold tracking-wide uppercase">
@@ -67,22 +77,36 @@ export default function EventCard({ event }: { event: EventCardType }) {
           {dateFormatted}
         </p>
 
-        <p className="text-lg font-semibold text-[var(--accent)]">
-          From £{price}
-        </p>
-
-        {!soldOut ? (
-          <Badge
-            color={event.remaining <= 3 ? "yellow" : "green"}
-            className="w-max px-3 py-1"
-          >
-            {event.remaining <= 3
-              ? "Only a few seats left"
-              : "Seats available"}
-          </Badge>
+        {/* ✅ PRICE / INTEREST SWITCH */}
+        {event.bookingType === "ticketed" ? (
+          <p className="text-lg font-semibold text-[var(--accent)]">
+            From £{price}
+          </p>
         ) : (
-          <Badge color="red" className="w-max px-3 py-1">
-            Sold Out
+          <p className="text-lg font-semibold text-[var(--accent)]">
+            Register interest
+          </p>
+        )}
+
+        {/* ✅ AVAILABILITY */}
+        {event.bookingType === "ticketed" ? (
+          !soldOut ? (
+            <Badge
+              color={event.remaining <= 3 ? "yellow" : "green"}
+              className="w-max px-3 py-1"
+            >
+              {event.remaining <= 3
+                ? "Only a few seats left"
+                : "Seats available"}
+            </Badge>
+          ) : (
+            <Badge color="red" className="w-max px-3 py-1">
+              Sold Out
+            </Badge>
+          )
+        ) : (
+          <Badge color="blue" className="w-max px-3 py-1">
+            Open for interest
           </Badge>
         )}
       </div>

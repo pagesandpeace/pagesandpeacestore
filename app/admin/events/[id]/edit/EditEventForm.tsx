@@ -26,6 +26,7 @@ type EventItem = {
   image_url?: string | null;
   store_id: string;
   published: boolean;
+  booking_type: "ticketed" | "interest"
 };
 
 type StoreItem = {
@@ -131,6 +132,9 @@ export default function EditEventForm({
   return (
     <div className="max-w-3xl mx-auto py-10">
       <h1 className="text-3xl font-bold mb-8">Edit Event</h1>
+<div className="text-sm text-neutral-500">
+  Type: {event.booking_type === "ticketed" ? "Ticketed Event" : "Interest Event"}
+</div>
 
       <div className="space-y-6">
         {errorMsg && <Alert type="error" message={errorMsg} />}
@@ -140,6 +144,7 @@ export default function EditEventForm({
           <label className="block mb-1 text-sm font-medium">Title *</label>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
+        
 
         {/* SUBTITLE */}
         <div>
@@ -234,9 +239,13 @@ export default function EditEventForm({
             onChange={(e) => setCapacity(Number(e.target.value))}
           />
         </div>
-
+{event.booking_type === "interest" && (
+  <div className="p-4 rounded-lg border bg-neutral-50 text-sm">
+    This is an interest-based event. No tickets or pricing apply.
+  </div>
+)}
         {/* 🎟️ TICKET EDITOR (PRICING LIVES HERE) */}
-        {ticketEditor}
+  {event.booking_type === "ticketed" && ticketEditor}
 
         {/* PUBLISHED */}
         <div className="flex items-center gap-3">

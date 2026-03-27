@@ -20,7 +20,13 @@ type EventRow = {
   image_url: string | null;
   capacity: number;
   published: boolean;
+
+  booking_type: "ticketed" | "interest";
+
   event_bookings: { id: string }[];
+
+  interest_count?: number;
+  attending_count?: number; // ✅ ADD THIS
 };
 
 type Props = {
@@ -61,6 +67,8 @@ export default function AdminEventsTable({ events }: Props) {
                 event.capacity - booked,
                 0
               );
+
+              const interestCount = event.interest_count ?? 0;
 
               return (
                 <TableRow key={event.id}>
@@ -108,15 +116,30 @@ export default function AdminEventsTable({ events }: Props) {
                     )}
                   </Cell>
 
-                  {/* BOOKINGS */}
+                  {/* BOOKINGS / INTEREST */}
                   <Cell>
-                    <div className="text-sm">
-                      {booked} / {event.capacity}
-                    </div>
-                    <div className="text-xs text-foreground/60">
-                      {remaining} remaining
-                    </div>
-                  </Cell>
+  {event.booking_type === "ticketed" ? (
+    <>
+      <div className="text-sm font-medium">
+        {event.event_bookings.length} / {event.capacity}
+      </div>
+
+      <div className="text-xs text-foreground/60">
+        {Math.max(event.capacity - event.event_bookings.length, 0)} remaining
+      </div>
+    </>
+  ) : (
+    <>
+      <div className="text-sm font-medium text-blue-700">
+        🔥 {event.interest_count ?? 0} interested
+      </div>
+
+      <div className="text-sm font-medium text-green-700">
+        ✅ {event.attending_count ?? 0} attending
+      </div>
+    </>
+  )}
+</Cell>
 
                   {/* STATUS */}
                   <Cell>

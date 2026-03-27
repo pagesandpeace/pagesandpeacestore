@@ -13,6 +13,7 @@ type EventRow = {
   capacity: number;
   image_url: string | null;
   is_test: boolean;
+  booking_type: "ticketed" | "interest";
   event_ticket_types: {
     price_pence: number;
     is_default: boolean;
@@ -28,7 +29,7 @@ export default async function EventsPage() {
   const now = new Date();
 
   /* -----------------------------
-     FETCH EVENTS + DEFAULT TICKET
+     FETCH EVENTS (NO INNER JOIN)
   ----------------------------- */
   const { data: events, error: eventErr } = await supabase
     .from("events")
@@ -40,13 +41,13 @@ export default async function EventsPage() {
       capacity,
       image_url,
       is_test,
-      event_ticket_types!inner (
+      booking_type,
+      event_ticket_types (
         price_pence,
         is_default
       )
     `)
     .eq("is_test", false)
-    .eq("event_ticket_types.is_default", true)
     .order("date", { ascending: true });
 
   if (eventErr) {
@@ -87,7 +88,9 @@ export default async function EventsPage() {
       (b) => b.event_id === evt.id
     ).length;
 
-    const defaultTicket = evt.event_ticket_types[0];
+    const defaultTicket = evt.event_ticket_types?.find(
+      (t) => t.is_default
+    );
 
     return {
       id: evt.id,
@@ -96,7 +99,14 @@ export default async function EventsPage() {
       date: evt.date,
       imageUrl: evt.image_url,
       remaining: evt.capacity - usedSeats,
-      defaultPricePence: defaultTicket?.price_pence ?? 0,
+
+      // ✅ HANDLE BOTH TYPES
+      defaultPricePence:
+        evt.booking_type === "ticketed"
+          ? defaultTicket?.price_pence ?? 0
+          : null,
+
+      bookingType: evt.booking_type, // ✅ NEW
     };
   });
 

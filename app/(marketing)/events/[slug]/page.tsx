@@ -6,6 +6,11 @@ import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import BookNowButton from "@/components/events/BookNowButton";
+import InterestButton from "@/components/events/InterestButton";
+import AttendButton from "@/components/events/AttendButton";
+import CancelAttendanceButton from "@/components/events/CancelAttendanceButton";
+import CancelInterestButton from "@/components/events/CancelInterestButton";
+
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
@@ -20,14 +25,11 @@ interface Event {
   capacity: number;
   price_pence: number;
   image_url: string | null;
+  booking_type: "ticketed" | "interest";
 }
 
 interface Params {
   slug: string;
-}
-
-interface CategoryLink {
-  category_id: string;
 }
 
 interface EventCategory {
@@ -64,14 +66,50 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
 
   const eventId = event.id;
 
+  /* ---------------------- USER ---------------------- */
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+
+  /* ---------------------- ADMIN CLIENT ---------------------- */
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+
+  /* ---------------------- USER STATE (MATCH DASHBOARD) ---------------------- */
+  let isInterested = false;
+  let isAttending = false;
+
+  if (user) {
+    const [{ data: interestRows }, { data: attendanceRows }] =
+      await Promise.all([
+        supabaseAdmin
+          .from("event_interest")
+          .select("id")
+          .eq("event_id", eventId)
+          .eq("user_id", user.id)
+          .limit(1),
+
+        supabaseAdmin
+          .from("event_attendance")
+          .select("id")
+          .eq("event_id", eventId)
+          .eq("user_id", user.id)
+          .limit(1),
+      ]);
+
+    isAttending = !!attendanceRows?.length;
+    isInterested = !!interestRows?.length;
+  }
+
   /* -------------------- CATEGORIES -------------------- */
   const { data: categoryLinksRaw } = await supabase
     .from("event_category_links")
     .select("category_id")
     .eq("event_id", eventId);
 
-  const categoryIds =
-    categoryLinksRaw?.map((c) => c.category_id) ?? [];
+  const categoryIds = categoryLinksRaw?.map((c) => c.category_id) ?? [];
 
   let categories: EventCategory[] = [];
   if (categoryIds.length > 0) {
@@ -84,12 +122,6 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
   }
 
   /* ---------------------- CAPACITY ---------------------- */
-  const supabaseAdmin = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
-
   const { data: paidSeats } = await supabaseAdmin
     .from("event_bookings")
     .select("id")
@@ -99,7 +131,9 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
 
   const usedSeats = paidSeats?.length ?? 0;
   const remainingSeats = event.capacity - usedSeats;
-  const soldOut = remainingSeats <= 0;
+
+  const soldOut =
+    event.booking_type === "ticketed" && remainingSeats <= 0;
 
   const formattedDate = new Date(event.date).toLocaleString("en-GB", {
     weekday: "long",
@@ -112,6 +146,8 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
   /* ---------------------- UI ---------------------- */
   return (
     <main className="bg-background min-h-screen pb-20 font-[Montserrat]">
+
+      {/* HERO */}
       <div className="relative w-full h-[55vh] min-h-80">
         <Image
           src={event.image_url || "/coming_soon.svg"}
@@ -120,13 +156,14 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
           className="object-cover object-center"
           priority
         />
-        <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <h1 className="absolute bottom-8 left-8 text-white text-4xl font-extrabold drop-shadow-xl tracking-tight">
           {event.title}
         </h1>
       </div>
 
       <div className="max-w-3xl mx-auto px-6 mt-12 space-y-10">
+
         {event.subtitle && (
           <p className="text-xl text-foreground/80 italic text-center">
             {event.subtitle}
@@ -163,7 +200,11 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
           <div className="border-b border-muted pb-4">
             <strong>Availability</strong>
             <div>
-              {soldOut ? "Sold Out" : "Seats available"}
+              {event.booking_type === "ticketed"
+                ? soldOut
+                  ? "Sold Out"
+                  : "Seats available"
+                : "Open for interest"}
             </div>
           </div>
 
@@ -175,19 +216,58 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
           )}
         </section>
 
+        {/* CTA */}
         <section className="bg-white border rounded-2xl shadow-sm p-8 text-center">
-          <h2 className="text-2xl font-semibold mb-4">Book Your Place</h2>
+          <h2 className="text-2xl font-semibold mb-4">
+            {event.booking_type === "ticketed"
+              ? "Book Your Place"
+              : "Register Your Interest"}
+          </h2>
 
-          {soldOut ? (
-            <Button disabled className="w-full">
-              Sold Out
-            </Button>
+          {event.booking_type === "ticketed" ? (
+            soldOut ? (
+              <Button disabled className="w-full">
+                Sold Out
+              </Button>
+            ) : (
+              <BookNowButton
+                eventId={event.id}
+                slug={event.slug}
+                remainingSeats={remainingSeats}
+              />
+            )
           ) : (
-            <BookNowButton
-              eventId={event.id}
-              slug={event.slug}
-              remainingSeats={remainingSeats}
-            />
+            <div className="space-y-4">
+
+              {/* ATTENDING */}
+              {isAttending && (
+                <div className="space-y-3">
+                  <div className="w-full border-2 border-[var(--secondary)] bg-[var(--accent)] text-[var(--background)] py-3 rounded-full font-semibold text-center">
+                    ✓ You&#39;re attending
+                  </div>
+
+                  <CancelAttendanceButton eventId={event.id} />
+                </div>
+              )}
+
+              {/* INTERESTED */}
+              {!isAttending && isInterested && (
+                <div className="space-y-3">
+                  <div className="w-full border-2 border-[var(--secondary)] bg-light-green text-[var(--accent)] py-3 rounded-full font-semibold text-center">
+                    ✓ You&#39;re on the list
+                  </div>
+
+                  <AttendButton eventId={event.id} />
+                  <CancelInterestButton eventId={event.id} />
+                </div>
+              )}
+
+              {/* NONE */}
+              {!isAttending && !isInterested && (
+                <InterestButton eventId={event.id} />
+              )}
+
+            </div>
           )}
 
           <Link
@@ -197,6 +277,7 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
             Booking Terms & Conditions
           </Link>
         </section>
+
       </div>
     </main>
   );

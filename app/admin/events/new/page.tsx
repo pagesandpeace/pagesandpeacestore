@@ -31,8 +31,11 @@ export default function CreateEventPage() {
   const [price, setPrice] = useState(0);
   const [published, setPublished] = useState(true);
 
+  // ✅ NEW
+  const [bookingType, setBookingType] = useState<"ticketed" | "interest">("ticketed");
+
   /* -------------------------------
-     STORES (ADDITIVE FIX)
+     STORES
   -------------------------------- */
   const [stores, setStores] = useState<Store[]>([]);
   const [storeId, setStoreId] = useState("");
@@ -51,7 +54,7 @@ export default function CreateEventPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   /* -------------------------------
-     LOAD STORES (FIXED, ADDITIVE)
+     LOAD STORES
   -------------------------------- */
   useEffect(() => {
     let cancelled = false;
@@ -64,27 +67,16 @@ export default function CreateEventPage() {
           credentials: "include",
         });
 
-        if (!res.ok) {
-          console.error("Store fetch failed:", await res.text());
-          return;
-        }
+        if (!res.ok) return;
 
         const data = await res.json();
 
         if (!cancelled) {
           setStores(data);
-
-          // ✅ auto-select if exactly one store
-          if (data.length === 1) {
-            setStoreId(data[0].id);
-          }
+          if (data.length === 1) setStoreId(data[0].id);
         }
-      } catch (err) {
-        console.error("Store fetch error:", err);
       } finally {
-        if (!cancelled) {
-          setLoadingStores(false);
-        }
+        if (!cancelled) setLoadingStores(false);
       }
     }
 
@@ -108,15 +100,15 @@ export default function CreateEventPage() {
     const form = new FormData();
     form.append("file", file);
 
-    const uploadRes = await fetch("/api/admin/events/upload-image", {
+    const res = await fetch("/api/admin/events/upload-image", {
       method: "POST",
       body: form,
       credentials: "include",
     });
 
-    const data = await uploadRes.json();
+    const data = await res.json();
 
-    if (!uploadRes.ok) {
+    if (!res.ok) {
       setUploading(false);
       setErrorMsg(data.error || "Image upload failed.");
       return;
@@ -139,6 +131,8 @@ export default function CreateEventPage() {
       return;
     }
 
+    const isTicketed = bookingType === "ticketed";
+
     const payload = {
       title,
       subtitle,
@@ -146,10 +140,11 @@ export default function CreateEventPage() {
       description,
       date,
       capacity,
-      price_pence: Math.round(price * 100),
+      price_pence: isTicketed ? Math.round(price * 100) : 0, // ✅ FIX
       image_url: imageUrl,
       store_id: storeId,
       published,
+      booking_type: bookingType, // ✅ NEW
     };
 
     const res = await fetch("/api/admin/events/create", {
@@ -178,6 +173,24 @@ export default function CreateEventPage() {
 
       <div className="space-y-6">
         {errorMsg && <Alert type="error" message={errorMsg} />}
+
+        {/* EVENT TYPE */}
+        <div>
+          <label className="block mb-1 text-sm font-medium">
+            Event Type *
+          </label>
+
+          <select
+            className="border rounded-md px-3 py-2 w-full"
+            value={bookingType}
+            onChange={(e) =>
+              setBookingType(e.target.value as "ticketed" | "interest")
+            }
+          >
+            <option value="ticketed">Ticketed (paid event)</option>
+            <option value="interest">Interest (no payment)</option>
+          </select>
+        </div>
 
         {/* TITLE */}
         <div>
@@ -241,29 +254,15 @@ export default function CreateEventPage() {
               </option>
             ))}
           </select>
-
-          {!loadingStores && stores.length === 0 && (
-            <p className="text-xs text-red-500 mt-1">
-              No stores available.
-            </p>
-          )}
         </div>
 
         {/* IMAGE */}
         <div>
           <label className="block mb-1 text-sm font-medium">Event Image</label>
 
-          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-            <input
-              type="file"
-              className="hidden"
-              accept="image/*"
-              onChange={handleUpload}
-            />
-            <span className="text-sm text-gray-500">Upload image</span>
-          </label>
+          <input type="file" accept="image/*" onChange={handleUpload} />
 
-          {uploading && <p className="text-sm mt-2">Uploading…</p>}
+          {uploading && <p>Uploading…</p>}
 
           {imageUrl && (
             <Image
@@ -287,27 +286,22 @@ export default function CreateEventPage() {
           />
         </div>
 
-        {/* DEFAULT TICKET PRICE */}
-<div>
-  <label className="block mb-1 text-sm font-medium">
-    Default Ticket Price (£)
-  </label>
+        {/* PRICE (ONLY IF TICKETED) */}
+        {bookingType === "ticketed" && (
+          <div>
+            <label className="block mb-1 text-sm font-medium">
+              Default Ticket Price (£)
+            </label>
 
-  <Input
-    type="number"
-    min={0}
-    step="0.01"
-    value={price}
-    onChange={(e) => setPrice(Number(e.target.value))}
-  />
-
-  <p className="text-xs text-gray-500 mt-1">
-    This creates the default “General Admission” ticket.
-    You can add more ticket options (e.g. drinks, snacks, VIP)
-    after creating the event.
-  </p>
-</div>
-
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={price}
+              onChange={(e) => setPrice(Number(e.target.value))}
+            />
+          </div>
+        )}
 
         {/* PUBLISHED */}
         <div className="flex items-center gap-3">
