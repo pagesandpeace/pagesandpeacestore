@@ -1,15 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/Button";
+import AuthPromptModal from "@/components/ui/AuthPromptModal";
 
 export default function InterestButton({ eventId }: { eventId: string }) {
   const [loading, setLoading] = useState(false);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
   async function handleClick() {
     setLoading(true);
 
-    const res = await fetch("/api/events/interest", {
+    const res = await fetch("/api/me", {
+      cache: "no-store",
+      credentials: "include",
+    });
+    const me = await res.json();
+
+    if (!me?.id) {
+      setShowAuthPrompt(true);
+      setLoading(false);
+      return;
+    }
+
+    const r = await fetch("/api/events/interest", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -18,7 +31,7 @@ export default function InterestButton({ eventId }: { eventId: string }) {
       credentials: "include",
     });
 
-    if (res.ok) {
+    if (r.ok) {
       window.location.reload();
     } else {
       alert("Something went wrong.");
@@ -28,8 +41,19 @@ export default function InterestButton({ eventId }: { eventId: string }) {
   }
 
   return (
-    <Button onClick={handleClick} disabled={loading} className="w-full">
-      {loading ? "Saving…" : "Join interest list"}
-    </Button>
+    <>
+      <button
+        onClick={handleClick}
+        disabled={loading}
+        className="w-full bg-accent text-white py-3 rounded-lg font-semibold hover:opacity-90"
+      >
+        {loading ? "Saving…" : "Join interest list"}
+      </button>
+
+      <AuthPromptModal
+        open={showAuthPrompt}
+        onClose={() => setShowAuthPrompt(false)}
+      />
+    </>
   );
 }
