@@ -4,20 +4,27 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+/* ----------------------------------
+   TYPES
+---------------------------------- */
 type BeehiivWebhook = {
-  type: string;
+  event_type: string; // ✅ FIXED (was "type")
   data?: {
     email?: string;
   };
 };
 
+/* ----------------------------------
+   HANDLER
+---------------------------------- */
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as BeehiivWebhook;
 
     console.log("📩 Beehiiv webhook received:", body);
 
-    const event = body?.type;
+    // ✅ FIXED: correct field
+    const event = body?.event_type;
     const email = body?.data?.email?.toLowerCase();
 
     if (!email) {
@@ -35,7 +42,7 @@ export async function POST(req: Request) {
        SUBSCRIBE
     ------------------------- */
     if (event === "subscription.created") {
-      await supabaseAdmin
+      const { data, error } = await supabaseAdmin
         .from("users")
         .update({
           marketing_consent: true,
@@ -43,25 +50,45 @@ export async function POST(req: Request) {
           beehiiv_subscribed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq("email", email);
+        .eq("email", email)
+        .select();
 
-      console.log("✅ Subscribed:", email);
+      if (error) {
+        console.error("❌ DB update error (subscribe):", error);
+      } else {
+        console.log("✅ Subscribed:", email, data);
+      }
     }
 
     /* -------------------------
        UNSUBSCRIBE (CRITICAL)
     ------------------------- */
     if (event === "subscription.deleted") {
-      await supabaseAdmin
+      const { data, error } = await supabaseAdmin
         .from("users")
         .update({
           marketing_consent: false,
           beehiiv_subscribed: false,
           updated_at: new Date().toISOString(),
         })
-        .eq("email", email);
+        .eq("email", email)
+        .select();
 
-      console.log("❌ Unsubscribed:", email);
+      if (error) {
+        console.error("❌ DB update error (unsubscribe):", error);
+      } else {
+        console.log("❌ Unsubscribed:", email, data);
+      }
+    }
+
+    /* -------------------------
+       UNKNOWN EVENT (SAFE LOG)
+    ------------------------- */
+    if (
+      event !== "subscription.created" &&
+      event !== "subscription.deleted"
+    ) {
+      console.log("ℹ️ Unhandled Beehiiv event:", event);
     }
 
     return NextResponse.json({ ok: true });
