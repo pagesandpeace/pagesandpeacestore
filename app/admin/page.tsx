@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
 
 import { supabaseServer } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js"; // ⭐ NEW
 
 import DashboardKpiCards from "@/components/admin/dashboard/DashboardKpiCards";
 import LowStockWidget from "@/components/admin/dashboard/LowStockWidget";
@@ -37,34 +38,50 @@ type MetricRow = {
 export default async function AdminDashboardPage() {
   noStore();
 
+  // 🔐 USER CLIENT (respects RLS)
   const supabase = await supabaseServer();
 
+  // 🔓 ADMIN CLIENT (bypasses RLS)
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  console.log("🔍 Admin dashboard loading...");
+
   /* ------------------------------------------------------------------
-     AUTH (SERVER SOURCE OF TRUTH)
+     AUTH
   ------------------------------------------------------------------ */
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+
+  console.log("👤 Auth user:", user?.email, authError);
 
   if (!user) {
     redirect("/sign-in?callbackURL=/admin");
   }
 
   /* ------------------------------------------------------------------
-     ✅ CORRECT PROFILE LOOKUP (auth_user_id)
+     PROFILE CHECK (still RLS-safe)
   ------------------------------------------------------------------ */
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("users")
     .select("role")
     .eq("auth_user_id", user.id)
     .single();
 
+  console.log("👤 Profile:", profile, profileError);
+
   if (profile?.role !== "admin") {
     redirect("/dashboard");
   }
 
+  console.log("🟥 [ADMIN] ✅ admin access granted");
+
   /* ------------------------------------------------------------------
-     RPC – ADMIN METRICS (SOURCE OF TRUTH)
+     RPC – ADMIN METRICS
   ------------------------------------------------------------------ */
   const { data: rpc, error: rpcError } = await supabase.rpc(
     "get_admin_dashboard_metrics"
@@ -116,9 +133,9 @@ export default async function AdminDashboardPage() {
   /* ------------------------------------------------------------------
      FEEDBACK
   ------------------------------------------------------------------ */
-  const { data: feedbackData } = await supabase
-    .from("feedback")
-    .select("rating");
+  const { data: feedbackData } = await supabaseAdmin
+  .from("feedback")
+  .select("rating");
 
   const feedback = feedbackData ?? [];
   const totalFeedback = feedback.length;
@@ -129,13 +146,19 @@ export default async function AdminDashboardPage() {
       : 0;
 
   /* ------------------------------------------------------------------
-     NEWSLETTER
+     🔥 EMAIL SUBSCRIBERS (FIXED WITH ADMIN CLIENT)
   ------------------------------------------------------------------ */
-  const { data: subs } = await supabase
-    .from("newsletter_subscribers")
-    .select("id");
+  const { data: subs, error: subsError } = await supabaseAdmin
+    .from("users")
+    .select("id, email, beehiiv_subscribed")
+    .eq("beehiiv_subscribed", true);
+
+  console.log("📧 Subscribers query result:", subs);
+  console.log("❌ Subscribers query error:", subsError);
 
   const totalEmailSubscribers = subs?.length ?? 0;
+
+  console.log("📊 Total Email Subscribers:", totalEmailSubscribers);
 
   /* ------------------------------------------------------------------
      RENDER
