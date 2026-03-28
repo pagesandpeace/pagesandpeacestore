@@ -19,11 +19,13 @@ export default function SignUpClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [marketingConsent, setMarketingConsent] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   /* --------------------------------------------------
-     AUTO LOYALTY OPT-IN (SAFE + IDEMPOTENT)
+     AUTO LOYALTY OPT-IN
   -------------------------------------------------- */
   async function autoJoinLoyaltyIfNeeded() {
     if (joinIntent !== "loyalty") return;
@@ -42,13 +44,11 @@ export default function SignUpClient() {
       });
 
       localStorage.setItem("pp:loyalty-confirmed", "true");
-    } catch {
-      // silent failure
-    }
+    } catch {}
   }
 
   /* --------------------------------------------------
-     EMAIL SIGN-UP (CREDENTIALS)
+     EMAIL SIGN-UP
   -------------------------------------------------- */
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
@@ -71,16 +71,12 @@ export default function SignUpClient() {
       return;
     }
 
-    // Email confirmation flow (Supabase may not return a session yet)
     if (!data.user) {
       alert("Check your email inbox to confirm your account!");
       setLoading(false);
       return;
     }
 
-    /* --------------------------------------------------
-       CREATE USER PROFILE (SERVER — SERVICE ROLE)
-    -------------------------------------------------- */
     const res = await fetch("/api/profile/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -88,24 +84,22 @@ export default function SignUpClient() {
         auth_user_id: data.user.id,
         email,
         name,
+        marketing_consent: marketingConsent,
       }),
     });
 
     if (!res.ok) {
-      const err = await res.json();
       alert("Profile creation failed");
-      console.error("Profile create error:", err);
       setLoading(false);
       return;
     }
 
     await autoJoinLoyaltyIfNeeded();
-
     router.push(callbackURL);
   }
 
   /* --------------------------------------------------
-     GOOGLE SIGN-UP (HANDLED BY CALLBACK)
+     GOOGLE SIGN-UP
   -------------------------------------------------- */
   async function handleGoogle() {
     setGoogleLoading(true);
@@ -134,26 +128,7 @@ export default function SignUpClient() {
         Create your account
       </h1>
 
-      <button
-        onClick={handleGoogle}
-        disabled={googleLoading}
-        className="w-full flex items-center justify-center gap-3 py-3 bg-white rounded-lg border border-[#D6C28B] hover:bg-[#f1ede4]"
-      >
-        <Image src="/google_logo.svg" width={20} height={20} alt="Google" />
-        <span>{googleLoading ? "Connecting…" : "Sign up with Google"}</span>
-      </button>
-
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-[#e4ddd5]" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="px-2 bg-[#FAF6F1] text-[#6b665d]">
-            or continue with email
-          </span>
-        </div>
-      </div>
-
+      {/* ---------------- EMAIL FORM FIRST ---------------- */}
       <form onSubmit={handleSignUp} className="space-y-4">
         <input
           type="text"
@@ -182,10 +157,51 @@ export default function SignUpClient() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
+        {/* NEWSLETTER CONSENT */}
+        <label className="flex items-start gap-2 text-sm text-[#444]">
+          <input
+            type="checkbox"
+            checked={marketingConsent}
+            onChange={(e) => setMarketingConsent(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            Send me updates, events and book drops by email.
+          </span>
+        </label>
+
         <Button type="submit" disabled={loading} className="w-full">
           {loading ? "Creating…" : "Create Account"}
         </Button>
       </form>
+
+      {/* ---------------- DIVIDER ---------------- */}
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-[#e4ddd5]" />
+        </div>
+        <div className="relative flex justify-center text-xs">
+          <span className="px-2 bg-[#FAF6F1] text-[#6b665d]">
+            or sign up faster
+          </span>
+        </div>
+      </div>
+
+      {/* ---------------- GOOGLE BUTTON ---------------- */}
+      <button
+        onClick={handleGoogle}
+        disabled={googleLoading}
+        className="w-full flex items-center justify-center gap-3 py-3 bg-white rounded-lg border border-[#D6C28B] hover:bg-[#f1ede4]"
+      >
+        <Image src="/google_logo.svg" width={20} height={20} alt="Google" />
+        <span>{googleLoading ? "Connecting…" : "Sign up with Google"}</span>
+      </button>
+
+      {/* GOOGLE CONSENT */}
+      <p className="text-xs text-[#6b665d] text-center mt-2">
+        By continuing, you may receive occasional emails about events and
+        updates. You can unsubscribe anytime.
+      </p>
 
       <p className="text-center text-sm">
         Already have an account?{" "}
