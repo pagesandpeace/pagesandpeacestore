@@ -15,14 +15,11 @@ export async function POST(req: Request) {
       );
     }
 
-    /* ------------------ AUTH CLIENT ------------------ */
     const supabase = await supabaseServer();
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
-
-    console.log("👤 USER:", user);
 
     if (!user) {
       return NextResponse.json(
@@ -31,7 +28,20 @@ export async function POST(req: Request) {
       );
     }
 
-    /* ------------------ SERVICE ROLE CLIENT ------------------ */
+    /* ------------------ CLEAN USER DATA ------------------ */
+    const fullName =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      "";
+
+    const firstName =
+      fullName.split(" ")[0] ||
+      user.email?.split("@")[0] ||
+      "Guest";
+
+    const email = user.email ?? null;
+
+    /* ------------------ ADMIN CLIENT ------------------ */
     const admin = createClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -57,11 +67,10 @@ export async function POST(req: Request) {
       .from("event_interest")
       .insert({
         event_id,
-        user_id: user.id,
-        first_name:
-          user.user_metadata?.full_name?.split(" ")[0] ||
-          user.email?.split("@")[0] ||
-          null,
+        user_id: user.id, // keep auth id
+        auth_user_id: user.id, // 🔥 NEW (future-proof)
+        first_name: firstName,
+        email: email, // 🔥 THIS FIXES YOUR ISSUE
       });
 
     if (
@@ -75,33 +84,22 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log("✅ Interest saved");
+    console.log("✅ Interest saved with email:", email);
 
     /* ------------------ EMAIL ------------------ */
     try {
-      console.log("📧 Sending email...");
-      console.log("📧 RESEND KEY EXISTS:", !!process.env.RESEND_API_KEY);
-
       const resend = new Resend(process.env.RESEND_API_KEY);
 
-      const emailRes = await resend.emails.send({
+      await resend.emails.send({
         from: "Pages & Peace <onboarding@resend.dev>",
-        to: "mattymclauchlan@gmail.com", // 🔥 TEMP HARD CODE FOR TEST
+        to: email!, // 🔥 now dynamic
         subject: `You're registered for ${event.title}`,
         html: `
           <h2>You're on the list 👀</h2>
-          <p>You've registered interest for:</p>
-          <strong>${event.title}</strong>
+          <p>${event.title}</p>
           <p>${new Date(event.date).toLocaleString("en-GB")}</p>
-
-          <br />
-
-          <p>We’ll let you know when tickets go live.</p>
-          <p>– Pages & Peace</p>
         `,
       });
-
-      console.log("📧 EMAIL RESPONSE:", emailRes);
     } catch (emailErr) {
       console.error("❌ EMAIL FAILED:", emailErr);
     }
