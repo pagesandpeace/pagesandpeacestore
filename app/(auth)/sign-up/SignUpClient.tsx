@@ -12,8 +12,7 @@ export default function SignUpClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const callbackURL = searchParams.get("callbackURL") || "/cart";
-  const joinIntent = searchParams.get("join");
+const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const joinIntent = searchParams.get("join");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -23,6 +22,8 @@ export default function SignUpClient() {
 
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  const [emailSent, setEmailSent] = useState(false); // ✅ NEW
 
   /* --------------------------------------------------
      AUTO LOYALTY OPT-IN
@@ -95,7 +96,10 @@ export default function SignUpClient() {
     }
 
     await autoJoinLoyaltyIfNeeded();
-    router.push(callbackURL);
+
+    // ✅ SWITCH TO SUCCESS STATE INSTEAD OF REDIRECT
+    setEmailSent(true);
+    setLoading(false);
   }
 
   /* --------------------------------------------------
@@ -122,13 +126,46 @@ export default function SignUpClient() {
     setGoogleLoading(false);
   }
 
+  /* --------------------------------------------------
+     ✅ EMAIL SENT SCREEN
+  -------------------------------------------------- */
+  if (emailSent) {
+    return (
+      <div className="w-full space-y-6 text-center">
+        <h1 className="text-2xl font-semibold text-[#111]">
+          Check your email 📩
+        </h1>
+
+        <p className="text-[#555]">
+          We’ve sent a confirmation link to:
+          <br />
+          <span className="font-medium text-[#111]">{email}</span>
+        </p>
+
+        <p className="text-sm text-[#777]">
+          Click the link in the email to activate your account and continue.
+        </p>
+
+        <button
+          onClick={() => window.location.reload()}
+          className="underline text-sm mt-4"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  /* --------------------------------------------------
+     DEFAULT SIGN-UP FORM
+  -------------------------------------------------- */
   return (
     <div className="w-full space-y-8">
       <h1 className="text-3xl font-semibold text-[#111]">
         Create your account
       </h1>
 
-      {/* ---------------- EMAIL FORM FIRST ---------------- */}
+      {/* ---------------- EMAIL FORM ---------------- */}
       <form onSubmit={handleSignUp} className="space-y-4">
         <input
           type="text"
