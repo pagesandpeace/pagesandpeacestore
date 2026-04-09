@@ -45,10 +45,18 @@ export default async function MenuPage() {
   );
 
   const food = categoriesWithItems.filter((c) =>
-    ["Traybakes", "Cakes", "Savoury", "Viennoiserie", "Toasted", "DBF"].includes(
-      c.name
-    )
-  );
+  [
+    "Traybakes",
+    "Cakes",
+    "Savoury",
+    "Viennoiserie",
+    "Toasted",
+    "DBF",
+    "Waffles",
+    "Paninis",
+    "Yoghurt Pots",
+  ].includes(c.name)
+);
 
   return (
     <main className="min-h-screen bg-[#FAF6F1] text-[#111] font-[Montserrat] px-6 py-12">
