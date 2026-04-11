@@ -54,7 +54,7 @@ export default async function MenuPage() {
     "DBF",
     "Waffles",
     "Paninis",
-    "Yoghurt Pots",
+    "Yogurt Pots",
   ].includes(c.name)
 );
 

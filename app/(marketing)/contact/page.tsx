@@ -42,7 +42,7 @@ export default function ContactPage() {
                 href="tel:07486313261"
                 className="text-[var(--accent)] font-medium hover:underline"
               >
-                07486 313261
+                07395266100
               </a>
             </li>
 
