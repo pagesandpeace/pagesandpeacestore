@@ -21,7 +21,17 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type");
-  const callbackURL = url.searchParams.get("callbackURL") || "/dashboard";
+
+  /* -------------------------
+     🔐 SAFE CALLBACK (FIX)
+  ------------------------- */
+  const allowedPaths = ["/dashboard", "/admin", "/account"];
+
+  const rawCallback = url.searchParams.get("callbackURL") || "/dashboard";
+
+  const callbackURL = allowedPaths.includes(rawCallback)
+    ? rawCallback
+    : "/dashboard";
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -105,7 +115,6 @@ export async function GET(request: Request) {
         .eq("id", existingUser.id);
     }
 
-    /* ✅ ONLY SYNC IF CONSENT */
     if (existingUser.marketing_consent) {
       try {
         await fetch(
@@ -128,15 +137,13 @@ export async function GET(request: Request) {
       } catch (err) {
         console.error("⚠️ Beehiiv sync failed (existing):", err);
       }
-    } else {
-      console.log("ℹ️ Existing user has no consent — skipping Beehiiv");
     }
 
     return NextResponse.redirect(new URL(callbackURL, url));
   }
 
   /* -------------------------
-     NEW USER CREATION (GOOGLE)
+     NEW USER CREATION (ALL PROVIDERS)
   ------------------------- */
   const now = new Date().toISOString();
 
@@ -147,17 +154,15 @@ export async function GET(request: Request) {
     name: meta.full_name || meta.name || email,
     image: meta.avatar_url || meta.picture || null,
     role: "customer",
-    auth_provider: user.app_metadata?.provider || "google",
+    auth_provider: user.app_metadata?.provider || "email",
     email_verified: true,
     created_at: now,
-
-    // ✅ CONSENT STORED (IMPLICIT VIA GOOGLE DISCLOSURE)
     marketing_consent: true,
     marketing_consent_at: now,
   });
 
   /* -------------------------
-     BEEHIIV SUBSCRIBE (NEW USER)
+     BEEHIIV SUBSCRIBE
   ------------------------- */
   try {
     const res = await fetch(
@@ -172,8 +177,7 @@ export async function GET(request: Request) {
           email,
           reactivate_existing: true,
           send_welcome_email: true,
-          utm_source: "google_signup",
-          utm_medium: "oauth",
+          utm_source: "signup",
           referring_site: "pages_and_peace",
           custom_fields: [
             {
@@ -188,8 +192,6 @@ export async function GET(request: Request) {
     if (!res.ok) {
       const err = await res.json();
       console.error("⚠️ Beehiiv error (new user):", err);
-    } else {
-      console.log("✅ Beehiiv subscription success (new user)");
     }
   } catch (err) {
     console.error("⚠️ Beehiiv request failed (new user):", err);

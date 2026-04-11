@@ -1,5 +1,8 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { supabaseServer } from "@/lib/supabase/server";
 
 type UserInsert = {
   auth_user_id: string;
@@ -13,7 +16,27 @@ type UserInsert = {
 };
 
 export async function POST(req: Request) {
+  /* -------------------------
+     🔐 AUTH (CRITICAL FIX)
+  ------------------------- */
+  const supabase = await supabaseServer();
+  const { data: auth } = await supabase.auth.getUser();
+
+  if (!auth?.user || !auth.user.email) {
+    return NextResponse.json(
+      { error: "NOT_AUTHENTICATED" },
+      { status: 401 }
+    );
+  }
+
+  const authUserId = auth.user.id;
+  const email = auth.user.email.toLowerCase();
+
+  /* -------------------------
+     BODY (SAFE TO READ NOW)
+  ------------------------- */
   const body = await req.json();
+  const hasConsent = !!body.marketing_consent;
 
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,15 +44,14 @@ export async function POST(req: Request) {
     { auth: { persistSession: false } }
   );
 
-  const hasConsent = !!body.marketing_consent;
-
   /* -------------------------
      BUILD UPSERT PAYLOAD
+     ✅ AUTH DATA FROM SESSION ONLY
   ------------------------- */
   const payload: UserInsert = {
-    auth_user_id: body.auth_user_id,
-    email: body.email,
-    name: body.name,
+    auth_user_id: authUserId, // 🔐 FIXED
+    email: email,             // 🔐 FIXED
+    name: body.name || email,
     image: null,
     role: "customer",
     auth_provider: "credentials",
@@ -57,6 +79,7 @@ export async function POST(req: Request) {
 
   /* -------------------------
      BEEHIIV SUBSCRIBE (ONLY IF CONSENT)
+     ✅ USE VERIFIED EMAIL
   ------------------------- */
   if (hasConsent) {
     try {
@@ -69,7 +92,7 @@ export async function POST(req: Request) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            email: body.email,
+            email, // 🔐 FIXED (was body.email)
             reactivate_existing: true,
             send_welcome_email: true,
             utm_source: "app_signup",

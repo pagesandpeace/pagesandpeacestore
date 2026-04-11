@@ -5,14 +5,14 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export default function SignUpClient() {
   const supabase = supabaseBrowser();
-  const router = useRouter();
   const searchParams = useSearchParams();
 
-const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const joinIntent = searchParams.get("join");
+  const callbackURL = searchParams.get("callbackURL") || "/dashboard";
+  const joinIntent = searchParams.get("join");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -23,10 +23,10 @@ const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const join
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const [emailSent, setEmailSent] = useState(false); // ✅ NEW
+  const [emailSent, setEmailSent] = useState(false);
 
   /* --------------------------------------------------
-     AUTO LOYALTY OPT-IN
+     AUTO LOYALTY OPT-IN (SAFE TO KEEP)
   -------------------------------------------------- */
   async function autoJoinLoyaltyIfNeeded() {
     if (joinIntent !== "loyalty") return;
@@ -78,26 +78,12 @@ const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const join
       return;
     }
 
-    const res = await fetch("/api/profile/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        auth_user_id: data.user.id,
-        email,
-        name,
-        marketing_consent: marketingConsent,
-      }),
-    });
+    // ❌ REMOVED PROFILE CREATE (FIXES 401 ISSUE)
 
-    if (!res.ok) {
-      alert("Profile creation failed");
-      setLoading(false);
-      return;
-    }
-
+    // Optional: keep or remove this — won’t run until authenticated anyway
     await autoJoinLoyaltyIfNeeded();
 
-    // ✅ SWITCH TO SUCCESS STATE INSTEAD OF REDIRECT
+    // ✅ SHOW SUCCESS SCREEN
     setEmailSent(true);
     setLoading(false);
   }
@@ -127,7 +113,7 @@ const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const join
   }
 
   /* --------------------------------------------------
-     ✅ EMAIL SENT SCREEN
+     EMAIL SENT SCREEN
   -------------------------------------------------- */
   if (emailSent) {
     return (
@@ -165,7 +151,6 @@ const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const join
         Create your account
       </h1>
 
-      {/* ---------------- EMAIL FORM ---------------- */}
       <form onSubmit={handleSignUp} className="space-y-4">
         <input
           type="text"
@@ -194,7 +179,6 @@ const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const join
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        {/* NEWSLETTER CONSENT */}
         <label className="flex items-start gap-2 text-sm text-[#444]">
           <input
             type="checkbox"
@@ -212,7 +196,6 @@ const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const join
         </Button>
       </form>
 
-      {/* ---------------- DIVIDER ---------------- */}
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-[#e4ddd5]" />
@@ -224,7 +207,6 @@ const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const join
         </div>
       </div>
 
-      {/* ---------------- GOOGLE BUTTON ---------------- */}
       <button
         onClick={handleGoogle}
         disabled={googleLoading}
@@ -234,7 +216,6 @@ const callbackURL = searchParams.get("callbackURL") || "/dashboard";  const join
         <span>{googleLoading ? "Connecting…" : "Sign up with Google"}</span>
       </button>
 
-      {/* GOOGLE CONSENT */}
       <p className="text-xs text-[#6b665d] text-center mt-2">
         By continuing, you may receive occasional emails about events and
         updates. You can unsubscribe anytime.
