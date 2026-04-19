@@ -7,7 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import crypto from "crypto";
 
-type GoogleMetadata = {
+type Meta = {
   full_name?: string;
   name?: string;
   avatar_url?: string;
@@ -15,6 +15,9 @@ type GoogleMetadata = {
 };
 
 export async function GET(request: Request) {
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("🔥 AUTH CALLBACK START");
+
   const url = new URL(request.url);
   const cookieStore = await cookies();
 
@@ -22,16 +25,19 @@ export async function GET(request: Request) {
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type");
 
+  console.log("📥 PARAMS:", { code, tokenHash, type });
+
   /* -------------------------
-     🔐 SAFE CALLBACK (FIX)
+     SAFE CALLBACK URL
   ------------------------- */
   const allowedPaths = ["/dashboard", "/admin", "/account"];
-
   const rawCallback = url.searchParams.get("callbackURL") || "/dashboard";
 
   const callbackURL = allowedPaths.includes(rawCallback)
     ? rawCallback
     : "/dashboard";
+
+  console.log("🔁 REDIRECT TARGET:", callbackURL);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,21 +58,27 @@ export async function GET(request: Request) {
      AUTH FLOW
   ------------------------- */
   if (code) {
+    console.log("🔑 OAuth flow (code)");
     const { error } = await supabase.auth.exchangeCodeForSession(code);
+
     if (error) {
-      console.error("❌ OAuth exchange failed:", error);
+      console.error("❌ exchangeCodeForSession failed:", error);
       return NextResponse.redirect(new URL("/sign-in", url));
     }
   } else if (tokenHash && type) {
+    console.log("🔑 OTP flow:", type);
+
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: type as "magiclink" | "recovery",
+      type: type as "signup" | "magiclink" | "recovery", // ✅ FIXED
     });
+
     if (error) {
       console.error("❌ verifyOtp failed:", error);
       return NextResponse.redirect(new URL("/sign-in", url));
     }
   } else {
+    console.log("⚠️ No auth params");
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
@@ -78,11 +90,16 @@ export async function GET(request: Request) {
     error: userErr,
   } = await supabase.auth.getUser();
 
+  console.log("👤 USER AFTER AUTH:", user?.id, user?.email);
+
   if (userErr || !user || !user.email) {
     console.error("❌ getUser failed:", userErr);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
+  /* -------------------------
+     ADMIN CLIENT
+  ------------------------- */
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -90,112 +107,56 @@ export async function GET(request: Request) {
   );
 
   const email = user.email.toLowerCase();
-  const meta = (user.user_metadata as GoogleMetadata) || {};
+  const meta = (user.user_metadata as Meta) || {};
 
   /* -------------------------
      CHECK EXISTING USER
   ------------------------- */
-  const { data: existingUser } = await supabaseAdmin
+  const { data: existingUser, error: existingErr } = await supabaseAdmin
     .from("users")
-    .select("id, auth_user_id, marketing_consent")
-    .eq("email", email)
+    .select("id, auth_user_id")
+    .eq("auth_user_id", user.id)
     .maybeSingle();
 
+  console.log("🔍 EXISTING USER:", existingUser, existingErr);
+
   /* -------------------------
-     EXISTING USER FLOW
+     CREATE USER (IDEMPOTENT)
   ------------------------- */
-  if (existingUser) {
-    if (existingUser.auth_user_id !== user.id) {
-      await supabaseAdmin
-        .from("users")
-        .update({
-          auth_user_id: user.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingUser.id);
-    }
+  if (!existingUser) {
+    console.log("🆕 CREATING USER...");
 
-    if (existingUser.marketing_consent) {
-      try {
-        await fetch(
-          `https://api.beehiiv.com/v2/publications/${process.env.BEEHIIV_PUBLICATION_ID}/subscriptions`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${process.env.BEEHIIV_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email,
-              reactivate_existing: true,
-              send_welcome_email: false,
-              utm_source: "existing_user_login",
-              referring_site: "pages_and_peace",
-            }),
-          }
-        );
-      } catch (err) {
-        console.error("⚠️ Beehiiv sync failed (existing):", err);
-      }
-    }
+    const now = new Date().toISOString();
 
-    return NextResponse.redirect(new URL(callbackURL, url));
+    const { error: insertErr } = await supabaseAdmin
+      .from("users")
+      .insert({
+        id: crypto.randomUUID(),
+        email,
+        auth_user_id: user.id,
+        name: meta.full_name || meta.name || email,
+        image: meta.avatar_url || meta.picture || null,
+        role: "customer",
+        auth_provider: user.app_metadata?.provider || "email",
+        email_verified: true,
+        created_at: now,
+        marketing_consent: true,
+        marketing_consent_at: now,
+      })
+      .select()
+      .single();
+
+    if (insertErr) {
+      console.error("❌ USER INSERT FAILED:", insertErr);
+    } else {
+      console.log("✅ USER CREATED");
+    }
+  } else {
+    console.log("✅ USER ALREADY EXISTS");
   }
 
-  /* -------------------------
-     NEW USER CREATION (ALL PROVIDERS)
-  ------------------------- */
-  const now = new Date().toISOString();
-
-  await supabaseAdmin.from("users").insert({
-    id: crypto.randomUUID(),
-    email,
-    auth_user_id: user.id,
-    name: meta.full_name || meta.name || email,
-    image: meta.avatar_url || meta.picture || null,
-    role: "customer",
-    auth_provider: user.app_metadata?.provider || "email",
-    email_verified: true,
-    created_at: now,
-    marketing_consent: true,
-    marketing_consent_at: now,
-  });
-
-  /* -------------------------
-     BEEHIIV SUBSCRIBE
-  ------------------------- */
-  try {
-    const res = await fetch(
-      `https://api.beehiiv.com/v2/publications/${process.env.BEEHIIV_PUBLICATION_ID}/subscriptions`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.BEEHIIV_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          reactivate_existing: true,
-          send_welcome_email: true,
-          utm_source: "signup",
-          referring_site: "pages_and_peace",
-          custom_fields: [
-            {
-              name: "name",
-              value: meta.full_name || meta.name || "",
-            },
-          ],
-        }),
-      }
-    );
-
-    if (!res.ok) {
-      const err = await res.json();
-      console.error("⚠️ Beehiiv error (new user):", err);
-    }
-  } catch (err) {
-    console.error("⚠️ Beehiiv request failed (new user):", err);
-  }
+  console.log("🚀 REDIRECTING:", callbackURL);
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
   return NextResponse.redirect(new URL(callbackURL, url));
 }
