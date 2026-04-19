@@ -12,7 +12,6 @@ type Meta = {
   name?: string;
   avatar_url?: string;
   picture?: string;
-  marketing_consent?: boolean;
 };
 
 export async function GET(request: Request) {
@@ -27,6 +26,11 @@ export async function GET(request: Request) {
   const type = url.searchParams.get("type");
 
   /* -------------------------
+     CONSENT (SOURCE OF TRUTH)
+  ------------------------- */
+  const marketingConsentParam = url.searchParams.get("mc") === "true";
+
+  /* -------------------------
      SAFE REDIRECT
   ------------------------- */
   const allowedPaths = ["/dashboard", "/admin", "/account"];
@@ -35,8 +39,6 @@ export async function GET(request: Request) {
   const callbackURL = allowedPaths.includes(rawCallback)
     ? rawCallback
     : "/dashboard";
-
-  console.log("🔁 Redirect target:", callbackURL);
 
   /* -------------------------
      CLIENT
@@ -60,27 +62,21 @@ export async function GET(request: Request) {
      AUTH FLOW
   ------------------------- */
   if (code) {
-    console.log("🔑 OAuth flow");
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-
     if (error) {
-      console.error("❌ exchange failed:", error);
+      console.error("❌ OAuth exchange failed:", error);
       return NextResponse.redirect(new URL("/sign-in", url));
     }
   } else if (tokenHash && type) {
-    console.log("🔑 OTP flow:", type);
-
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type: type as "signup" | "magiclink" | "recovery",
     });
-
     if (error) {
-      console.error("❌ OTP failed:", error);
+      console.error("❌ verifyOtp failed:", error);
       return NextResponse.redirect(new URL("/sign-in", url));
     }
   } else {
-    console.warn("⚠️ No auth params");
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
@@ -89,17 +85,16 @@ export async function GET(request: Request) {
   ------------------------- */
   const {
     data: { user },
+    error: userErr,
   } = await supabase.auth.getUser();
 
-  if (!user || !user.email) {
-    console.error("❌ No user after auth");
+  if (userErr || !user || !user.email) {
+    console.error("❌ getUser failed:", userErr);
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
   const email = user.email.toLowerCase();
   const meta = (user.user_metadata as Meta) || {};
-
-  console.log("👤 USER:", email);
 
   /* -------------------------
      ADMIN CLIENT
@@ -111,22 +106,38 @@ export async function GET(request: Request) {
   );
 
   /* -------------------------
-     CHECK EXISTING
+     CHECK EXISTING USER
   ------------------------- */
   const { data: existing } = await supabaseAdmin
     .from("users")
-    .select("id, beehiiv_subscribed")
-    .eq("auth_user_id", user.id)
+    .select("id, auth_user_id, marketing_consent, beehiiv_subscribed")
+    .eq("email", email)
     .maybeSingle();
 
-  let created = false;
+  /* -------------------------
+     DETERMINE CONSENT (FINAL)
+  ------------------------- */
+  let consent = false;
+
+  if (existing) {
+    // ✅ NEVER downgrade existing users
+    consent = existing.marketing_consent;
+  } else {
+    // ✅ EMAIL flow → use checkbox param
+    // ✅ GOOGLE flow → default TRUE (your rule)
+    const isGoogle = user.app_metadata?.provider === "google";
+
+    consent = isGoogle ? true : marketingConsentParam;
+  }
+
+  console.log("🧠 Consent resolved:", consent);
 
   /* -------------------------
-     CREATE USER (SAFE)
+     CREATE USER
   ------------------------- */
-  if (!existing) {
-    console.log("🆕 Creating user");
+  let created = false;
 
+  if (!existing) {
     const now = new Date().toISOString();
 
     const { error } = await supabaseAdmin.from("users").insert({
@@ -139,8 +150,10 @@ export async function GET(request: Request) {
       auth_provider: user.app_metadata?.provider || "email",
       email_verified: true,
       created_at: now,
-      marketing_consent: meta.marketing_consent ?? false,
-      marketing_consent_at: meta.marketing_consent ? now : null,
+
+      marketing_consent: consent,
+      marketing_consent_at: consent ? now : null,
+
       signup_status: "complete",
     });
 
@@ -151,7 +164,18 @@ export async function GET(request: Request) {
       console.log("✅ User created");
     }
   } else {
-    console.log("ℹ️ User already exists");
+    console.log("ℹ️ Existing user");
+
+    // 🔄 ensure auth_user_id is synced
+    if (existing.auth_user_id !== user.id) {
+      await supabaseAdmin
+        .from("users")
+        .update({
+          auth_user_id: user.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+    }
   }
 
   /* -------------------------
@@ -160,7 +184,7 @@ export async function GET(request: Request) {
   const publicationId = process.env.BEEHIIV_PUBLICATION_ID;
   const apiKey = process.env.BEEHIIV_API_KEY;
 
-  if ((created || existing) && meta.marketing_consent) {
+  if (consent) {
     if (!publicationId || !apiKey) {
       console.error("❌ Missing Beehiiv env vars");
     } else {
@@ -178,7 +202,7 @@ export async function GET(request: Request) {
             body: JSON.stringify({
               email,
               reactivate_existing: true,
-              send_welcome_email: false,
+              send_welcome_email: created,
             }),
           }
         );
@@ -193,11 +217,10 @@ export async function GET(request: Request) {
         console.error("❌ Beehiiv crash:", err);
       }
     }
+  } else {
+    console.log("🚫 No consent → skipping Beehiiv");
   }
 
-  /* -------------------------
-     DONE
-  ------------------------- */
   console.log("➡️ Redirect:", callbackURL);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
