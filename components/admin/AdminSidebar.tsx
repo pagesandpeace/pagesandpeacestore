@@ -223,6 +223,12 @@ export default function AdminSidebar({
 
             <div className="mt-3 flex flex-col gap-3">
               <button
+  onClick={() => handleNav("/admin/users")}
+  className="text-left hover:text-[#5DA865]"
+>
+  👤 Users
+</button>
+              <button
                 onClick={() =>
                   handleNav("/admin/suppliers/gardners")
                 }

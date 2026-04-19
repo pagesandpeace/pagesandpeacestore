@@ -116,31 +116,61 @@ export default function SignUpClient() {
      EMAIL SENT SCREEN
   -------------------------------------------------- */
   if (emailSent) {
-    return (
-      <div className="w-full space-y-6 text-center">
-        <h1 className="text-2xl font-semibold text-[#111]">
-          Check your email 📩
-        </h1>
+  return (
+    <div className="w-full max-w-md mx-auto text-center space-y-6">
 
-        <p className="text-[#555]">
-          We’ve sent a confirmation link to:
-          <br />
-          <span className="font-medium text-[#111]">{email}</span>
+      {/* ICON */}
+      <div className="text-4xl">📩</div>
+
+      {/* TITLE */}
+      <h1 className="text-2xl font-semibold text-[#111]">
+        Confirm your email
+      </h1>
+
+      {/* MAIN MESSAGE */}
+      <p className="text-[#555] leading-relaxed">
+        We’ve sent a confirmation link to:
+      </p>
+
+      <div className="font-medium text-[#111] break-all">
+        {email}
+      </div>
+
+      {/* INSTRUCTIONS */}
+      <div className="text-sm text-[#666] space-y-2 leading-relaxed">
+        <p>
+          Click the link in that email to activate your account and continue.
         </p>
 
-        <p className="text-sm text-[#777]">
-          Click the link in the email to activate your account and continue.
+        <p>
+          ⏱ It can take a minute or two to arrive.
         </p>
+
+        <p>
+          📬 If you don’t see it, check your <strong>spam or junk folder</strong>.
+        </p>
+      </div>
+
+      {/* DIVIDER */}
+      <div className="border-t border-[#e4ddd5] my-4" />
+
+      {/* SECONDARY ACTION */}
+      <div className="text-sm text-[#777] space-y-3">
+        <p>Still having trouble?</p>
 
         <button
           onClick={() => window.location.reload()}
-          className="underline text-sm mt-4"
+          className="underline hover:text-[#111]"
         >
-          Try again
+          Try signing up again
         </button>
+
+        <p>or email admin@pagesandpeace.co.uk</p>
       </div>
-    );
-  }
+
+    </div>
+  );
+}
 
   /* --------------------------------------------------
      DEFAULT SIGN-UP FORM
