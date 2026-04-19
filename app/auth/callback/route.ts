@@ -26,11 +26,6 @@ export async function GET(request: Request) {
   const type = url.searchParams.get("type");
 
   /* -------------------------
-     CONSENT (SOURCE OF TRUTH)
-  ------------------------- */
-  const marketingConsentParam = url.searchParams.get("mc") === "true";
-
-  /* -------------------------
      SAFE REDIRECT
   ------------------------- */
   const allowedPaths = ["/dashboard", "/admin", "/account"];
@@ -39,6 +34,8 @@ export async function GET(request: Request) {
   const callbackURL = allowedPaths.includes(rawCallback)
     ? rawCallback
     : "/dashboard";
+
+  console.log("🔁 Redirect:", callbackURL);
 
   /* -------------------------
      CLIENT
@@ -62,12 +59,14 @@ export async function GET(request: Request) {
      AUTH FLOW
   ------------------------- */
   if (code) {
+    console.log("🔑 OAuth flow");
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       console.error("❌ OAuth exchange failed:", error);
       return NextResponse.redirect(new URL("/sign-in", url));
     }
   } else if (tokenHash && type) {
+    console.log("🔑 OTP flow:", type);
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type: type as "signup" | "magiclink" | "recovery",
@@ -77,6 +76,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL("/sign-in", url));
     }
   } else {
+    console.warn("⚠️ No auth params");
     return NextResponse.redirect(new URL("/sign-in", url));
   }
 
@@ -96,6 +96,9 @@ export async function GET(request: Request) {
   const email = user.email.toLowerCase();
   const meta = (user.user_metadata as Meta) || {};
 
+  console.log("👤 USER:", email);
+  console.log("🧪 PROVIDER:", user.app_metadata?.provider);
+
   /* -------------------------
      ADMIN CLIENT
   ------------------------- */
@@ -110,27 +113,19 @@ export async function GET(request: Request) {
   ------------------------- */
   const { data: existing } = await supabaseAdmin
     .from("users")
-    .select("id, auth_user_id, marketing_consent, beehiiv_subscribed")
+    .select("*")
     .eq("email", email)
     .maybeSingle();
 
+  console.log("🧠 EXISTING USER:", existing);
+
   /* -------------------------
-     DETERMINE CONSENT (FINAL)
+     CONSENT (SIMPLE + WORKING)
   ------------------------- */
-  let consent = false;
+  const consent = true;
+  const now = new Date().toISOString();
 
-  if (existing) {
-    // ✅ NEVER downgrade existing users
-    consent = existing.marketing_consent;
-  } else {
-    // ✅ EMAIL flow → use checkbox param
-    // ✅ GOOGLE flow → default TRUE (your rule)
-    const isGoogle = user.app_metadata?.provider === "google";
-
-    consent = isGoogle ? true : marketingConsentParam;
-  }
-
-  console.log("🧠 Consent resolved:", consent);
+  console.log("🧠 FINAL CONSENT:", consent);
 
   /* -------------------------
      CREATE USER
@@ -138,7 +133,7 @@ export async function GET(request: Request) {
   let created = false;
 
   if (!existing) {
-    const now = new Date().toISOString();
+    console.log("🆕 Creating user");
 
     const { error } = await supabaseAdmin.from("users").insert({
       id: crypto.randomUUID(),
@@ -150,10 +145,8 @@ export async function GET(request: Request) {
       auth_provider: user.app_metadata?.provider || "email",
       email_verified: true,
       created_at: now,
-
-      marketing_consent: consent,
-      marketing_consent_at: consent ? now : null,
-
+      marketing_consent: true,
+      marketing_consent_at: now,
       signup_status: "complete",
     });
 
@@ -166,13 +159,13 @@ export async function GET(request: Request) {
   } else {
     console.log("ℹ️ Existing user");
 
-    // 🔄 ensure auth_user_id is synced
+    // ensure auth_user_id is synced
     if (existing.auth_user_id !== user.id) {
       await supabaseAdmin
         .from("users")
         .update({
           auth_user_id: user.id,
-          updated_at: new Date().toISOString(),
+          updated_at: now,
         })
         .eq("id", existing.id);
     }
@@ -184,44 +177,48 @@ export async function GET(request: Request) {
   const publicationId = process.env.BEEHIIV_PUBLICATION_ID;
   const apiKey = process.env.BEEHIIV_API_KEY;
 
+  console.log("📊 BEEHIIV CHECK:");
+  console.log("   consent:", consent);
+  console.log("   created:", created);
+
   if (consent) {
-    if (!publicationId || !apiKey) {
-      console.error("❌ Missing Beehiiv env vars");
-    } else {
-      try {
-        console.log("📩 Syncing to Beehiiv");
+    try {
+      const payload = {
+        email,
+        reactivate_existing: true,
+        send_welcome_email: created,
+      };
 
-        const res = await fetch(
-          `https://api.beehiiv.com/v2/publications/${publicationId}/subscriptions`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email,
-              reactivate_existing: true,
-              send_welcome_email: created,
-            }),
-          }
-        );
+      console.log("📤 Beehiiv payload:", payload);
 
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("❌ Beehiiv failed:", text);
-        } else {
-          console.log("✅ Beehiiv synced");
+      const res = await fetch(
+        `https://api.beehiiv.com/v2/publications/${publicationId}/subscriptions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         }
-      } catch (err) {
-        console.error("❌ Beehiiv crash:", err);
+      );
+
+      const text = await res.text();
+
+      console.log("📥 Beehiiv status:", res.status);
+      console.log("📥 Beehiiv response:", text);
+
+      if (!res.ok) {
+        console.error("❌ Beehiiv failed");
+      } else {
+        console.log("✅ Beehiiv success");
       }
+    } catch (err) {
+      console.error("❌ Beehiiv crash:", err);
     }
-  } else {
-    console.log("🚫 No consent → skipping Beehiiv");
   }
 
-  console.log("➡️ Redirect:", callbackURL);
+  console.log("➡️ Redirecting:", callbackURL);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
   return NextResponse.redirect(new URL(callbackURL, url));

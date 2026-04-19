@@ -7,47 +7,47 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function Home() {
   const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-  const supabase = supabaseBrowser();
+    const supabase = supabaseBrowser();
+    let mounted = true;
 
-  let mounted = true;
+    async function syncSession() {
+      const { data } = await supabase.auth.getSession();
 
-  async function syncSession() {
-    const { data } = await supabase.auth.getSession();
-    if (mounted) {
-      setIsSignedIn(!!data.session);
+      if (mounted) {
+        setIsSignedIn(!!data.session);
+        setLoading(false);
+      }
     }
-  }
 
-  // 1️⃣ Initial check
-  syncSession();
+    // 1️⃣ Initial session check
+    syncSession();
 
-  // 2️⃣ Listen for ALL auth events (including INITIAL_SESSION)
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((_event, session) => {
-    if (mounted) {
-      setIsSignedIn(!!session);
-    }
-  });
+    // 2️⃣ Listen for auth changes (including INITIAL_SESSION)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
+        setIsSignedIn(!!session);
+        setLoading(false);
+      }
+    });
 
-  return () => {
-    mounted = false;
-    subscription.unsubscribe();
-  };
-}, []);
-
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <>
-      {/* Fill visible viewport minus footer */}
       <main
         className="
           min-h-[calc(100dvh-4rem)]
           md:min-h-[calc(100svh-4rem)]
           overflow-hidden
-
           flex flex-col items-center justify-start
           px-6 py-8
           bg-[var(--background)] text-[var(--foreground)] font-[Montserrat]
@@ -94,8 +94,8 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Auth Prompt — ONLY when signed out */}
-        {isSignedIn === false && (
+        {/* ✅ AUTH PROMPT — only after session is known */}
+        {!loading && isSignedIn === false && (
           <div className="mt-6 text-center">
             <p className="text-[var(--foreground)]/70 mb-3">
               Ready to make it personal?
@@ -120,8 +120,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
-        
       </main>
     </>
   );
