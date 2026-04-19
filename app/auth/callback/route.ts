@@ -119,16 +119,11 @@ export async function GET(request: Request) {
 
   console.log("🧠 EXISTING USER:", existing);
 
-  /* -------------------------
-     CONSENT (SIMPLE + WORKING)
-  ------------------------- */
-  const consent = true;
   const now = new Date().toISOString();
-
-  console.log("🧠 FINAL CONSENT:", consent);
+  const consent = true;
 
   /* -------------------------
-     CREATE USER
+     CREATE OR UPDATE USER
   ------------------------- */
   let created = false;
 
@@ -142,7 +137,7 @@ export async function GET(request: Request) {
       name: meta.full_name || meta.name || email.split("@")[0],
       image: meta.avatar_url || meta.picture || null,
       role: "customer",
-      auth_provider: user.app_metadata?.provider || "email",
+      auth_provider: user.app_metadata?.provider || "email", // ✅ keep dynamic
       email_verified: true,
       created_at: now,
       marketing_consent: true,
@@ -159,7 +154,6 @@ export async function GET(request: Request) {
   } else {
     console.log("ℹ️ Existing user");
 
-    // ensure auth_user_id is synced
     if (existing.auth_user_id !== user.id) {
       await supabaseAdmin
         .from("users")
@@ -176,10 +170,6 @@ export async function GET(request: Request) {
   ------------------------- */
   const publicationId = process.env.BEEHIIV_PUBLICATION_ID;
   const apiKey = process.env.BEEHIIV_API_KEY;
-
-  console.log("📊 BEEHIIV CHECK:");
-  console.log("   consent:", consent);
-  console.log("   created:", created);
 
   if (consent) {
     try {
@@ -208,10 +198,22 @@ export async function GET(request: Request) {
       console.log("📥 Beehiiv status:", res.status);
       console.log("📥 Beehiiv response:", text);
 
-      if (!res.ok) {
-        console.error("❌ Beehiiv failed");
-      } else {
+      if (res.ok) {
         console.log("✅ Beehiiv success");
+
+        /* 🔥 CRITICAL FIX — optimistic DB update */
+        await supabaseAdmin
+          .from("users")
+          .update({
+            beehiiv_subscribed: true,
+            beehiiv_subscribed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("email", email);
+
+        console.log("⚡ Optimistic DB update applied");
+      } else {
+        console.error("❌ Beehiiv failed");
       }
     } catch (err) {
       console.error("❌ Beehiiv crash:", err);

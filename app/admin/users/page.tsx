@@ -23,14 +23,37 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "inactive">("inactive");
 
+  const [now, setNow] = useState(() => Date.now());
+
   useEffect(() => {
-    let isMounted = true;
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  /* -------------------------
+     🔄 SHARED FETCH (FIX)
+  ------------------------- */
+  async function refreshUsers() {
+    const res = await fetch("/api/admin/users");
+    const data = await res.json();
+    setUsers(data.users || []);
+    setLoading(false);
+  }
+
+  /* -------------------------
+     INITIAL LOAD
+  ------------------------- */
+  useEffect(() => {
+    let mounted = true;
 
     async function load() {
       const res = await fetch("/api/admin/users");
       const data = await res.json();
 
-      if (!isMounted) return;
+      if (!mounted) return;
 
       setUsers(data.users || []);
       setLoading(false);
@@ -39,22 +62,30 @@ export default function UsersPage() {
     load();
 
     return () => {
-      isMounted = false;
+      mounted = false;
     };
   }, []);
 
+  /* -------------------------
+     SEND MAGIC LINK
+  ------------------------- */
   async function sendMagicLink(email: string) {
-    await fetch("/api/admin/send-magic-links", {
+    const res = await fetch("/api/admin/send-magic-links", {
       method: "POST",
       body: JSON.stringify({ email }),
     });
 
-    alert(`Magic link sent to ${email}`);
-
-    // refresh table
-    const res = await fetch("/api/admin/users");
     const data = await res.json();
-    setUsers(data.users || []);
+
+    if (!res.ok) {
+      alert(data.error || "Failed to send link");
+      return;
+    }
+
+    alert("Magic link sent ✓");
+
+    // ✅ FIX: use refresh instead of missing function
+    await refreshUsers();
   }
 
   function fmtDate(date?: string | null) {
@@ -69,7 +100,15 @@ export default function UsersPage() {
 
   function getStatus(user: AuthUser) {
     if (user.last_sign_in_at) return "active";
-    if (user.last_magic_link_sent_at) return "chased";
+
+    if (user.last_magic_link_sent_at) {
+      const diff =
+        now - new Date(user.last_magic_link_sent_at).getTime();
+
+      if (diff < 5 * 60 * 1000) return "recent";
+      return "chased";
+    }
+
     return "new";
   }
 
@@ -79,19 +118,19 @@ export default function UsersPage() {
     const styles = {
       active: "bg-green-100 text-green-700",
       chased: "bg-yellow-100 text-yellow-700",
+      recent: "bg-blue-100 text-blue-700",
       new: "bg-gray-100 text-gray-600",
     };
 
     const labels = {
       active: "Active",
       chased: "Chased",
+      recent: "Link Sent",
       new: "New",
     };
 
     return (
-      <span
-        className={`text-xs px-2 py-1 rounded ${styles[status]}`}
-      >
+      <span className={`text-xs px-2 py-1 rounded ${styles[status]}`}>
         {labels[status]}
       </span>
     );
@@ -108,7 +147,6 @@ export default function UsersPage() {
     <div className="max-w-6xl mx-auto py-10 space-y-6">
       <h1 className="text-3xl font-semibold">Users</h1>
 
-      {/* FILTER */}
       <div className="flex gap-3">
         <button onClick={() => setFilter("inactive")}>
           Inactive
@@ -127,39 +165,52 @@ export default function UsersPage() {
               <HeadCell>Signed Up</HeadCell>
               <HeadCell>Last Login</HeadCell>
               <HeadCell>Last Link Sent</HeadCell>
-              <HeadCell>{" "}</HeadCell>
+              <HeadCell>Actions</HeadCell>
             </tr>
           </TableHead>
 
           <TableBody>
-            {filtered.map((user) => (
-              <TableRow key={user.id}>
-                <Cell>{user.email}</Cell>
+            {filtered.map((user) => {
+              const recentlySent =
+                user.last_magic_link_sent_at &&
+                now -
+                  new Date(user.last_magic_link_sent_at).getTime() <
+                  5 * 60 * 1000;
 
-                <Cell>
-                  <StatusBadge user={user} />
-                </Cell>
+              return (
+                <TableRow key={user.id}>
+                  <Cell>{user.email}</Cell>
 
-                <Cell>{fmtDate(user.created_at)}</Cell>
+                  <Cell>
+                    <StatusBadge user={user} />
+                  </Cell>
 
-                <Cell>{fmtDate(user.last_sign_in_at)}</Cell>
+                  <Cell>{fmtDate(user.created_at)}</Cell>
 
-                <Cell>
-                  {fmtDate(user.last_magic_link_sent_at)}
-                </Cell>
+                  <Cell>{fmtDate(user.last_sign_in_at)}</Cell>
 
-                <Cell>
-                  {!user.last_sign_in_at && (
-                    <button
-                      onClick={() => sendMagicLink(user.email)}
-                      className="text-xs px-3 py-1 border rounded hover:bg-gray-100"
-                    >
-                      Send Link
-                    </button>
-                  )}
-                </Cell>
-              </TableRow>
-            ))}
+                  <Cell>
+                    {fmtDate(user.last_magic_link_sent_at)}
+                  </Cell>
+
+                  <Cell>
+                    {!user.last_sign_in_at && (
+                      <button
+                        onClick={() => sendMagicLink(user.email)}
+                        disabled={!!recentlySent}
+                        className={`text-xs px-3 py-1 border rounded ${
+                          recentlySent
+                            ? "opacity-50 cursor-not-allowed"
+                            : "hover:bg-gray-100"
+                        }`}
+                      >
+                        {recentlySent ? "Link Sent" : "Send Link"}
+                      </button>
+                    )}
+                  </Cell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableSurface>

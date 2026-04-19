@@ -53,12 +53,68 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log("📧 Sending magic link to:", email);
+    console.log("📧 Target email:", email);
+
+    /* -------------------------
+       🔑 ADMIN CLIENT
+    ------------------------- */
+    const supabaseAdmin = supabaseService();
+
+    /* -------------------------
+       🧠 CHECK USER EXISTS + RATE LIMIT
+    ------------------------- */
+    const { data: existingUser, error: lookupErr } =
+      await supabaseAdmin
+        .from("users")
+        .select("last_magic_link_sent_at")
+        .ilike("email", email)
+        .maybeSingle();
+
+    if (lookupErr) {
+      console.error("❌ Lookup failed:", lookupErr);
+      return NextResponse.json(
+        { error: "Lookup failed" },
+        { status: 500 }
+      );
+    }
+
+    if (!existingUser) {
+      console.warn("🚫 User not found");
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    /* -------------------------
+       ⛔ RATE LIMIT (5 MIN)
+    ------------------------- */
+    if (existingUser.last_magic_link_sent_at) {
+      const diff =
+        Date.now() -
+        new Date(existingUser.last_magic_link_sent_at).getTime();
+
+      const cooldown = 5 * 60 * 1000;
+
+      if (diff < cooldown) {
+        const remaining = Math.ceil((cooldown - diff) / 1000);
+
+        console.warn("⛔ Too soon to resend");
+
+        return NextResponse.json(
+          {
+            error: "Link already sent recently",
+            retry_in_seconds: remaining,
+          },
+          { status: 429 }
+        );
+      }
+    }
 
     /* -------------------------
        🚀 SEND MAGIC LINK
     ------------------------- */
-    const supabaseAdmin = supabaseService();
+    console.log("📨 Sending magic link...");
 
     const { error } = await supabaseAdmin.auth.signInWithOtp({
       email,
@@ -78,7 +134,7 @@ export async function POST(req: Request) {
     console.log("✅ Magic link sent");
 
     /* -------------------------
-       🧠 TRACK IN USERS TABLE
+       📊 TRACK SEND (CRITICAL)
     ------------------------- */
     const { error: updateErr } = await supabaseAdmin
       .from("users")
@@ -86,7 +142,7 @@ export async function POST(req: Request) {
         last_magic_link_sent_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("email", email);
+      .ilike("email", email);
 
     if (updateErr) {
       console.warn("⚠️ Tracking failed (non-blocking):", updateErr);

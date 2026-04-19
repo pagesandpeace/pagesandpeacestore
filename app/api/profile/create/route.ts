@@ -17,7 +17,7 @@ type UserInsert = {
 
 export async function POST(req: Request) {
   /* -------------------------
-     🔐 AUTH (CRITICAL FIX)
+     🔐 AUTH
   ------------------------- */
   const supabase = await supabaseServer();
   const { data: auth } = await supabase.auth.getUser();
@@ -32,8 +32,16 @@ export async function POST(req: Request) {
   const authUserId = auth.user.id;
   const email = auth.user.email.toLowerCase();
 
+  // ✅ Provider (robust)
+  const provider =
+    auth.user.app_metadata?.provider ||
+    auth.user.identities?.[0]?.provider ||
+    "email";
+
+  console.log("🧪 AUTH PROVIDER:", provider);
+
   /* -------------------------
-     BODY (SAFE TO READ NOW)
+     BODY
   ------------------------- */
   const body = await req.json();
   const hasConsent = !!body.marketing_consent;
@@ -46,18 +54,16 @@ export async function POST(req: Request) {
 
   /* -------------------------
      BUILD UPSERT PAYLOAD
-     ✅ AUTH DATA FROM SESSION ONLY
   ------------------------- */
   const payload: UserInsert = {
-    auth_user_id: authUserId, // 🔐 FIXED
-    email: email,             // 🔐 FIXED
+    auth_user_id: authUserId,
+    email,
     name: body.name || email,
     image: null,
     role: "customer",
-    auth_provider: "credentials",
+    auth_provider: provider,
   };
 
-  // ✅ ONLY set consent if TRUE (never overwrite to false)
   if (hasConsent) {
     payload.marketing_consent = true;
     payload.marketing_consent_at = new Date().toISOString();
@@ -78,11 +84,29 @@ export async function POST(req: Request) {
   }
 
   /* -------------------------
-     BEEHIIV SUBSCRIBE (ONLY IF CONSENT)
-     ✅ USE VERIFIED EMAIL
+     BEEHIIV SYNC (SILENT)
   ------------------------- */
   if (hasConsent) {
     try {
+      const beehiivPayload = {
+        email,
+        reactivate_existing: true,
+
+        // 🔥 FIX: prevent duplicate welcome emails
+        send_welcome_email: false,
+
+        utm_source: "app_signup",
+        referring_site: "pages_and_peace",
+        custom_fields: [
+          {
+            name: "name",
+            value: body.name || "",
+          },
+        ],
+      };
+
+      console.log("📤 Beehiiv payload:", beehiivPayload);
+
       const res = await fetch(
         `https://api.beehiiv.com/v2/publications/${process.env.BEEHIIV_PUBLICATION_ID}/subscriptions`,
         {
@@ -91,33 +115,37 @@ export async function POST(req: Request) {
             Authorization: `Bearer ${process.env.BEEHIIV_API_KEY}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            email, // 🔐 FIXED (was body.email)
-            reactivate_existing: true,
-            send_welcome_email: true,
-            utm_source: "app_signup",
-            referring_site: "pages_and_peace",
-            custom_fields: [
-              {
-                name: "name",
-                value: body.name || "",
-              },
-            ],
-          }),
+          body: JSON.stringify(beehiivPayload),
         }
       );
 
-      if (!res.ok) {
-        const err = await res.json();
-        console.error("⚠️ Beehiiv error:", err);
+      const text = await res.text();
+
+      console.log("📥 Beehiiv status:", res.status);
+      console.log("📥 Beehiiv response:", text);
+
+      if (res.ok) {
+        console.log("✅ Beehiiv sync success");
+
+        // ✅ Keep DB consistent (same as callback)
+        await supabaseAdmin
+          .from("users")
+          .update({
+            beehiiv_subscribed: true,
+            beehiiv_subscribed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .ilike("email", email); // 🔥 slightly safer than eq
+
+        console.log("⚡ Optimistic DB update applied");
       } else {
-        console.log("✅ Beehiiv subscription success");
+        console.error("⚠️ Beehiiv error");
       }
     } catch (err) {
       console.error("⚠️ Beehiiv request failed:", err);
     }
   } else {
-    console.log("ℹ️ User did not consent to marketing — skipping Beehiiv");
+    console.log("ℹ️ No marketing consent — skipping Beehiiv");
   }
 
   return NextResponse.json({ ok: true });
