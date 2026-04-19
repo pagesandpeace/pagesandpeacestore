@@ -26,7 +26,7 @@ export default function SignUpClient() {
   const [emailSent, setEmailSent] = useState(false);
 
   /* --------------------------------------------------
-     AUTO LOYALTY OPT-IN (SAFE TO KEEP)
+     AUTO LOYALTY
   -------------------------------------------------- */
   async function autoJoinLoyaltyIfNeeded() {
     if (joinIntent !== "loyalty") return;
@@ -62,7 +62,12 @@ export default function SignUpClient() {
         emailRedirectTo: `${window.location.origin}/auth/callback?callbackURL=${encodeURIComponent(
           callbackURL
         )}${joinIntent === "loyalty" ? "&join=loyalty" : ""}`,
-        data: { name },
+
+        // ✅🔥 CRITICAL FIX HERE
+        data: {
+          name,
+          marketing_consent: marketingConsent,
+        },
       },
     });
 
@@ -78,12 +83,8 @@ export default function SignUpClient() {
       return;
     }
 
-    // ❌ REMOVED PROFILE CREATE (FIXES 401 ISSUE)
-
-    // Optional: keep or remove this — won’t run until authenticated anyway
     await autoJoinLoyaltyIfNeeded();
 
-    // ✅ SHOW SUCCESS SCREEN
     setEmailSent(true);
     setLoading(false);
   }
@@ -116,64 +117,48 @@ export default function SignUpClient() {
      EMAIL SENT SCREEN
   -------------------------------------------------- */
   if (emailSent) {
-  return (
-    <div className="w-full max-w-md mx-auto text-center space-y-6">
+    return (
+      <div className="w-full max-w-md mx-auto text-center space-y-6">
+        <div className="text-4xl">📩</div>
 
-      {/* ICON */}
-      <div className="text-4xl">📩</div>
+        <h1 className="text-2xl font-semibold text-[#111]">
+          Confirm your email
+        </h1>
 
-      {/* TITLE */}
-      <h1 className="text-2xl font-semibold text-[#111]">
-        Confirm your email
-      </h1>
-
-      {/* MAIN MESSAGE */}
-      <p className="text-[#555] leading-relaxed">
-        We’ve sent a confirmation link to:
-      </p>
-
-      <div className="font-medium text-[#111] break-all">
-        {email}
-      </div>
-
-      {/* INSTRUCTIONS */}
-      <div className="text-sm text-[#666] space-y-2 leading-relaxed">
-        <p>
-          Click the link in that email to activate your account and continue.
+        <p className="text-[#555]">
+          We’ve sent a confirmation link to:
         </p>
 
-        <p>
-          ⏱ It can take a minute or two to arrive.
-        </p>
+        <div className="font-medium text-[#111] break-all">
+          {email}
+        </div>
 
-        <p>
-          📬 If you don’t see it, check your <strong>spam or junk folder</strong>.
-        </p>
+        <div className="text-sm text-[#666] space-y-2">
+          <p>Click the link in that email to activate your account.</p>
+          <p>⏱ It can take a minute or two to arrive.</p>
+          <p>
+            📬 Check your <strong>spam or junk folder</strong> if you don’t see it.
+          </p>
+        </div>
+
+        <div className="border-t border-[#e4ddd5] my-4" />
+
+        <div className="text-sm text-[#777] space-y-2">
+          <button
+            onClick={() => window.location.reload()}
+            className="underline hover:text-[#111]"
+          >
+            Try again
+          </button>
+
+          <p>or email admin@pagesandpeace.co.uk</p>
+        </div>
       </div>
-
-      {/* DIVIDER */}
-      <div className="border-t border-[#e4ddd5] my-4" />
-
-      {/* SECONDARY ACTION */}
-      <div className="text-sm text-[#777] space-y-3">
-        <p>Still having trouble?</p>
-
-        <button
-          onClick={() => window.location.reload()}
-          className="underline hover:text-[#111]"
-        >
-          Try signing up again
-        </button>
-
-        <p>or email admin@pagesandpeace.co.uk</p>
-      </div>
-
-    </div>
-  );
-}
+    );
+  }
 
   /* --------------------------------------------------
-     DEFAULT SIGN-UP FORM
+     FORM
   -------------------------------------------------- */
   return (
     <div className="w-full space-y-8">
@@ -209,6 +194,7 @@ export default function SignUpClient() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
+        {/* ✅ CONSENT */}
         <label className="flex items-start gap-2 text-sm text-[#444]">
           <input
             type="checkbox"
@@ -247,8 +233,7 @@ export default function SignUpClient() {
       </button>
 
       <p className="text-xs text-[#6b665d] text-center mt-2">
-        By continuing, you may receive occasional emails about events and
-        updates. You can unsubscribe anytime.
+        You can unsubscribe at any time.
       </p>
 
       <p className="text-center text-sm">
