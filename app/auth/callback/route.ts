@@ -140,12 +140,12 @@ export async function GET(request: Request) {
   console.log("🧪 USING firstSend:", firstSend);
 
   /* -------------------------
-     FIND USER
+     FIND USER (FIXED)
   ------------------------- */
   const { data: existing } = await supabaseAdmin
     .from("users")
     .select("*")
-    .eq("email", email)
+    .eq("auth_user_id", user.id)
     .maybeSingle();
 
   console.log("📦 Existing user:", existing);
@@ -173,11 +173,12 @@ export async function GET(request: Request) {
       marketing_consent: marketingConsent,
       marketing_consent_at: marketingConsent ? now : null,
 
-      // 🔥 FIX
+      // MAGIC LINK TRACKING
       first_magic_link_sent_at: firstSend,
       last_magic_link_sent_at: firstSend,
       magic_link_send_count: 1,
 
+      // LOGIN TRACKING
       first_login_at: now,
       last_login_at: now,
       last_seen_at: now,
@@ -204,7 +205,6 @@ export async function GET(request: Request) {
       .update({
         auth_user_id: user.id,
 
-        // 🔥 FIX
         first_magic_link_sent_at:
           existing.first_magic_link_sent_at || firstSend,
         last_magic_link_sent_at:
@@ -221,7 +221,7 @@ export async function GET(request: Request) {
 
         updated_at: now,
       })
-      .eq("email", email);
+      .eq("auth_user_id", user.id);
 
     if (updateErr) {
       console.error("❌ UPDATE FAILED:", updateErr);
@@ -231,7 +231,7 @@ export async function GET(request: Request) {
   }
 
   /* -------------------------
-     BEEHIIV (UNCHANGED)
+     BEEHIIV (FIXED MATCH)
   ------------------------- */
   const publicationId = process.env.BEEHIIV_PUBLICATION_ID;
   const apiKey = process.env.BEEHIIV_API_KEY;
@@ -264,7 +264,7 @@ export async function GET(request: Request) {
             beehiiv_subscribed_at: now,
             updated_at: now,
           })
-          .eq("email", email);
+          .eq("auth_user_id", user.id);
       }
     } catch (err) {
       console.error("❌ Beehiiv crash:", err);
