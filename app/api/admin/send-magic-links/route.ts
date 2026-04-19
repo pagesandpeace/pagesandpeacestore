@@ -61,35 +61,29 @@ export async function POST(req: Request) {
     const supabaseAdmin = supabaseService();
 
     /* -------------------------
-       🧠 CHECK USER EXISTS + RATE LIMIT
+       🧠 OPTIONAL PROFILE LOOKUP
+       (DO NOT BLOCK)
     ------------------------- */
     const { data: existingUser, error: lookupErr } =
       await supabaseAdmin
         .from("users")
-        .select("last_magic_link_sent_at")
+        .select("id, last_magic_link_sent_at")
         .ilike("email", email)
         .maybeSingle();
 
     if (lookupErr) {
       console.error("❌ Lookup failed:", lookupErr);
-      return NextResponse.json(
-        { error: "Lookup failed" },
-        { status: 500 }
-      );
+      // continue anyway (non-blocking)
     }
 
     if (!existingUser) {
-      console.warn("🚫 User not found");
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+      console.log("⚠️ No profile yet — continuing (auth user may exist)");
     }
 
     /* -------------------------
-       ⛔ RATE LIMIT (5 MIN)
+       ⛔ RATE LIMIT (ONLY IF PROFILE EXISTS)
     ------------------------- */
-    if (existingUser.last_magic_link_sent_at) {
+    if (existingUser?.last_magic_link_sent_at) {
       const diff =
         Date.now() -
         new Date(existingUser.last_magic_link_sent_at).getTime();
@@ -134,20 +128,24 @@ export async function POST(req: Request) {
     console.log("✅ Magic link sent");
 
     /* -------------------------
-       📊 TRACK SEND (CRITICAL)
+       📊 TRACK SEND (ONLY IF PROFILE EXISTS)
     ------------------------- */
-    const { error: updateErr } = await supabaseAdmin
-      .from("users")
-      .update({
-        last_magic_link_sent_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .ilike("email", email);
+    if (existingUser) {
+      const { error: updateErr } = await supabaseAdmin
+        .from("users")
+        .update({
+          last_magic_link_sent_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingUser.id);
 
-    if (updateErr) {
-      console.warn("⚠️ Tracking failed (non-blocking):", updateErr);
+      if (updateErr) {
+        console.warn("⚠️ Tracking failed (non-blocking):", updateErr);
+      } else {
+        console.log("📊 Magic link tracked");
+      }
     } else {
-      console.log("📊 Magic link tracked");
+      console.log("ℹ️ Skipped tracking (no profile yet)");
     }
 
     return NextResponse.json({ success: true });
