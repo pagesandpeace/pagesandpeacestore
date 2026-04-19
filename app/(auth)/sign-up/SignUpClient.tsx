@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { useSearchParams } from "next/navigation";
+import ErrorModal from "@/components/ui/ErrorModal";
 
 export default function SignUpClient() {
   const supabase = supabaseBrowser();
@@ -14,10 +15,11 @@ export default function SignUpClient() {
   const callbackURL = searchParams.get("callbackURL") || "/dashboard";
   const joinIntent = searchParams.get("join");
 
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
+  // ✅ NEW
   const [marketingConsent, setMarketingConsent] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -25,8 +27,16 @@ export default function SignUpClient() {
 
   const [emailSent, setEmailSent] = useState(false);
 
+  const [errorMessage, setErrorMessage] = useState("");
+  const [errorOpen, setErrorOpen] = useState(false);
+
+  function showError(msg: string) {
+    setErrorMessage(msg);
+    setErrorOpen(true);
+  }
+
   /* --------------------------------------------------
-     AUTO LOYALTY
+     AUTO LOYALTY (OPTIONAL)
   -------------------------------------------------- */
   async function autoJoinLoyaltyIfNeeded() {
     if (joinIntent !== "loyalty") return;
@@ -49,36 +59,33 @@ export default function SignUpClient() {
   }
 
   /* --------------------------------------------------
-     EMAIL SIGN-UP
+     SIGN UP = MAGIC LINK
   -------------------------------------------------- */
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signUp({
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    const { error } = await supabase.auth.signInWithOtp({
       email,
-      password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback?callbackURL=${encodeURIComponent(
           callbackURL
         )}${joinIntent === "loyalty" ? "&join=loyalty" : ""}`,
 
-        // ✅🔥 CRITICAL FIX HERE
+        // ✅ CRITICAL: METADATA FOR CALLBACK
         data: {
-          name,
+          name: fullName,
+          first_name: firstName,
+          last_name: lastName,
           marketing_consent: marketingConsent,
         },
       },
     });
 
     if (error) {
-      alert(error.message);
-      setLoading(false);
-      return;
-    }
-
-    if (!data.user) {
-      alert("Check your email inbox to confirm your account!");
+      showError(error.message);
       setLoading(false);
       return;
     }
@@ -109,7 +116,7 @@ export default function SignUpClient() {
       },
     });
 
-    if (error) alert(error.message);
+    if (error) showError(error.message);
     setGoogleLoading(false);
   }
 
@@ -119,14 +126,14 @@ export default function SignUpClient() {
   if (emailSent) {
     return (
       <div className="w-full max-w-md mx-auto text-center space-y-6">
-        <div className="text-4xl">📩</div>
+        <div className="text-4xl">✨</div>
 
         <h1 className="text-2xl font-semibold text-[#111]">
-          Confirm your email
+          You&apos;re almost in
         </h1>
 
         <p className="text-[#555]">
-          We’ve sent a confirmation link to:
+          We&apos;ve sent your secure access link to:
         </p>
 
         <div className="font-medium text-[#111] break-all">
@@ -134,25 +141,21 @@ export default function SignUpClient() {
         </div>
 
         <div className="text-sm text-[#666] space-y-2">
-          <p>Click the link in that email to activate your account.</p>
-          <p>⏱ It can take a minute or two to arrive.</p>
+          <p>Click the link to enter your account instantly.</p>
+          <p>⏱ It can take a minute to arrive.</p>
           <p>
-            📬 Check your <strong>spam or junk folder</strong> if you don’t see it.
+            📬 Check your <strong>spam or junk folder</strong> if needed.
           </p>
         </div>
 
         <div className="border-t border-[#e4ddd5] my-4" />
 
-        <div className="text-sm text-[#777] space-y-2">
-          <button
-            onClick={() => window.location.reload()}
-            className="underline hover:text-[#111]"
-          >
-            Try again
-          </button>
-
-          <p>or email admin@pagesandpeace.co.uk</p>
-        </div>
+        <button
+          onClick={() => setEmailSent(false)}
+          className="underline text-sm hover:text-[#111]"
+        >
+          Use a different email
+        </button>
       </div>
     );
   }
@@ -162,20 +165,62 @@ export default function SignUpClient() {
   -------------------------------------------------- */
   return (
     <div className="w-full space-y-8">
+      <ErrorModal
+        open={errorOpen}
+        message={errorMessage}
+        onClose={() => setErrorOpen(false)}
+      />
+
       <h1 className="text-3xl font-semibold text-[#111]">
         Create your account
       </h1>
 
-      <form onSubmit={handleSignUp} className="space-y-4">
-        <input
-          type="text"
-          placeholder="Full name"
-          required
-          className="border p-3 w-full rounded-lg"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+      {/* GOOGLE */}
+      <button
+        onClick={handleGoogle}
+        disabled={googleLoading}
+        className="w-full flex items-center justify-center gap-3 py-3 bg-white rounded-lg border border-[#D6C28B] hover:bg-[#f1ede4]"
+      >
+        <Image src="/google_logo.svg" width={20} height={20} alt="Google" />
+        <span>
+          {googleLoading ? "Connecting…" : "Sign up with Google"}
+        </span>
+      </button>
 
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-[#e4ddd5]" />
+        </div>
+        <div className="relative flex justify-center text-xs">
+          <span className="px-2 bg-[#FAF6F1] text-[#6b665d]">
+            or continue with email
+          </span>
+        </div>
+      </div>
+
+      <form onSubmit={handleSignUp} className="space-y-4">
+        {/* NAME */}
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            type="text"
+            placeholder="First name"
+            required
+            className="border p-3 w-full rounded-lg"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Last name"
+            required
+            className="border p-3 w-full rounded-lg"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+          />
+        </div>
+
+        {/* EMAIL */}
         <input
           type="email"
           placeholder="Email address"
@@ -185,16 +230,7 @@ export default function SignUpClient() {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <input
-          type="password"
-          placeholder="Password"
-          required
-          className="border p-3 w-full rounded-lg"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        {/* ✅ CONSENT */}
+        {/* ✅ MARKETING CONSENT */}
         <label className="flex items-start gap-2 text-sm text-[#444]">
           <input
             type="checkbox"
@@ -208,38 +244,18 @@ export default function SignUpClient() {
         </label>
 
         <Button type="submit" disabled={loading} className="w-full">
-          {loading ? "Creating…" : "Create Account"}
+          {loading ? "Creating…" : "Continue"}
         </Button>
       </form>
 
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-[#e4ddd5]" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="px-2 bg-[#FAF6F1] text-[#6b665d]">
-            or sign up faster
-          </span>
-        </div>
-      </div>
-
-      <button
-        onClick={handleGoogle}
-        disabled={googleLoading}
-        className="w-full flex items-center justify-center gap-3 py-3 bg-white rounded-lg border border-[#D6C28B] hover:bg-[#f1ede4]"
-      >
-        <Image src="/google_logo.svg" width={20} height={20} alt="Google" />
-        <span>{googleLoading ? "Connecting…" : "Sign up with Google"}</span>
-      </button>
-
-      <p className="text-xs text-[#6b665d] text-center mt-2">
-        You can unsubscribe at any time.
+      <p className="text-xs text-[#6b665d] text-center">
+        No password needed. We&apos;ll send you a secure login link.
       </p>
 
       <p className="text-center text-sm">
-        Already have an account?{" "}
+        Already have an account{" "}
         <Link
-          href={`/sign-in${joinIntent ? "?join=loyalty" : ""}`}
+          href={`/sign-in${joinIntent ? `?join=${joinIntent}` : ""}`}
           className="underline font-semibold"
         >
           Sign in

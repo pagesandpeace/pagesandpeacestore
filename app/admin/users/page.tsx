@@ -10,21 +10,30 @@ import { TableRow } from "@/components/table/TableRow";
 import { Cell } from "@/components/table/Cell";
 import { HeadCell } from "@/components/table/HeadCell";
 
-type AuthUser = {
+type User = {
   id: string;
   email: string;
-  last_sign_in_at: string | null;
   created_at: string;
-  last_magic_link_sent_at?: string | null;
+
+  last_login_at: string | null;
+  last_magic_link_sent_at: string | null;
+
+  has_logged_in: boolean;
+  signup_status: string;
+
+  magic_link_send_count?: number;
 };
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<AuthUser[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "inactive">("inactive");
 
   const [now, setNow] = useState(() => Date.now());
 
+  /* -------------------------
+     ⏱ LIVE TIME
+  ------------------------- */
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Date.now());
@@ -34,29 +43,24 @@ export default function UsersPage() {
   }, []);
 
   /* -------------------------
-     🔄 SHARED FETCH (FIX)
-  ------------------------- */
-  async function refreshUsers() {
-    const res = await fetch("/api/admin/users");
-    const data = await res.json();
-    setUsers(data.users || []);
-    setLoading(false);
-  }
-
-  /* -------------------------
      INITIAL LOAD
   ------------------------- */
   useEffect(() => {
     let mounted = true;
 
     async function load() {
-      const res = await fetch("/api/admin/users");
-      const data = await res.json();
+      try {
+        const res = await fetch("/api/admin/users");
+        const data = await res.json();
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      setUsers(data.users || []);
-      setLoading(false);
+        setUsers(data.users || []);
+      } catch (err) {
+        console.error("Failed to load users", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     }
 
     load();
@@ -66,10 +70,13 @@ export default function UsersPage() {
     };
   }, []);
 
-  /* -------------------------
-     SEND MAGIC LINK
-  ------------------------- */
-  async function sendMagicLink(email: string) {
+  async function refreshUsers() {
+    const res = await fetch("/api/admin/users");
+    const data = await res.json();
+    setUsers(data.users || []);
+  }
+
+  async function sendLoginLink(email: string) {
     const res = await fetch("/api/admin/send-magic-links", {
       method: "POST",
       body: JSON.stringify({ email }),
@@ -78,18 +85,17 @@ export default function UsersPage() {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.error || "Failed to send link");
+      alert(data.error || "Failed to send login link");
       return;
     }
 
-    alert("Magic link sent ✓");
-
-    // ✅ FIX: use refresh instead of missing function
+    alert(`Login link sent to ${email}`);
     await refreshUsers();
   }
 
   function fmtDate(date?: string | null) {
     if (!date) return "—";
+
     return new Date(date).toLocaleString("en-GB", {
       day: "2-digit",
       month: "short",
@@ -98,35 +104,45 @@ export default function UsersPage() {
     });
   }
 
-  function getStatus(user: AuthUser) {
-    if (user.last_sign_in_at) return "active";
+  /* -------------------------
+     🔥 IMPROVED STATUS LOGIC
+  ------------------------- */
+  function getStatus(user: User) {
+    if (user.has_logged_in) return "active";
+
+    if (user.magic_link_send_count && user.magic_link_send_count >= 3) {
+      return "cold";
+    }
 
     if (user.last_magic_link_sent_at) {
       const diff =
         now - new Date(user.last_magic_link_sent_at).getTime();
 
       if (diff < 5 * 60 * 1000) return "recent";
-      return "chased";
+
+      return "pending";
     }
 
     return "new";
   }
 
-  function StatusBadge({ user }: { user: AuthUser }) {
+  function StatusBadge({ user }: { user: User }) {
     const status = getStatus(user);
 
     const styles = {
       active: "bg-green-100 text-green-700",
-      chased: "bg-yellow-100 text-yellow-700",
       recent: "bg-blue-100 text-blue-700",
+      pending: "bg-yellow-100 text-yellow-700",
       new: "bg-gray-100 text-gray-600",
+      cold: "bg-red-100 text-red-700",
     };
 
     const labels = {
       active: "Active",
-      chased: "Chased",
       recent: "Link Sent",
+      pending: "Awaiting Login",
       new: "New",
+      cold: "Cold",
     };
 
     return (
@@ -136,9 +152,12 @@ export default function UsersPage() {
     );
   }
 
+  /* -------------------------
+     FILTER
+  ------------------------- */
   const filtered =
     filter === "inactive"
-      ? users.filter((u) => !u.last_sign_in_at)
+      ? users.filter((u) => !u.has_logged_in)
       : users;
 
   if (loading) return <div className="p-8">Loading users...</div>;
@@ -164,7 +183,7 @@ export default function UsersPage() {
               <HeadCell>Status</HeadCell>
               <HeadCell>Signed Up</HeadCell>
               <HeadCell>Last Login</HeadCell>
-              <HeadCell>Last Link Sent</HeadCell>
+              <HeadCell>Last Login Link</HeadCell>
               <HeadCell>Actions</HeadCell>
             </tr>
           </TableHead>
@@ -177,6 +196,8 @@ export default function UsersPage() {
                   new Date(user.last_magic_link_sent_at).getTime() <
                   5 * 60 * 1000;
 
+              const isActive = user.has_logged_in;
+
               return (
                 <TableRow key={user.id}>
                   <Cell>{user.email}</Cell>
@@ -187,26 +208,28 @@ export default function UsersPage() {
 
                   <Cell>{fmtDate(user.created_at)}</Cell>
 
-                  <Cell>{fmtDate(user.last_sign_in_at)}</Cell>
+                  <Cell>{fmtDate(user.last_login_at)}</Cell>
 
                   <Cell>
                     {fmtDate(user.last_magic_link_sent_at)}
                   </Cell>
 
                   <Cell>
-                    {!user.last_sign_in_at && (
-                      <button
-                        onClick={() => sendMagicLink(user.email)}
-                        disabled={!!recentlySent}
-                        className={`text-xs px-3 py-1 border rounded ${
-                          recentlySent
-                            ? "opacity-50 cursor-not-allowed"
-                            : "hover:bg-gray-100"
-                        }`}
-                      >
-                        {recentlySent ? "Link Sent" : "Send Link"}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => sendLoginLink(user.email)}
+                      disabled={recentlySent || isActive}
+                      className={`text-xs px-3 py-1 border rounded ${
+                        recentlySent || isActive
+                          ? "opacity-50 cursor-not-allowed"
+                          : "hover:bg-gray-100"
+                      }`}
+                    >
+                      {isActive
+                        ? "Active"
+                        : recentlySent
+                        ? "Link Sent"
+                        : "Send Login Link"}
+                    </button>
                   </Cell>
                 </TableRow>
               );

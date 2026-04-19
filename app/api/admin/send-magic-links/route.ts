@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { supabaseAuthServer } from "@/lib/supabase/server";
 import { supabaseService } from "@/lib/supabase/service";
+import crypto from "crypto";
 
 export async function POST(req: Request) {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -59,29 +60,33 @@ export async function POST(req: Request) {
        🔑 ADMIN CLIENT
     ------------------------- */
     const supabaseAdmin = supabaseService();
+    const now = new Date().toISOString();
 
     /* -------------------------
-       🧠 OPTIONAL PROFILE LOOKUP
-       (DO NOT BLOCK)
+       🧠 LOOKUP USER (BY EMAIL)
     ------------------------- */
     const { data: existingUser, error: lookupErr } =
       await supabaseAdmin
         .from("users")
-        .select("id, last_magic_link_sent_at")
+        .select(`
+          id,
+          last_magic_link_sent_at,
+          magic_link_send_count,
+          first_magic_link_sent_at
+        `)
         .ilike("email", email)
         .maybeSingle();
 
     if (lookupErr) {
       console.error("❌ Lookup failed:", lookupErr);
-      // continue anyway (non-blocking)
     }
 
     if (!existingUser) {
-      console.log("⚠️ No profile yet — continuing (auth user may exist)");
+      console.log("⚠️ No profile yet — will create shadow user");
     }
 
     /* -------------------------
-       ⛔ RATE LIMIT (ONLY IF PROFILE EXISTS)
+       ⛔ RATE LIMIT
     ------------------------- */
     if (existingUser?.last_magic_link_sent_at) {
       const diff =
@@ -128,24 +133,53 @@ export async function POST(req: Request) {
     console.log("✅ Magic link sent");
 
     /* -------------------------
-       📊 TRACK SEND (ONLY IF PROFILE EXISTS)
+       📊 TRACK SEND (CREATE OR UPDATE)
     ------------------------- */
-    if (existingUser) {
+    if (!existingUser) {
+      // 🔥 CREATE SHADOW USER
+      const { error: insertErr } = await supabaseAdmin
+        .from("users")
+        .insert({
+          id: crypto.randomUUID(),
+          email,
+          name: email.split("@")[0],
+
+          signup_status: "invited",
+
+          first_magic_link_sent_at: now,
+          last_magic_link_sent_at: now,
+          magic_link_send_count: 1,
+
+          created_at: now,
+        });
+
+      if (insertErr) {
+        console.warn("⚠️ Shadow user create failed:", insertErr);
+      } else {
+        console.log("🆕 Shadow user created");
+      }
+    } else {
+      // 🔥 UPDATE EXISTING
       const { error: updateErr } = await supabaseAdmin
         .from("users")
         .update({
-          last_magic_link_sent_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          last_magic_link_sent_at: now,
+          magic_link_send_count:
+            (existingUser.magic_link_send_count || 0) + 1,
+
+          // only set first if missing
+          first_magic_link_sent_at:
+            existingUser.first_magic_link_sent_at || now,
+
+          updated_at: now,
         })
         .eq("id", existingUser.id);
 
       if (updateErr) {
-        console.warn("⚠️ Tracking failed (non-blocking):", updateErr);
+        console.warn("⚠️ Tracking failed:", updateErr);
       } else {
         console.log("📊 Magic link tracked");
       }
-    } else {
-      console.log("ℹ️ Skipped tracking (no profile yet)");
     }
 
     return NextResponse.json({ success: true });

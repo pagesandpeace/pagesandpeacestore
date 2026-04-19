@@ -5,90 +5,86 @@ import { supabaseAuthServer } from "@/lib/supabase/server";
 import { supabaseService } from "@/lib/supabase/service";
 
 export async function GET() {
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("📥 [ADMIN] GET /api/admin/users");
-
   try {
     const supabase = await supabaseAuthServer();
 
     /* -------------------------
-       🔐 AUTH CHECK
+       AUTH CHECK
     ------------------------- */
     const {
       data: { user },
-      error: authErr,
     } = await supabase.auth.getUser();
 
-    if (authErr || !user) {
-      console.warn("🚫 Unauthorized");
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     /* -------------------------
-       👤 ADMIN CHECK
+       ADMIN CHECK
     ------------------------- */
-    const { data: profile, error: profileErr } = await supabase
+    const { data: profile } = await supabase
       .from("users")
       .select("role")
       .eq("auth_user_id", user.id)
       .single();
 
-    if (profileErr || profile?.role !== "admin") {
-      console.warn("🚫 Not admin");
+    if (profile?.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    console.log("🟥 Admin verified:", user.email);
-
-    /* -------------------------
-       🔥 FETCH AUTH USERS
-    ------------------------- */
     const supabaseAdmin = supabaseService();
 
-    const { data: authUsers, error } =
+    /* -------------------------
+       GET AUTH USERS (ALL)
+    ------------------------- */
+    const { data: authUsers } =
       await supabaseAdmin.auth.admin.listUsers();
 
-    if (error) {
-      console.error("💥 Failed to fetch auth users:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch users" },
-        { status: 500 }
-      );
-    }
-
     /* -------------------------
-       🧠 FETCH APP USERS TABLE
+       GET APP USERS
     ------------------------- */
-    const { data: profiles } = await supabaseAdmin
+    const { data: appUsers } = await supabaseAdmin
       .from("users")
-      .select("email, last_magic_link_sent_at");
+      .select("*");
 
-    const profileMap = Object.fromEntries(
-      (profiles || []).map((p) => [p.email, p])
+    const appMap = Object.fromEntries(
+      (appUsers || []).map((u) => [u.email, u])
     );
 
     /* -------------------------
-       🧠 MERGE DATA
+       MERGE (FIXED)
     ------------------------- */
-    const users = authUsers.users.map((u) => ({
-      id: u.id,
-      email: u.email,
-      created_at: u.created_at,
-      last_sign_in_at: u.last_sign_in_at,
-      last_magic_link_sent_at:
-        profileMap[u.email || ""]?.last_magic_link_sent_at || null,
-    }));
+    const users = authUsers.users.map((auth) => {
+      const app = appMap[auth.email ?? ""];
 
-    console.log("📊 Users fetched:", users.length);
+      // 🔥 THIS IS THE FIX
+      const lastMagicLink =
+        app?.last_magic_link_sent_at || auth.created_at;
+
+      return {
+        id: auth.id,
+        email: auth.email,
+        created_at: auth.created_at,
+
+        has_logged_in: app?.has_logged_in ?? false,
+        last_login_at: app?.last_login_at ?? null,
+
+        // ✅ ALWAYS SHOW SOMETHING
+        last_magic_link_sent_at: lastMagicLink,
+
+        signup_status: app?.signup_status ?? "invited",
+
+        is_shadow: !app,
+      };
+    });
 
     return NextResponse.json({ users });
   } catch (err) {
-    console.error("🔥 HARD CRASH:", err);
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    );
-  } finally {
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  }
+  console.error("❌ /api/admin/users error:", err);
+
+  return NextResponse.json(
+    { error: "Server error" },
+    { status: 500 }
+  );
+}
 }

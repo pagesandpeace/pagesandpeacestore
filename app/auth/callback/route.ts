@@ -10,8 +10,11 @@ import crypto from "crypto";
 type Meta = {
   full_name?: string;
   name?: string;
+  first_name?: string;
+  last_name?: string;
   avatar_url?: string;
   picture?: string;
+  marketing_consent?: boolean;
 };
 
 export async function GET(request: Request) {
@@ -24,6 +27,8 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type");
+
+  console.log("📥 PARAMS:", { code, tokenHash, type });
 
   /* -------------------------
      SAFE REDIRECT
@@ -38,7 +43,7 @@ export async function GET(request: Request) {
   console.log("🔁 Redirect:", callbackURL);
 
   /* -------------------------
-     CLIENT
+     SUPABASE CLIENT
   ------------------------- */
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,17 +65,21 @@ export async function GET(request: Request) {
   ------------------------- */
   if (code) {
     console.log("🔑 OAuth flow");
+
     const { error } = await supabase.auth.exchangeCodeForSession(code);
+
     if (error) {
       console.error("❌ OAuth exchange failed:", error);
       return NextResponse.redirect(new URL("/sign-in", url));
     }
   } else if (tokenHash && type) {
     console.log("🔑 OTP flow:", type);
+
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type: type as "signup" | "magiclink" | "recovery",
     });
+
     if (error) {
       console.error("❌ verifyOtp failed:", error);
       return NextResponse.redirect(new URL("/sign-in", url));
@@ -81,12 +90,14 @@ export async function GET(request: Request) {
   }
 
   /* -------------------------
-     GET USER
+     GET AUTH USER
   ------------------------- */
   const {
     data: { user },
     error: userErr,
   } = await supabase.auth.getUser();
+
+  console.log("👤 AUTH USER RAW:", user);
 
   if (userErr || !user || !user.email) {
     console.error("❌ getUser failed:", userErr);
@@ -96,8 +107,23 @@ export async function GET(request: Request) {
   const email = user.email.toLowerCase();
   const meta = (user.user_metadata as Meta) || {};
 
-  console.log("👤 USER:", email);
-  console.log("🧪 PROVIDER:", user.app_metadata?.provider);
+  console.log("📧 Email:", email);
+  console.log("📊 Metadata:", meta);
+  console.log("🕒 Auth created_at:", user.created_at);
+
+  /* -------------------------
+     EXTRACT METADATA
+  ------------------------- */
+  const fullName =
+    meta.full_name ||
+    meta.name ||
+    `${meta.first_name || ""} ${meta.last_name || ""}`.trim() ||
+    email.split("@")[0];
+
+  const marketingConsent = meta.marketing_consent === true;
+
+  console.log("👤 Final name:", fullName);
+  console.log("📊 Marketing consent:", marketingConsent);
 
   /* -------------------------
      ADMIN CLIENT
@@ -108,8 +134,13 @@ export async function GET(request: Request) {
     { auth: { persistSession: false } }
   );
 
+  const now = new Date().toISOString();
+  const firstSend = user.created_at;
+
+  console.log("🧪 USING firstSend:", firstSend);
+
   /* -------------------------
-     CHECK EXISTING USER
+     FIND USER
   ------------------------- */
   const { data: existing } = await supabaseAdmin
     .from("users")
@@ -117,32 +148,41 @@ export async function GET(request: Request) {
     .eq("email", email)
     .maybeSingle();
 
-  console.log("🧠 EXISTING USER:", existing);
+  console.log("📦 Existing user:", existing);
 
-  const now = new Date().toISOString();
-  const consent = true;
-
-  /* -------------------------
-     CREATE OR UPDATE USER
-  ------------------------- */
   let created = false;
 
+  /* -------------------------
+     CREATE USER
+  ------------------------- */
   if (!existing) {
-    console.log("🆕 Creating user");
+    console.log("🆕 Creating REAL user");
 
     const { error } = await supabaseAdmin.from("users").insert({
       id: crypto.randomUUID(),
       email,
       auth_user_id: user.id,
-      name: meta.full_name || meta.name || email.split("@")[0],
+      name: fullName,
       image: meta.avatar_url || meta.picture || null,
       role: "customer",
-      auth_provider: user.app_metadata?.provider || "email", // ✅ keep dynamic
+      auth_provider: user.app_metadata?.provider || "email",
       email_verified: true,
       created_at: now,
-      marketing_consent: true,
-      marketing_consent_at: now,
-      signup_status: "complete",
+      signup_status: "active",
+
+      marketing_consent: marketingConsent,
+      marketing_consent_at: marketingConsent ? now : null,
+
+      // 🔥 FIX
+      first_magic_link_sent_at: firstSend,
+      last_magic_link_sent_at: firstSend,
+      magic_link_send_count: 1,
+
+      first_login_at: now,
+      last_login_at: now,
+      last_seen_at: now,
+      last_magic_link_clicked_at: now,
+      has_logged_in: true,
     });
 
     if (error) {
@@ -152,34 +192,57 @@ export async function GET(request: Request) {
       console.log("✅ User created");
     }
   } else {
-    console.log("ℹ️ Existing user");
+    console.log("ℹ️ Updating existing user");
 
-    if (existing.auth_user_id !== user.id) {
-      await supabaseAdmin
-        .from("users")
-        .update({
-          auth_user_id: user.id,
-          updated_at: now,
-        })
-        .eq("id", existing.id);
+    console.log("🧪 BEFORE UPDATE:", {
+      existing_first: existing.first_magic_link_sent_at,
+      existing_last: existing.last_magic_link_sent_at,
+    });
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("users")
+      .update({
+        auth_user_id: user.id,
+
+        // 🔥 FIX
+        first_magic_link_sent_at:
+          existing.first_magic_link_sent_at || firstSend,
+        last_magic_link_sent_at:
+          existing.last_magic_link_sent_at || firstSend,
+        magic_link_send_count:
+          existing.magic_link_send_count || 1,
+
+        first_login_at: existing.first_login_at || now,
+        last_login_at: now,
+        last_seen_at: now,
+        last_magic_link_clicked_at: now,
+        has_logged_in: true,
+        signup_status: "active",
+
+        updated_at: now,
+      })
+      .eq("email", email);
+
+    if (updateErr) {
+      console.error("❌ UPDATE FAILED:", updateErr);
+    } else {
+      console.log("✅ UPDATE SUCCESS");
     }
   }
 
   /* -------------------------
-     BEEHIIV SYNC
+     BEEHIIV (UNCHANGED)
   ------------------------- */
   const publicationId = process.env.BEEHIIV_PUBLICATION_ID;
   const apiKey = process.env.BEEHIIV_API_KEY;
 
-  if (consent) {
+  if (publicationId && apiKey && marketingConsent) {
     try {
       const payload = {
         email,
         reactivate_existing: true,
         send_welcome_email: created,
       };
-
-      console.log("📤 Beehiiv payload:", payload);
 
       const res = await fetch(
         `https://api.beehiiv.com/v2/publications/${publicationId}/subscriptions`,
@@ -193,27 +256,15 @@ export async function GET(request: Request) {
         }
       );
 
-      const text = await res.text();
-
-      console.log("📥 Beehiiv status:", res.status);
-      console.log("📥 Beehiiv response:", text);
-
       if (res.ok) {
-        console.log("✅ Beehiiv success");
-
-        /* 🔥 CRITICAL FIX — optimistic DB update */
         await supabaseAdmin
           .from("users")
           .update({
             beehiiv_subscribed: true,
-            beehiiv_subscribed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            beehiiv_subscribed_at: now,
+            updated_at: now,
           })
           .eq("email", email);
-
-        console.log("⚡ Optimistic DB update applied");
-      } else {
-        console.error("❌ Beehiiv failed");
       }
     } catch (err) {
       console.error("❌ Beehiiv crash:", err);

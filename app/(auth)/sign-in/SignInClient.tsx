@@ -1,26 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/client";
-import Link from "next/link";
+import { supabaseBrowser } from "@/lib/supabase/client"; // ✅ FIX: re-add this
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import ErrorModal from "@/components/ui/ErrorModal";
 
 export default function SignInClient() {
-  const supabase = supabaseBrowser();
-  const router = useRouter();
+  const supabase = supabaseBrowser(); // ✅ FIX: init client
+
   const searchParams = useSearchParams();
 
-  const callbackURL = searchParams.get("callbackURL") || null;
+  const callbackURL = searchParams.get("callbackURL") || "/dashboard";
   const joinIntent = searchParams.get("join");
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const defaultEmail = searchParams.get("email") || "";
 
+  const [email, setEmail] = useState(defaultEmail);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState("");
   const [errorOpen, setErrorOpen] = useState(false);
@@ -31,90 +31,111 @@ export default function SignInClient() {
   }
 
   /* --------------------------------------------------
-     AUTO LOYALTY OPT-IN (IDEMPOTENT)
+     MAGIC LINK (BACKEND CONTROLLED)
   -------------------------------------------------- */
-  async function autoJoinLoyaltyIfNeeded() {
-    if (joinIntent !== "loyalty") return;
-
-    try {
-      await fetch("/api/loyalty/optin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-"Idempotency-Key": self.crypto?.randomUUID?.() ?? String(Date.now()),
-        },
-        body: JSON.stringify({
-          termsVersion: "v1.0",
-          marketingConsent: true,
-        }),
-      });
-
-      localStorage.setItem("pp:loyalty-confirmed", "true");
-    } catch {
-      // silent failure
-    }
-  }
-
-  /* --------------------------------------------------
-     EMAIL SIGN-IN
-  -------------------------------------------------- */
-  async function handleEmailSignIn(e: React.FormEvent) {
+  async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
-    
+    try {
+      const res = await fetch("/api/admin/send-magic-links", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          callbackURL,
+          joinIntent,
+        }),
+      });
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      const data = await res.json();
 
-    if (error) {
-      showError(error.message);
-      setLoading(false);
-      return;
-    }
+      if (!res.ok) {
+        showError(data.error || "Failed to send link");
+        setLoading(false);
+        return;
+      }
 
-    await autoJoinLoyaltyIfNeeded();
+      setEmailSent(true);
+    } catch (err) {
+  console.error(err); // 👈 use it
+  showError("Something went wrong");
+}
 
-    /* --------------------------------------------------
-       FETCH ME (PROFILE IS GUARANTEED)
-    -------------------------------------------------- */
-    const res = await fetch("/api/me", { cache: "no-store" });
-    const me = await res.json();
-
-    if (me?.role === "admin") {
-      router.push("/admin");
-      return;
-    }
-
-    router.push(callbackURL || "/dashboard");
+    setLoading(false);
   }
 
   /* --------------------------------------------------
-     GOOGLE SIGN-IN
+     GOOGLE SIGN-IN (FIXED)
   -------------------------------------------------- */
   async function handleGoogle() {
-    setGoogleLoading(true);
+    setLoading(true);
 
-    const redirectParams = new URLSearchParams();
-    redirectParams.set("callbackURL", callbackURL || "/dashboard");
+    const params = new URLSearchParams();
+    params.set("callbackURL", callbackURL);
 
     if (joinIntent === "loyalty") {
-      redirectParams.set("join", "loyalty");
+      params.set("join", "loyalty");
     }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${location.origin}/auth/callback?${redirectParams.toString()}`,
+        redirectTo: `${location.origin}/auth/callback?${params.toString()}`,
       },
     });
 
-    if (error) showError(error.message);
-    setGoogleLoading(false);
+    if (error) {
+      showError(error.message);
+      setLoading(false);
+    }
   }
 
+  /* --------------------------------------------------
+     EMAIL SENT STATE
+  -------------------------------------------------- */
+  if (emailSent) {
+    return (
+      <div className="w-full max-w-md mx-auto text-center space-y-6">
+        <div className="text-4xl">📩</div>
+
+        <h1 className="text-2xl font-semibold text-[#111]">
+          Check your email
+        </h1>
+
+        <p className="text-[#555]">
+          We’ve sent you a secure login link:
+        </p>
+
+        <div className="font-medium text-[#111] break-all">
+          {email}
+        </div>
+
+        <div className="text-sm text-[#666] space-y-2">
+          <p>Click the link to access your account instantly.</p>
+          <p>⏱ It may take a minute to arrive.</p>
+          <p>
+            📬 Check your <strong>spam or junk folder</strong> if needed.
+          </p>
+        </div>
+
+        <div className="border-t border-[#e4ddd5] my-4" />
+
+        <button
+          onClick={() => setEmailSent(false)}
+          className="underline text-sm hover:text-[#111]"
+        >
+          Use a different email
+        </button>
+      </div>
+    );
+  }
+
+  /* --------------------------------------------------
+     MAIN FORM
+  -------------------------------------------------- */
   return (
     <div className="w-full space-y-8">
       <ErrorModal
@@ -123,29 +144,34 @@ export default function SignInClient() {
         onClose={() => setErrorOpen(false)}
       />
 
-      <h1 className="text-3xl font-semibold text-[#111]">Sign In</h1>
+      <h1 className="text-3xl font-semibold text-[#111]">
+        Sign In
+      </h1>
 
+      {/* GOOGLE */}
       <button
         onClick={handleGoogle}
-        disabled={googleLoading}
+        disabled={loading}
         className="w-full flex items-center justify-center gap-3 py-3 bg-white rounded-lg border border-[#D6C28B] hover:bg-[#f1ede4]"
       >
         <Image src="/google_logo.svg" width={20} height={20} alt="Google" />
-        <span>{googleLoading ? "Connecting…" : "Sign in with Google"}</span>
+        <span>{loading ? "Connecting…" : "Continue with Google"}</span>
       </button>
 
+      {/* DIVIDER */}
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-[#e4ddd5]" />
         </div>
         <div className="relative flex justify-center text-xs">
           <span className="px-2 bg-[#FAF6F1] text-[#6b665d]">
-            or continue with email
+            or use email
           </span>
         </div>
       </div>
 
-      <form onSubmit={handleEmailSignIn} className="space-y-4">
+      {/* MAGIC LINK */}
+      <form onSubmit={handleMagicLink} className="space-y-4">
         <input
           type="email"
           required
@@ -155,30 +181,21 @@ export default function SignInClient() {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <input
-          type="password"
-          required
-          placeholder="Password"
-          className="border p-3 w-full rounded-lg"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
         <Button type="submit" disabled={loading} className="w-full">
-          {loading ? "Signing in…" : "Sign In"}
+          {loading ? "Sending link…" : "Send login link"}
         </Button>
       </form>
 
-      <div className="text-center text-sm">
-        <Link href="/reset-password" className="underline">
-          Forgot password?
-        </Link>
-      </div>
+      <p className="text-xs text-[#6b665d] text-center">
+        We’ll email you a secure link — no password needed.
+      </p>
 
       <p className="text-center text-sm">
         No account?{" "}
         <Link
-          href={`/sign-up${joinIntent ? "?join=loyalty" : ""}`}
+          href={`/sign-up${
+            joinIntent ? `?join=${joinIntent}` : ""
+          }`}
           className="underline font-semibold"
         >
           Create one
