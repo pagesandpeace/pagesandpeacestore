@@ -77,21 +77,29 @@ export default function UsersPage() {
   }
 
   async function sendLoginLink(email: string) {
-    const res = await fetch("/api/admin/send-magic-links", {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    });
+  const res = await fetch("/api/auth/send-magic-links", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      intent: "signin",
+      callbackURL: "/dashboard",
+    }),
+  });
 
-    const data = await res.json();
+  const data = await res.json();
 
-    if (!res.ok) {
-      alert(data.error || "Failed to send login link");
-      return;
-    }
-
-    alert(`Login link sent to ${email}`);
-    await refreshUsers();
+  if (!res.ok) {
+    alert(data.error || "Failed to send login link");
+    return;
   }
+
+  alert(`Login link sent to ${email}`);
+  await refreshUsers();
+}
+   
 
   function fmtDate(date?: string | null) {
     if (!date) return "—";

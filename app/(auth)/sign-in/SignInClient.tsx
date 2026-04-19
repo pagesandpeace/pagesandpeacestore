@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/client"; // ✅ FIX: re-add this
+import { supabaseBrowser } from "@/lib/supabase/client";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -9,7 +9,7 @@ import { useSearchParams } from "next/navigation";
 import ErrorModal from "@/components/ui/ErrorModal";
 
 export default function SignInClient() {
-  const supabase = supabaseBrowser(); // ✅ FIX: init client
+  const supabase = supabaseBrowser();
 
   const searchParams = useSearchParams();
 
@@ -38,7 +38,7 @@ export default function SignInClient() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/admin/send-magic-links", {
+      const res = await fetch("/api/auth/send-magic-links", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -47,6 +47,7 @@ export default function SignInClient() {
           email,
           callbackURL,
           joinIntent,
+          intent: "signin", // 🔥 required
         }),
       });
 
@@ -60,21 +61,26 @@ export default function SignInClient() {
 
       setEmailSent(true);
     } catch (err) {
-  console.error(err); // 👈 use it
-  showError("Something went wrong");
-}
+      console.error(err);
+      showError("Something went wrong");
+    }
 
     setLoading(false);
   }
 
   /* --------------------------------------------------
-     GOOGLE SIGN-IN (FIXED)
+     GOOGLE SIGN-IN
   -------------------------------------------------- */
   async function handleGoogle() {
     setLoading(true);
 
     const params = new URLSearchParams();
+
     params.set("callbackURL", callbackURL);
+    params.set("intent", "signin"); // 🔥 required
+
+    // ✅ IMPORTANT: explicitly mark no consent
+    params.set("marketing_consent", "false");
 
     if (joinIntent === "loyalty") {
       params.set("join", "loyalty");
@@ -193,9 +199,7 @@ export default function SignInClient() {
       <p className="text-center text-sm">
         No account?{" "}
         <Link
-          href={`/sign-up${
-            joinIntent ? `?join=${joinIntent}` : ""
-          }`}
+          href={`/sign-up${joinIntent ? `?join=${joinIntent}` : ""}`}
           className="underline font-semibold"
         >
           Create one

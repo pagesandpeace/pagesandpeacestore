@@ -28,13 +28,25 @@ export async function GET(request: Request) {
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type");
 
-  console.log("📥 PARAMS:", { code, tokenHash, type });
+  // ✅ NEW
+  const intent = url.searchParams.get("intent");
+  const marketingFromURL =
+    url.searchParams.get("marketing_consent") === "true";
+
+  console.log("📥 PARAMS:", {
+    code,
+    tokenHash,
+    type,
+    intent,
+    marketingFromURL,
+  });
 
   /* -------------------------
      SAFE REDIRECT
   ------------------------- */
   const allowedPaths = ["/dashboard", "/admin", "/account"];
-  const rawCallback = url.searchParams.get("callbackURL") || "/dashboard";
+  const rawCallback =
+    url.searchParams.get("callbackURL") || "/dashboard";
 
   const callbackURL = allowedPaths.includes(rawCallback)
     ? rawCallback
@@ -66,7 +78,8 @@ export async function GET(request: Request) {
   if (code) {
     console.log("🔑 OAuth flow");
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { error } =
+      await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
       console.error("❌ OAuth exchange failed:", error);
@@ -117,10 +130,14 @@ export async function GET(request: Request) {
   const fullName =
     meta.full_name ||
     meta.name ||
-    `${meta.first_name || ""} ${meta.last_name || ""}`.trim() ||
+    `${meta.first_name || ""} ${
+      meta.last_name || ""
+    }`.trim() ||
     email.split("@")[0];
 
-  const marketingConsent = meta.marketing_consent === true;
+  // ✅ FIX: MERGE GOOGLE + EMAIL CONSENT
+  const marketingConsent =
+    meta.marketing_consent === true || marketingFromURL;
 
   console.log("👤 Final name:", fullName);
   console.log("📊 Marketing consent:", marketingConsent);
@@ -140,7 +157,7 @@ export async function GET(request: Request) {
   console.log("🧪 USING firstSend:", firstSend);
 
   /* -------------------------
-     FIND USER (FIXED)
+     FIND USER
   ------------------------- */
   const { data: existing } = await supabaseAdmin
     .from("users")
@@ -151,6 +168,17 @@ export async function GET(request: Request) {
   console.log("📦 Existing user:", existing);
 
   let created = false;
+
+  /* -------------------------
+     🚨 INTENT PROTECTION
+  ------------------------- */
+  if (!existing && intent === "signin") {
+    console.log("⛔ Sign-in attempted with no account");
+
+    return NextResponse.redirect(
+      new URL("/sign-up?error=no_account", url)
+    );
+  }
 
   /* -------------------------
      CREATE USER
@@ -170,15 +198,13 @@ export async function GET(request: Request) {
       created_at: now,
       signup_status: "active",
 
-      marketing_consent: marketingConsent,
-      marketing_consent_at: marketingConsent ? now : null,
+      marketing_consent: null,
+marketing_consent_at: null,
 
-      // MAGIC LINK TRACKING
       first_magic_link_sent_at: firstSend,
       last_magic_link_sent_at: firstSend,
       magic_link_send_count: 1,
 
-      // LOGIN TRACKING
       first_login_at: now,
       last_login_at: now,
       last_seen_at: now,
@@ -195,16 +221,12 @@ export async function GET(request: Request) {
   } else {
     console.log("ℹ️ Updating existing user");
 
-    console.log("🧪 BEFORE UPDATE:", {
-      existing_first: existing.first_magic_link_sent_at,
-      existing_last: existing.last_magic_link_sent_at,
-    });
-
     const { error: updateErr } = await supabaseAdmin
       .from("users")
       .update({
         auth_user_id: user.id,
 
+        // ✅ KEEP EXISTING OR FALLBACK
         first_magic_link_sent_at:
           existing.first_magic_link_sent_at || firstSend,
         last_magic_link_sent_at:
@@ -231,13 +253,15 @@ export async function GET(request: Request) {
   }
 
   /* -------------------------
-     BEEHIIV (FIXED MATCH)
+     BEEHIIV (NOW WORKS)
   ------------------------- */
   const publicationId = process.env.BEEHIIV_PUBLICATION_ID;
   const apiKey = process.env.BEEHIIV_API_KEY;
 
   if (publicationId && apiKey && marketingConsent) {
     try {
+      console.log("📬 Subscribing to Beehiiv...");
+
       const payload = {
         email,
         reactivate_existing: true,
@@ -256,6 +280,8 @@ export async function GET(request: Request) {
         }
       );
 
+      console.log("📬 Beehiiv status:", res.status);
+
       if (res.ok) {
         await supabaseAdmin
           .from("users")
@@ -265,6 +291,10 @@ export async function GET(request: Request) {
             updated_at: now,
           })
           .eq("auth_user_id", user.id);
+
+        console.log("✅ Beehiiv subscribed");
+      } else {
+        console.error("❌ Beehiiv failed");
       }
     } catch (err) {
       console.error("❌ Beehiiv crash:", err);

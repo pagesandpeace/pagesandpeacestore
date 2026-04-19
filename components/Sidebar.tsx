@@ -61,8 +61,33 @@ export default function Sidebar({
   }, [profile]);
 
   /* -------------------------------------------------------
-     Listen for profile updates (avatar/name/etc)
-  ------------------------------------------------------- */
+   🔥 LISTEN FOR PROFILE UPDATES (FIXES AVATAR)
+------------------------------------------------------- */
+useEffect(() => {
+  const refreshProfile = async () => {
+    try {
+      const res = await fetch("/api/me");
+      const data = await res.json();
+
+      if (!data) return;
+
+      setLocalProfile((prev) => ({
+        ...(prev ?? {}),
+        ...data,
+      }));
+    } catch (err) {
+      console.error("❌ Failed to refresh profile", err);
+    }
+  };
+
+  window.addEventListener("pp:user-should-refresh", refreshProfile);
+
+  return () =>
+    window.removeEventListener(
+      "pp:user-should-refresh",
+      refreshProfile
+    );
+}, []);
 
 
 

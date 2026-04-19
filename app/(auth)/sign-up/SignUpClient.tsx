@@ -19,9 +19,6 @@ export default function SignUpClient() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
 
-  // ✅ NEW
-  const [marketingConsent, setMarketingConsent] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -36,7 +33,7 @@ export default function SignUpClient() {
   }
 
   /* --------------------------------------------------
-     AUTO LOYALTY (OPTIONAL)
+     AUTO LOYALTY (UNCHANGED)
   -------------------------------------------------- */
   async function autoJoinLoyaltyIfNeeded() {
     if (joinIntent !== "loyalty") return;
@@ -70,16 +67,14 @@ export default function SignUpClient() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?callbackURL=${encodeURIComponent(
+        emailRedirectTo: `${window.location.origin}/auth/callback?intent=signup&callbackURL=${encodeURIComponent(
           callbackURL
         )}${joinIntent === "loyalty" ? "&join=loyalty" : ""}`,
 
-        // ✅ CRITICAL: METADATA FOR CALLBACK
         data: {
           name: fullName,
           first_name: firstName,
           last_name: lastName,
-          marketing_consent: marketingConsent,
         },
       },
     });
@@ -97,12 +92,14 @@ export default function SignUpClient() {
   }
 
   /* --------------------------------------------------
-     GOOGLE SIGN-UP
+     GOOGLE SIGN-UP (CLEAN)
   -------------------------------------------------- */
   async function handleGoogle() {
     setGoogleLoading(true);
 
     const params = new URLSearchParams();
+
+    params.set("intent", "signup");
     params.set("callbackURL", callbackURL);
 
     if (joinIntent === "loyalty") {
@@ -116,7 +113,10 @@ export default function SignUpClient() {
       },
     });
 
-    if (error) showError(error.message);
+    if (error) {
+      showError(error.message);
+    }
+
     setGoogleLoading(false);
   }
 
@@ -129,11 +129,11 @@ export default function SignUpClient() {
         <div className="text-4xl">✨</div>
 
         <h1 className="text-2xl font-semibold text-[#111]">
-          You&apos;re almost in
+          You are almost in
         </h1>
 
         <p className="text-[#555]">
-          We&apos;ve sent your secure access link to:
+          We have sent your secure access link to:
         </p>
 
         <div className="font-medium text-[#111] break-all">
@@ -199,7 +199,6 @@ export default function SignUpClient() {
       </div>
 
       <form onSubmit={handleSignUp} className="space-y-4">
-        {/* NAME */}
         <div className="grid grid-cols-2 gap-3">
           <input
             type="text"
@@ -220,7 +219,6 @@ export default function SignUpClient() {
           />
         </div>
 
-        {/* EMAIL */}
         <input
           type="email"
           placeholder="Email address"
@@ -230,26 +228,13 @@ export default function SignUpClient() {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        {/* ✅ MARKETING CONSENT */}
-        <label className="flex items-start gap-2 text-sm text-[#444]">
-          <input
-            type="checkbox"
-            checked={marketingConsent}
-            onChange={(e) => setMarketingConsent(e.target.checked)}
-            className="mt-1"
-          />
-          <span>
-            Send me updates, events and book drops by email.
-          </span>
-        </label>
-
         <Button type="submit" disabled={loading} className="w-full">
           {loading ? "Creating…" : "Continue"}
         </Button>
       </form>
 
       <p className="text-xs text-[#6b665d] text-center">
-        No password needed. We&apos;ll send you a secure login link.
+        No password needed. We will send you a secure login link.
       </p>
 
       <p className="text-center text-sm">

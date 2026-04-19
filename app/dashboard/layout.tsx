@@ -18,7 +18,7 @@ export default async function DashboardLayout({
   const supabase = await supabaseServer();
 
   /* --------------------------------------------------
-     1) Get authenticated user (SERVER SOURCE OF TRUTH)
+     1) Get authenticated user
   -------------------------------------------------- */
   const {
     data: { user },
@@ -37,7 +37,7 @@ export default async function DashboardLayout({
   }
 
   /* --------------------------------------------------
-     2) Load public.users profile via auth_user_id
+     2) Load profile
   -------------------------------------------------- */
   const { data: profile, error: profileError } = await supabase
     .from("users")
@@ -52,7 +52,7 @@ export default async function DashboardLayout({
   }
 
   /* --------------------------------------------------
-     3) 🚫 ADMINS NEVER SEE /dashboard
+     3) 🚫 ADMINS → /admin
   -------------------------------------------------- */
   console.log("🟦 [DASHBOARD] profile.role =", profile?.role);
 
@@ -62,7 +62,24 @@ export default async function DashboardLayout({
   }
 
   /* --------------------------------------------------
-     4) Render CLIENT UI
+   4) 🔥 ONBOARDING LOCK (FIXED + LOGS)
+-------------------------------------------------- */
+
+const hasMadeChoice = profile?.marketing_consent_at !== null;
+
+console.log("🟨 [ONBOARDING CHECK]");
+console.log("➡️ marketing_consent:", profile?.marketing_consent);
+console.log("➡️ marketing_consent_at:", profile?.marketing_consent_at);
+console.log("➡️ hasMadeChoice:", hasMadeChoice);
+
+if (!hasMadeChoice) {
+  console.log("🚨 [ONBOARDING] redirecting → /onboarding/consent");
+
+  redirect("/onboarding/consent");
+}
+
+  /* --------------------------------------------------
+     5) Render UI
   -------------------------------------------------- */
   console.log("🟦 [DASHBOARD] ✅ dashboard access granted");
 

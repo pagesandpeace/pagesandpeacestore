@@ -38,8 +38,37 @@ export default function AdminSidebar({
   const accountRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setLocalProfile(profile);
-  }, [profile]);
+  setLocalProfile(profile);
+}, [profile]);
+
+/* -------------------------------------------------------
+   🔥 LISTEN FOR PROFILE UPDATES (ADD THIS HERE)
+------------------------------------------------------- */
+useEffect(() => {
+  const refreshProfile = async () => {
+    try {
+      const res = await fetch("/api/me");
+      const data = await res.json();
+
+      if (!data) return;
+
+      setLocalProfile((prev) => ({
+        ...prev,
+        ...data,
+      }));
+    } catch (err) {
+      console.error("❌ Failed to refresh profile", err);
+    }
+  };
+
+  window.addEventListener("pp:user-should-refresh", refreshProfile);
+
+  return () =>
+    window.removeEventListener(
+      "pp:user-should-refresh",
+      refreshProfile
+    );
+}, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
