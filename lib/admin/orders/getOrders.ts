@@ -4,6 +4,12 @@ import { createClient } from "@supabase/supabase-js";
    TYPES
 --------------------------------------------- */
 
+export type OrderItemRow = {
+  id: string;
+  kind: string | null;
+  name: string | null;
+};
+
 export type OrderRow = {
   id: string;
   created_at: string;
@@ -11,6 +17,7 @@ export type OrderRow = {
   status: string | null;
   stripe_checkout_session_id: string | null;
   user_id: string | null;
+  order_items?: OrderItemRow[] | null;
 };
 
 export type UserRow = {
@@ -53,24 +60,28 @@ export async function getOrders({
     .from("orders")
     .select(
       `
-      id,
-      created_at,
-      total,
-      status,
-      stripe_checkout_session_id,
-      user_id
-    `,
+        id,
+        created_at,
+        total,
+        status,
+        stripe_checkout_session_id,
+        user_id,
+        order_items (
+          id,
+          kind,
+          name
+        )
+      `,
       { count: "exact" }
     )
     .order("created_at", { ascending: false });
 
   /* ---------------- SEARCH ---------------- */
 
-if (q && q.trim().length >= 3) {
-  const needle = q.trim().toLowerCase();
-  ordersQuery = ordersQuery.ilike("search_text", `%${needle}%`);
-}
-
+  if (q && q.trim().length >= 3) {
+    const needle = q.trim().toLowerCase();
+    ordersQuery = ordersQuery.ilike("search_text", `%${needle}%`);
+  }
 
   /* ---------------- PAGINATION ---------------- */
 
@@ -92,20 +103,22 @@ if (q && q.trim().length >= 3) {
   const usersById = new Map<string, UserRow>();
 
   if (userIds.length > 0) {
-    const { data: users } = await supabaseAdmin
+    const { data: users, error: usersError } = await supabaseAdmin
       .from("users")
       .select("id, name, email")
       .in("id", userIds);
+
+    if (usersError) {
+      console.error("❌ getOrders users lookup failed", usersError);
+      throw usersError;
+    }
 
     for (const u of users ?? []) {
       usersById.set(u.id, u);
     }
   }
 
-  const totalPages = Math.max(
-    Math.ceil((count ?? 0) / pageSize),
-    1
-  );
+  const totalPages = Math.max(Math.ceil((count ?? 0) / pageSize), 1);
 
   return {
     rows: orderRows,

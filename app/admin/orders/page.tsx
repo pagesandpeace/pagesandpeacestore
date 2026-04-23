@@ -41,6 +41,31 @@ function asMoney(total: string | number) {
   return Number.isNaN(num) ? String(total) : num.toFixed(2);
 }
 
+function getOrderTitle(
+  orderItems?: { name: string | null; kind: string | null }[] | null
+) {
+  if (!orderItems || orderItems.length === 0) {
+    return { title: "—", meta: "" };
+  }
+
+  const firstNamed = orderItems.find((item) => item.name?.trim());
+  const first = firstNamed ?? orderItems[0];
+
+  const title = first?.name?.trim() || "Untitled item";
+  const extraCount = orderItems.length - 1;
+  const kind = first?.kind
+    ? first.kind[0].toUpperCase() + first.kind.slice(1)
+    : "";
+
+  let meta = kind;
+
+  if (extraCount > 0) {
+    meta = meta ? `${meta} • +${extraCount} more` : `+${extraCount} more`;
+  }
+
+  return { title, meta };
+}
+
 /* ---------------------------------------------
    PAGE
 --------------------------------------------- */
@@ -89,9 +114,8 @@ export default async function AdminOrdersPage({
     <div className="max-w-6xl mx-auto py-10 space-y-6">
       <h1 className="text-3xl font-semibold">Orders</h1>
 
-      {/* ---------- SEARCH ---------- */}
       <TableSearch
-        placeholder="Search order ID, customer, email"
+        placeholder="Search order ID, customer, email, item title"
         debounceMs={300}
       />
 
@@ -101,19 +125,18 @@ export default async function AdminOrdersPage({
             <tr>
               <HeadCell>Date</HeadCell>
               <HeadCell>Order</HeadCell>
+              <HeadCell>Item</HeadCell>
               <HeadCell>Customer</HeadCell>
               <HeadCell>Status</HeadCell>
               <HeadCell>Total</HeadCell>
-              <HeadCell>Stripe</HeadCell>
               <HeadCell>{" "}</HeadCell>
             </tr>
           </TableHead>
 
           <TableBody>
             {orders.map((o) => {
-              const customer = o.user_id
-                ? usersById.get(o.user_id)
-                : null;
+              const customer = o.user_id ? usersById.get(o.user_id) : null;
+              const itemInfo = getOrderTitle(o.order_items);
 
               return (
                 <TableRow key={o.id}>
@@ -122,10 +145,26 @@ export default async function AdminOrdersPage({
                   <Cell>
                     <Link
                       href={`/admin/orders/${o.id}`}
-                      className="text-accent hover:underline"
+                      className="text-accent hover:underline font-medium"
                     >
                       {shortId(o.id, 10)}
                     </Link>
+
+                    <div className="text-xs text-foreground/60 mt-1">
+                      Stripe:{" "}
+                      {o.stripe_checkout_session_id
+                        ? shortId(o.stripe_checkout_session_id, 14)
+                        : "—"}
+                    </div>
+                  </Cell>
+
+                  <Cell>
+                    <div>{itemInfo.title}</div>
+                    {itemInfo.meta ? (
+                      <div className="text-xs text-foreground/60">
+                        {itemInfo.meta}
+                      </div>
+                    ) : null}
                   </Cell>
 
                   <Cell>
@@ -135,17 +174,9 @@ export default async function AdminOrdersPage({
                     </div>
                   </Cell>
 
-                  <Cell>{o.status}</Cell>
+                  <Cell>{o.status ?? "—"}</Cell>
 
                   <Cell strong>£{asMoney(o.total)}</Cell>
-
-                  <Cell>
-                    <span className="text-xs">
-                      {o.stripe_checkout_session_id
-                        ? shortId(o.stripe_checkout_session_id, 14)
-                        : "—"}
-                    </span>
-                  </Cell>
 
                   <Cell>{" "}</Cell>
                 </TableRow>
@@ -155,7 +186,6 @@ export default async function AdminOrdersPage({
         </Table>
       </TableSurface>
 
-      {/* ---------- PAGINATION ---------- */}
       <TablePagination page={page} totalPages={totalPages} />
     </div>
   );

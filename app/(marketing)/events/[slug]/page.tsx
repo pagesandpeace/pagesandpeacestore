@@ -68,14 +68,16 @@ async function getEventBySlug(slug: string): Promise<Event | null> {
 }
 
 export async function generateMetadata(
-  props: { params: Promise<Params> }
+  props: { params: Promise<Params> },
+  parent: Promise<Metadata>
 ): Promise<Metadata> {
   const { slug } = await props.params;
   const event = await getEventBySlug(slug);
+  const parentMetadata = await parent;
 
   if (!event) {
     return {
-      title: "Event Not Found | Pages & Peace",
+      title: "Event Not Found",
       description: "This event could not be found.",
     };
   }
@@ -86,8 +88,11 @@ export async function generateMetadata(
     event.subtitle ||
     `Join us for ${event.title} at Pages & Peace.`;
 
-  const ogImage = absoluteUrl(event.image_url || "/coming_soon.svg");
   const pageUrl = `${SITE_URL}/events/${event.slug}`;
+
+  const eventImage = absoluteUrl(event.image_url);
+  const fallbackImages = parentMetadata.openGraph?.images || [];
+  const fallbackTwitterImages = parentMetadata.twitter?.images || [];
 
   return {
     title,
@@ -98,22 +103,22 @@ export async function generateMetadata(
       url: pageUrl,
       siteName: "Pages & Peace",
       type: "article",
-      images: ogImage
+      images: eventImage
         ? [
             {
-              url: ogImage,
+              url: eventImage,
               width: 1200,
               height: 630,
               alt: event.title,
             },
           ]
-        : [],
+        : fallbackImages,
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: ogImage ? [ogImage] : [],
+      images: eventImage ? [eventImage] : fallbackTwitterImages,
     },
   };
 }
