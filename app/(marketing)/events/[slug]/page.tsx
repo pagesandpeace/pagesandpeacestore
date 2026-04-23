@@ -1,12 +1,13 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
 import BookNowButton from "@/components/events/BookNowButton";
-import EventCTAClient from "@/components/events/EventCTAClient"; // ✅ NEW
+import EventCTAClient from "@/components/events/EventCTAClient";
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -32,6 +33,89 @@ interface Params {
 interface EventCategory {
   id: string;
   name: string;
+}
+
+const SITE_URL =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://pagesandpeace.co.uk";
+
+function absoluteUrl(url?: string | null) {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${SITE_URL}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+function formatEventDate(dateString: string) {
+  return new Date(dateString).toLocaleString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function getEventBySlug(slug: string): Promise<Event | null> {
+  const supabase = await supabaseServer();
+
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("slug", slug)
+    .single<Event>();
+
+  if (error || !data) return null;
+  return data;
+}
+
+export async function generateMetadata(
+  props: { params: Promise<Params> }
+): Promise<Metadata> {
+  const { slug } = await props.params;
+  const event = await getEventBySlug(slug);
+
+  if (!event) {
+    return {
+      title: "Event Not Found | Pages & Peace",
+      description: "This event could not be found.",
+    };
+  }
+
+  const title = event.title;
+  const description =
+    event.short_description ||
+    event.subtitle ||
+    `Join us for ${event.title} at Pages & Peace.`;
+
+  const ogImage = absoluteUrl(event.image_url || "/coming_soon.svg");
+  const pageUrl = `${SITE_URL}/events/${event.slug}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: pageUrl,
+      siteName: "Pages & Peace",
+      type: "article",
+      images: ogImage
+        ? [
+            {
+              url: ogImage,
+              width: 1200,
+              height: 630,
+              alt: event.title,
+            },
+          ]
+        : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: ogImage ? [ogImage] : [],
+    },
+  };
 }
 
 export default async function EventDetailPage(props: { params: Promise<Params> }) {
@@ -132,19 +216,11 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
   const soldOut =
     event.booking_type === "ticketed" && remainingSeats <= 0;
 
-  const formattedDate = new Date(event.date).toLocaleString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const formattedDate = formatEventDate(event.date);
 
   /* ---------------------- UI ---------------------- */
   return (
     <main className="bg-background min-h-screen pb-20 font-[Montserrat]">
-
-      {/* HERO */}
       <div className="relative w-full h-[55vh] min-h-80">
         <Image
           src={event.image_url || "/coming_soon.svg"}
@@ -160,7 +236,6 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
       </div>
 
       <div className="max-w-3xl mx-auto px-6 mt-12 space-y-10">
-
         {event.subtitle && (
           <p className="text-xl text-foreground/80 italic text-center">
             {event.subtitle}
@@ -213,7 +288,6 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
           )}
         </section>
 
-        {/* CTA */}
         <section className="bg-white border rounded-2xl shadow-sm p-8 text-center">
           <h2 className="text-2xl font-semibold mb-4">
             {event.booking_type === "ticketed"
@@ -248,7 +322,6 @@ export default async function EventDetailPage(props: { params: Promise<Params> }
             Booking Terms & Conditions
           </Link>
         </section>
-
       </div>
     </main>
   );
