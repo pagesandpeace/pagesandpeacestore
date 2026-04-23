@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import type { Metadata } from "next";
+import type { Metadata, ResolvingMetadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
@@ -36,7 +36,7 @@ interface EventCategory {
 }
 
 const SITE_URL =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://pagesandpeace.co.uk";
+  process.env.NEXT_PUBLIC_SITE_URL || "https://pagesandpeace.co.uk";
 
 function absoluteUrl(url?: string | null) {
   if (!url) return null;
@@ -69,7 +69,7 @@ async function getEventBySlug(slug: string): Promise<Event | null> {
 
 export async function generateMetadata(
   props: { params: Promise<Params> },
-  parent: Promise<Metadata>
+  parent: ResolvingMetadata
 ): Promise<Metadata> {
   const { slug } = await props.params;
   const event = await getEventBySlug(slug);
