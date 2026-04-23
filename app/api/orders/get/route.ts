@@ -13,17 +13,16 @@ type OrderRow = {
   stripe_last4?: string | null;
   paid_at?: string | null;
 
-  // optional if you store them on orders
   refunded_amount?: string | number | null;
   refund_processed_at?: string | null;
 };
 
 type ItemRow = {
+  id: string;
+  kind: string | null; // ✅ ADDED
   quantity: number;
   price: string | number;
   name: string | null;
-
-  // optional if you want to show refunds per line in receipt UI later
   refunded_quantity?: number | null;
   refunded_amount?: string | number | null;
 };
@@ -41,6 +40,7 @@ export async function GET(req: Request) {
     }
 
     const orderId = new URL(req.url).searchParams.get("id");
+
     if (!orderId) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
@@ -57,11 +57,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    /* -------- LOAD ITEMS -------- */
+    /* -------- LOAD ITEMS (UPDATED) -------- */
     const { data: items, error: itemsErr } = await supabase
       .from("order_items")
       .select(
         `
+          id,
+          kind,
           quantity,
           price,
           name,
@@ -76,24 +78,32 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: itemsErr.message }, { status: 500 });
     }
 
+    /* -------- RESPONSE -------- */
     return NextResponse.json({
       order: {
         ...order,
         total: Number(order.total),
         refunded_amount:
-          order.refunded_amount != null ? Number(order.refunded_amount) : null,
+          order.refunded_amount != null
+            ? Number(order.refunded_amount)
+            : null,
         items: (items ?? []).map((it) => ({
+          id: it.id, // ✅ ADDED
+          kind: it.kind, // ✅ ADDED
           productName: it.name ?? "Unknown Item",
           quantity: it.quantity,
           price: Number(it.price),
           refunded_quantity: it.refunded_quantity ?? 0,
           refunded_amount:
-            it.refunded_amount != null ? Number(it.refunded_amount) : 0,
+            it.refunded_amount != null
+              ? Number(it.refunded_amount)
+              : 0,
         })),
       },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

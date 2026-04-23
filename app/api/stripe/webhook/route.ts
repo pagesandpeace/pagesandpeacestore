@@ -53,6 +53,8 @@ async function readRawBody(stream: ReadableStream | null): Promise<Buffer> {
    WEBHOOK
 ===================================================== */
 export async function POST(req: Request) {
+  console.log("🔥🔥🔥 WEBHOOK HIT (LOCAL FILE) 🔥🔥🔥");
+
   logWebhook("Webhook hit");
 
   const signature = req.headers.get("stripe-signature");
@@ -105,19 +107,32 @@ await supabase
     return NextResponse.json({ received: true });
   }
 
-  const session = isCheckoutSession
-    ? (stripeEvent.data.object as Stripe.Checkout.Session)
-    : null;
+  let session: Stripe.Checkout.Session | null = null;
+let md: Record<string, string> = {};
+let userId: string | undefined;
+let kind = "event";
 
-  const md = session?.metadata ?? {};
+if (isCheckoutSession) {
+  session = stripeEvent.data.object as Stripe.Checkout.Session;
+  md = session.metadata ?? {};
+  userId = md.userId || session.client_reference_id || undefined;
+  kind = md.kind || "event";
 
   logWebhook("Session metadata", md);
-  logWebhook("Session payment_intent", session?.payment_intent);
+  logWebhook("Session payment_intent", session.payment_intent);
 
-  if (isCheckoutSession && (!md.userId || !md.kind)) {
-    logWebhook("Missing metadata on checkout.session, exiting");
+  logWebhook("FINAL METADATA RESOLUTION", {
+    metadata: md,
+    fallbackUserId: session.client_reference_id,
+    resolvedUserId: userId,
+    kind,
+  });
+
+  if (!userId) {
+    logWebhook("❌ No userId found anywhere, exiting");
     return NextResponse.json({ received: true });
   }
+}
 
   /* -----------------------------------------------------
      CHARGE SUCCEEDED (STRIPE SOURCE OF TRUTH)
@@ -180,7 +195,7 @@ await supabase
     const { data } = await supabase
       .from("users")
       .select("id")
-      .eq("auth_user_id", md.userId)
+      .eq("auth_user_id", userId)
       .single();
 
     user = data ?? null;
@@ -211,7 +226,7 @@ await supabase
   await supabase.from("orders").insert({
     id: orderId,
     user_id: user!.id,
-    user_id_uuid: md.userId,
+    user_id_uuid: userId,
 
     // 🔑 ADD THESE TWO FIELDS
     customer_name:
@@ -293,9 +308,8 @@ await supabase
     .select("id")
     .maybeSingle();
 
-  if (!claim && md.kind === "event") {
-  logWebhook("Event order already claimed, exiting", orderId);
-  return NextResponse.json({ received: true });
+  if (!claim && kind === "event") {
+  logWebhook("Event already processed — continuing for email", orderId);
 }
 
 
@@ -321,7 +335,7 @@ if (systemAdminError || !systemAdmin?.auth_user_id) {
 /* -----------------------------------------------------
    PRODUCT ORDER ITEM CREATION (NEW)
 ----------------------------------------------------- */
-if (md.kind === "product") {
+if (kind === "product") {
   if (!md.items) {
     logWebhook("❌ Product checkout missing items metadata", {
       orderId,
@@ -386,7 +400,7 @@ if (md.kind === "product") {
 /* -----------------------------------------------------
    CART ORDER ITEM CREATION (NEW)
 ----------------------------------------------------- */
-if (md.kind === "cart") {
+if (kind === "cart") {
   if (!md.items) {
     logWebhook("❌ Cart checkout missing items metadata", {
       orderId,
@@ -450,7 +464,7 @@ if (md.kind === "cart") {
 /* -----------------------------------------------------
    PRODUCT IDEMPOTENCY GUARD
 ----------------------------------------------------- */
-if (md.kind === "product" || md.kind === "cart") {  const { data: existingItems } = await supabase
+if (kind === "product" || kind === "cart") {  const { data: existingItems } = await supabase
     .from("order_items")
     .select("id")
     .eq("order_id", orderId)
@@ -467,7 +481,7 @@ if (md.kind === "product" || md.kind === "cart") {  const { data: existingItems 
 /* -----------------------------------------------------
    HARD INVARIANT: PRODUCT MUST HAVE ORDER ITEMS
 ----------------------------------------------------- */
-if (md.kind === "product" || md.kind === "cart") {  const { count } = await supabase
+if (kind === "product" || kind === "cart") {  const { count } = await supabase
     .from("order_items")
     .select("*", { count: "exact", head: true })
     .eq("order_id", orderId)
@@ -490,7 +504,7 @@ if (md.kind === "product" || md.kind === "cart") {  const { count } = await supa
 /* -----------------------------------------------------
    BACKORDER CREATION (PRODUCT → SUPPLIER PIPELINE)
 ----------------------------------------------------- */
-if (md.kind === "product" || md.kind === "cart") {
+if (kind === "product" || kind === "cart") {
   const { data: items } = await supabase
     .from("order_items")
     .select("id, product_id, quantity")
@@ -562,7 +576,7 @@ created_by: systemAdmin.auth_user_id,
 /* -----------------------------------------------------
    PRODUCT INVENTORY PROCESSING (SAFE + IDEMPOTENT)
 ----------------------------------------------------- */
-if (md.kind === "product" || md.kind === "cart") {  const { data: items } = await supabase
+if (kind === "product" || kind === "cart") {  const { data: items } = await supabase
     .from("order_items")
     .select("product_id, quantity")
     .eq("order_id", orderId)
@@ -623,7 +637,7 @@ if (md.kind === "product" || md.kind === "cart") {  const { data: items } = awai
   /* -----------------------------------------------------
    PRODUCT FLOW COMPLETE
 ----------------------------------------------------- */
-if (md.kind === "product" || md.kind === "cart") {
+if (kind === "product" || kind === "cart") {
   /* -----------------------------------------------------
      PRODUCT CONFIRMATION EMAIL (IDEMPOTENT)
   ----------------------------------------------------- */
@@ -655,7 +669,7 @@ if (md.kind === "product" || md.kind === "cart") {
   /* =====================================================
      EVENT FLOW
   ===================================================== */
-  if (md.kind === "event") {
+  if (kind === "event") {
     logWebhook("🧨 EVENT FLOW ENTERED", {
       stripeEventId: stripeEvent.id,
       stripeEventType: stripeEvent.type,
@@ -843,6 +857,9 @@ const { data: emailLock } = await supabase
 if (emailLock) {
   logWebhook("📧 Sending EVENT confirmation email", { orderId });
 
+  // 🔥 CRITICAL FIX — allow DB to settle
+  await new Promise((res) => setTimeout(res, 300));
+
   await sendOrderConfirmationEmail(orderId);
 
   logWebhook("📧 Event confirmation email sent", { orderId });
@@ -850,11 +867,11 @@ if (emailLock) {
   logWebhook("↩️ Event confirmation email already sent", { orderId });
 }
 
-    return NextResponse.json({ received: true });
-  }
+return NextResponse.json({ received: true });
+} // ← closes: if (kind === "event")
 
- throw new Error(`Unhandled checkout kind: ${md.kind}`);
-
-
-  return NextResponse.json({ received: true });
+/* -----------------------------------------------------
+   FALLBACK
+----------------------------------------------------- */
+throw new Error(`Unhandled checkout kind: ${kind}`);
 }

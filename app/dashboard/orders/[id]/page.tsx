@@ -10,6 +10,8 @@ import NeedRefundHelp from "@/components/NeedRefundHelp";
    TYPES
 --------------------------------------------- */
 type OrderItem = {
+  id: string;
+  kind?: string | null; // ✅ ADDED
   productName: string | null;
   quantity: number;
   price: number;
@@ -43,6 +45,8 @@ export default function StoreOrderReceiptPage() {
   const [order, setOrder] = useState<StoreOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  const FOOD_FORM_URL = "https://tally.so/r/Med4gl";
 
   useEffect(() => {
     if (!orderId) return;
@@ -98,6 +102,13 @@ export default function StoreOrderReceiptPage() {
     );
   }
 
+  /* ---------------------------------------------
+     🔥 EVENT DETECTION (KEY)
+  --------------------------------------------- */
+  const hasEvent = order.items.some(
+    (item) => item.kind === "event"
+  );
+
   const refundMessage =
     order.status === "refunded"
       ? "This order has been fully refunded"
@@ -144,52 +155,49 @@ export default function StoreOrderReceiptPage() {
         )}
 
         {/* ITEMS */}
-<div className="mt-6 rounded-xl border p-4 bg-white">
-  <p className="text-sm font-semibold mb-3">Items</p>
+        <div className="mt-6 rounded-xl border p-4 bg-white">
+          <p className="text-sm font-semibold mb-3">Items</p>
 
-  {order.items.map((item, idx) => {
-    const refundedQty = item.refunded_quantity ?? 0;
-    const purchasedQty = item.quantity;
-    const netQty = purchasedQty - refundedQty;
+          {order.items.map((item, idx) => {
+            const refundedQty = item.refunded_quantity ?? 0;
+            const purchasedQty = item.quantity;
+            const netQty = purchasedQty - refundedQty;
 
-    const lineTotal = item.price * purchasedQty;
-    const refundedValue = refundedQty * item.price;
+            const lineTotal = item.price * purchasedQty;
+            const refundedValue = refundedQty * item.price;
 
-    return (
-      <div
-        key={idx}
-        className="py-3 border-b last:border-b-0 space-y-1"
-      >
-        {/* LINE ITEM */}
-        <div className="flex justify-between items-start gap-4">
-          <p className="text-sm font-medium leading-snug">
-            {item.productName || "Item"}{" "}
-            <span className="opacity-70">× {purchasedQty}</span>
-          </p>
+            return (
+              <div
+                key={idx}
+                className="py-3 border-b last:border-b-0 space-y-1"
+              >
+                <div className="flex justify-between items-start gap-4">
+                  <p className="text-sm font-medium leading-snug">
+                    {item.productName || "Item"}{" "}
+                    <span className="opacity-70">× {purchasedQty}</span>
+                  </p>
 
-          <p className="text-sm font-medium whitespace-nowrap">
-            £{lineTotal.toFixed(2)}
-          </p>
+                  <p className="text-sm font-medium whitespace-nowrap">
+                    £{lineTotal.toFixed(2)}
+                  </p>
+                </div>
+
+                {refundedQty > 0 && (
+                  <div className="text-xs text-red-600 space-y-0.5">
+                    <p>
+                      Refunded: {refundedQty} × £{item.price.toFixed(2)} = −£
+                      {refundedValue.toFixed(2)}
+                    </p>
+                    <p>
+                      Remaining: {netQty} × £{item.price.toFixed(2)} = £
+                      {(netQty * item.price).toFixed(2)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-
-        {/* REFUND DETAILS */}
-        {refundedQty > 0 && (
-          <div className="text-xs text-red-600 space-y-0.5">
-            <p>
-              Refunded: {refundedQty} × £{item.price.toFixed(2)} = −£
-              {refundedValue.toFixed(2)}
-            </p>
-            <p>
-              Remaining: {netQty} × £{item.price.toFixed(2)} = £
-              {(netQty * item.price).toFixed(2)}
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  })}
-</div>
-
 
         {/* TOTALS */}
         <div className="mt-4 space-y-1 text-sm">
@@ -235,17 +243,6 @@ export default function StoreOrderReceiptPage() {
           )}
         </div>
 
-        {/* REFUND DETAILS */}
-        {order.refund_processed_at && (
-          <div className="mt-4 rounded-xl border bg-neutral-50 p-4">
-            <p className="text-sm font-semibold mb-2">Refund Activity</p>
-            <p className="text-sm">
-              Last refund processed on{" "}
-              {new Date(order.refund_processed_at).toLocaleString()}
-            </p>
-          </div>
-        )}
-
         {/* NEED HELP */}
         {order.status !== "refunded" && (
           <NeedRefundHelp orderId={order.id} />
@@ -253,17 +250,27 @@ export default function StoreOrderReceiptPage() {
 
         {/* ACTIONS */}
         <div className="mt-6 flex flex-col gap-3">
+
+          {/* 🍽️ PRE-ORDER FOOD (ONLY FOR EVENTS) */}
+          {hasEvent && (
+            <a
+              href={FOOD_FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="primary" size="md" className="w-full">
+                Pre-order food for your event →
+              </Button>
+            </a>
+          )}
+
+          {/* BACK TO ORDERS */}
           <Link href="/dashboard/orders">
             <Button variant="neutral" size="md" className="w-full">
               Back to orders
             </Button>
           </Link>
 
-          <Link href="/shop">
-            <Button variant="primary" size="md" className="w-full">
-              Continue shopping
-            </Button>
-          </Link>
         </div>
       </div>
     </main>

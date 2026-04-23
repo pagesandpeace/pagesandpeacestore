@@ -16,9 +16,6 @@ export default async function BookingDetailPage({
   const { orderId } = await params;
   const supabase = await supabaseServer();
 
-  /* -----------------------------
-     AUTH
-  ----------------------------- */
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -31,9 +28,6 @@ export default async function BookingDetailPage({
     user.email ||
     "You (booker)";
 
-  /* -----------------------------
-     ORDER
-  ----------------------------- */
   const { data: order } = await supabase
     .from("orders")
     .select("id, total, status")
@@ -42,10 +36,6 @@ export default async function BookingDetailPage({
 
   if (!order) fail("NO ORDER");
 
-  /* -----------------------------
-     EVENT ORDER ITEMS
-     🔑 THIS IS REQUIRED
-  ----------------------------- */
   const { data: orderItems } = await supabase
     .from("order_items")
     .select("id, event_id")
@@ -59,9 +49,6 @@ export default async function BookingDetailPage({
   const orderItemIds = orderItems.map((i) => i.id);
   const eventId = orderItems[0].event_id;
 
-  /* -----------------------------
-     LOAD SEATS (CORRECT)
-  ----------------------------- */
   const { data: seats } = await supabase
     .from("event_bookings")
     .select(`
@@ -79,9 +66,6 @@ export default async function BookingDetailPage({
     fail("NO SEATS");
   }
 
-  /* -----------------------------
-     EVENT
-  ----------------------------- */
   const { data: event } = await supabase
     .from("events")
     .select(`
@@ -98,10 +82,6 @@ export default async function BookingDetailPage({
 
   if (!event) fail("NO EVENT");
 
-  /* -----------------------------
-     SORT SEATS
-     Booker first
-  ----------------------------- */
   const sortedSeats = [...seats].sort((a, b) => {
     const aIsBooker = a.user_id_uuid === user.id;
     const bIsBooker = b.user_id_uuid === user.id;
@@ -115,19 +95,16 @@ export default async function BookingDetailPage({
     );
   });
 
-  /* -----------------------------
-     COUNTS
-  ----------------------------- */
   const totalTickets = sortedSeats.length;
   const activeTickets = sortedSeats.filter(
     (s) => !s.refunded && !s.cancelled
   ).length;
 
-  /* -----------------------------
-     UI
-  ----------------------------- */
+  const FOOD_FORM_URL = "https://tally.so/r/Med4gl";
+
   return (
     <main className="mx-auto max-w-3xl space-y-12">
+
       {/* EVENT HERO */}
       <section className="overflow-hidden rounded-2xl bg-neutral-900 text-white shadow">
         {event.image_url && (
@@ -168,6 +145,26 @@ export default async function BookingDetailPage({
                 } booked`}
           </div>
         </div>
+      </section>
+
+      {/* 🍽️ FOOD PRE-ORDER CTA */}
+      <section className="p-6 rounded-2xl border border-border bg-muted/40 text-center">
+        <h2 className="text-xl font-semibold mb-2">
+          🍽️ Pre-order food for your event
+        </h2>
+
+        <p className="text-sm text-foreground/70 mb-4">
+          Skip the queue and have everything ready when you arrive.
+        </p>
+
+        <a
+          href={FOOD_FORM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block px-6 py-3 rounded-full bg-accent text-white font-semibold"
+        >
+          Pre-order now →
+        </a>
       </section>
 
       {/* TICKETS */}

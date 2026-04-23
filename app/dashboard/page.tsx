@@ -4,14 +4,36 @@ import { supabaseServer } from "@/lib/supabase/server";
 export default async function DashboardPage() {
   const supabase = await supabaseServer();
 
-  // User is already guaranteed by layout, but we can read it
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const FOOD_FORM_URL = "https://tally.so/r/Med4gl";
+
   return (
     <div className="flex-1 w-full bg-background text-foreground font-[Montserrat]">
       <div className="max-w-4xl mx-auto px-6 py-10">
+
+        {/* 🔥 FOOD PRE-ORDER CTA */}
+        <section className="mb-10 p-6 rounded-2xl border border-border bg-muted/40 text-center">
+          <h2 className="text-xl font-semibold mb-2">
+            🍽️ Pre-order food for your event
+          </h2>
+
+          <p className="text-sm text-foreground/70 mb-4">
+            Skip the queue and have everything ready when you arrive.
+          </p>
+
+          <a
+            href={FOOD_FORM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block px-6 py-3 rounded-full bg-accent text-white font-semibold"
+          >
+            Pre-order now →
+          </a>
+        </section>
+
         <header className="mb-12">
           <h1 className="text-3xl font-semibold">
             Welcome back, {user?.user_metadata?.name || "Reader"} ☕

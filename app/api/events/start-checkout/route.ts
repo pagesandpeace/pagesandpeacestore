@@ -169,21 +169,26 @@ export async function POST(req: Request) {
     console.log("💳 Stripe line items:", lineItems);
 
     const checkout = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer_email: user.email ?? undefined,
+  mode: "payment",
 
-      line_items: lineItems,
+  customer_email: user.email ?? undefined,
 
-      metadata: {
-        kind: "event",
-        eventId,
-        userId: user.id,
-        items: JSON.stringify(items), // 🔑 webhook-safe
-      },
+  line_items: lineItems,
 
-      success_url: `${BASE_URL}/events/${event.slug}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${BASE_URL}/events/${event.slug}?cancelled=1`,
-    });
+  // 🔥 PRIMARY SOURCE (used in webhook)
+  metadata: {
+    kind: "event",
+    eventId,
+    userId: user.id,
+    items: JSON.stringify(items),
+  },
+
+  // 🔥 SECONDARY FALLBACK (VERY IMPORTANT)
+  client_reference_id: user.id,
+
+  success_url: `${BASE_URL}/events/${event.slug}/success?session_id={CHECKOUT_SESSION_ID}`,
+  cancel_url: `${BASE_URL}/events/${event.slug}?cancelled=1`,
+});
 
     console.log("✅ Stripe session created:", checkout.id);
 
