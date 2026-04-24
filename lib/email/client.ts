@@ -12,4 +12,4 @@ export const getResendClient = () => {
 };
 
 // Reusable sender email
-export const FROM = "Pages & Peace <hello@pagesandpeace.co.uk>";
+export const FROM = "Pages & Peace <admin@pagesandpeace.co.uk>";
