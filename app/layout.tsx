@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Montserrat } from "next/font/google";
+import { Montserrat, Geist } from "next/font/google";
 import "./globals.css";
 
 import { CartProvider } from "@/context/CartContext";
@@ -7,6 +7,9 @@ import CookieBanner from "@/components/CookieBanner";
 import Footer from "@/components/Footer";
 import { Toaster } from "@/components/ui/Toaster";
 import AuthRefresh from "@/components/AuthRefresh";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://pagesandpeace.co.uk";
@@ -65,7 +68,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className={cn("h-full", "font-sans", geist.variable)}>
       <body
         className={`${montserrat.variable} min-h-screen flex flex-col antialiased bg-[var(--background)] text-[var(--foreground)]`}
       >
