@@ -7,10 +7,49 @@
 /* --------------------------------------------
    🌿 BRAND THEME
 --------------------------------------------- */
-:root { /* Cream */ /* Black */
-  --accent: oklch(0.97 0 0);     /* Green */
-  --secondary: oklch(0.97 0 0);  /* Gold */
-  --muted: oklch(0.97 0 0);      /* Soft border gray */      --background: oklch(1 0 0);      --foreground: oklch(0.145 0 0);      --card: oklch(1 0 0);      --card-foreground: oklch(0.145 0 0);      --popover: oklch(1 0 0);      --popover-foreground: oklch(0.145 0 0);      --primary: oklch(0.205 0 0);      --primary-foreground: oklch(0.985 0 0);      --secondary-foreground: oklch(0.205 0 0);      --muted-foreground: oklch(0.556 0 0);      --accent-foreground: oklch(0.205 0 0);      --destructive: oklch(0.577 0.245 27.325);      --border: oklch(0.922 0 0);      --input: oklch(0.922 0 0);      --ring: oklch(0.708 0 0);      --chart-1: oklch(0.87 0 0);      --chart-2: oklch(0.556 0 0);      --chart-3: oklch(0.439 0 0);      --chart-4: oklch(0.371 0 0);      --chart-5: oklch(0.269 0 0);      --radius: 0.625rem;      --sidebar: oklch(0.985 0 0);      --sidebar-foreground: oklch(0.145 0 0);      --sidebar-primary: oklch(0.205 0 0);      --sidebar-primary-foreground: oklch(0.985 0 0);      --sidebar-accent: oklch(0.97 0 0);      --sidebar-accent-foreground: oklch(0.205 0 0);      --sidebar-border: oklch(0.922 0 0);      --sidebar-ring: oklch(0.708 0 0);
+:root {
+  --background: #FAF6F1;
+  --foreground: #111111;
+
+  --accent: #189458;
+  --secondary: #C7A54B;
+  --muted: #dcd6cf;
+
+  --card: #ffffff;
+  --card-foreground: #111111;
+
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+
+  --primary: #189458;
+  --primary-foreground: #FAF6F1;
+
+  --secondary-foreground: #111111;
+  --muted-foreground: #6b625b;
+  --accent-foreground: #FAF6F1;
+
+  --destructive: #dc2626;
+
+  --border: #dcd6cf;
+  --input: #dcd6cf;
+  --ring: #189458;
+
+  --chart-1: #189458;
+  --chart-2: #C7A54B;
+  --chart-3: #111111;
+  --chart-4: #dc2626;
+  --chart-5: #4B79FF;
+
+  --radius: 0.625rem;
+
+  --sidebar: #FAF6F1;
+  --sidebar-foreground: #111111;
+  --sidebar-primary: #189458;
+  --sidebar-primary-foreground: #FAF6F1;
+  --sidebar-accent: rgba(24, 148, 88, 0.1);
+  --sidebar-accent-foreground: #111111;
+  --sidebar-border: #dcd6cf;
+  --sidebar-ring: #189458;
 }
 
 /* --------------------------------------------
@@ -66,9 +105,11 @@
    🪶 Global Reset + Base
 --------------------------------------------- */
 body {
+  background: var(--background);
+  color: var(--foreground);
   font-family: var(--font-montserrat), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans";
-  -webkit-font-smoothing: antialiased;
+      -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden; /* Keep for preventing horizontal scroll */
   margin: 0;
