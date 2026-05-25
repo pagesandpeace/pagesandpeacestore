@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase/server";
-import Tabs from "./Tabs"; // <-- import client component
+import Tabs from "./Tabs";
 
 type MenuCategory = {
   id: string;
@@ -34,29 +34,44 @@ export default async function MenuPage() {
   const cats = (categories ?? []) as MenuCategory[];
   const its = (items ?? []) as MenuItem[];
 
-  // Attach items
+  const uniqueItems = Array.from(
+    new Map(
+      its.map((item) => [
+        `${item.category_id}-${item.name}-${item.price}`,
+        item,
+      ])
+    ).values()
+  );
+
   const categoriesWithItems = cats.map((cat) => ({
     ...cat,
-    items: its.filter((i) => i.category_id === cat.id),
+    items: uniqueItems.filter((i) => i.category_id === cat.id),
   }));
 
   const drinks = categoriesWithItems.filter((c) =>
-    ["Hot Drinks", "Cold Drinks", "Alt Milk", "Syrups", "Extras"].includes(c.name)
+    [
+      "Hot Drinks",
+      "Cold Drinks",
+      "Smoothies",
+      "Alt Milk",
+      "Syrups",
+      "Extras",
+    ].includes(c.name)
   );
 
   const food = categoriesWithItems.filter((c) =>
-  [
-    "Traybakes",
-    "Cakes",
-    "Savoury",
-    "Viennoiserie",
-    "Toasted",
-    "DBF",
-    "Waffles",
-    "Paninis",
-    "Yogurt Pots",
-  ].includes(c.name)
-);
+    [
+      "Traybakes",
+      "Cakes",
+      "Savoury",
+      "Viennoiserie",
+      "Toasted",
+      "DBF",
+      "Waffles",
+      "Paninis",
+      "Yogurt Pots",
+    ].includes(c.name)
+  );
 
   return (
     <main className="min-h-screen bg-[#FAF6F1] text-[#111] font-[Montserrat] px-6 py-12">
@@ -68,17 +83,23 @@ export default async function MenuPage() {
           height={140}
           className="mb-4"
         />
+
         <h1 className="text-4xl sm:text-5xl font-semibold tracking-widest text-[#5DA865]">
           Our Menu
         </h1>
-        <p className="text-[#111]/70 mt-2">Every community needs a chapter.</p>
+
+        <p className="text-[#111]/70 mt-2">
+          Every community needs a chapter.
+        </p>
       </section>
 
-      {/* TABS CLIENT COMPONENT */}
       <Tabs drinks={drinks} food={food} />
 
       <div className="text-center mt-16">
-        <Link href="/" className="inline-block text-[#5DA865] font-medium hover:underline">
+        <Link
+          href="/"
+          className="inline-block text-[#5DA865] font-medium hover:underline"
+        >
           ← Back to Home
         </Link>
       </div>

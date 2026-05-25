@@ -20,13 +20,20 @@ export default function MenuSection({
 
       <div className="border-t border-[#111]/20 pt-3 divide-y divide-[#111]/10">
         {items.map((item) => (
-          <div
-            key={item.id}
-            className="flex justify-between py-2 text-lg leading-snug"
-          >
-            <span className="font-medium">{item.name}</span>
+          <div key={item.id} className="flex justify-between gap-6 py-3">
+            <div className="flex-1">
+              <p className="text-lg font-medium leading-snug text-[#111]">
+                {item.name}
+              </p>
 
-            <span className="text-[#5DA865] font-medium ml-8 shrink-0">
+              {item.note && (
+                <p className="text-sm text-[#111]/60 mt-1 leading-relaxed">
+                  {item.note}
+                </p>
+              )}
+            </div>
+
+            <span className="text-[#5DA865] font-medium text-lg shrink-0">
               {item.price === 0
                 ? "Included"
                 : `£${Number(item.price).toFixed(2)}`}
