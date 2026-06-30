@@ -37,7 +37,6 @@ export default function DashboardUI({
     router.prefetch("/dashboard/orders");
     router.prefetch("/dashboard/settings");
     router.prefetch("/dashboard/account");
-    router.prefetch("/dashboard/chapters-club");
     router.prefetch("/shop");
   }, [sidebarOpen, router]);
 

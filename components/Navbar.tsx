@@ -12,7 +12,6 @@ const NAV_LINKS = [
   { label: "Shop", href: "/shop" },
   { label: "Events", href: "/events" },
   { label: "About", href: "/about" },
-  { label: "Chapters Club", href: "/chapters-club" },
   { label: "Contact", href: "/contact" },
 ];
 
