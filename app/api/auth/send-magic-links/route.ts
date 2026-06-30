@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export async function POST(req: Request) {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("📥 SEND MAGIC LINK (PUBLIC)");
+  console.log("📥 SEND MAGIC LINK");
 
   try {
     const body = await req.json();
@@ -16,76 +16,46 @@ export async function POST(req: Request) {
       );
     }
 
+    const normalizedEmail = String(email).trim().toLowerCase();
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?intent=${intent || "signin"}&callbackURL=${encodeURIComponent(
+    const safeIntent = intent === "signup" ? "signup" : "signin";
+
+    const redirectTo = `${
+      process.env.NEXT_PUBLIC_SITE_URL
+    }/auth/callback?intent=${safeIntent}&callbackURL=${encodeURIComponent(
       callbackURL || "/dashboard"
     )}`;
 
-    console.log("📧 Email:", email);
+    console.log("📧 Email:", normalizedEmail);
+    console.log("🎯 Intent:", safeIntent);
     console.log("🔁 Redirect:", redirectTo);
 
-    /* -------------------------
-       CHECK IF USER EXISTS
-    ------------------------- */
-    const { data: usersData, error: listError } =
-      await supabase.auth.admin.listUsers();
+    const { error } = await supabase.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: redirectTo,
 
-    if (listError) {
-      console.error("❌ listUsers error:", listError);
-      return NextResponse.json(
-        { error: "User lookup failed" },
-        { status: 500 }
-      );
-    }
+        // Important:
+        // Sign-in should never create/invite users.
+        shouldCreateUser: safeIntent === "signup",
+      },
+    });
 
-    const exists = usersData.users.some(
-      (u) => u.email?.toLowerCase() === email.toLowerCase()
-    );
-
-    console.log("🧠 User exists:", exists);
-
-    /* -------------------------
-       SEND CORRECT FLOW
-    ------------------------- */
-    let error;
-
-    if (!exists) {
-      console.log("🆕 Invite flow");
-
-      const res = await supabase.auth.admin.inviteUserByEmail(email, {
-        redirectTo,
-      });
-
-      error = res.error;
-    } else {
-      console.log("🔐 Magic link flow");
-
-      const res = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: redirectTo,
-        },
-      });
-
-      error = res.error;
-    }
-
-    /* -------------------------
-       ERROR HANDLING
-    ------------------------- */
     if (error) {
       console.error("❌ Magic link error:", error);
+
       return NextResponse.json(
         { error: error.message },
-        { status: 500 }
+        { status: 400 }
       );
     }
 
-    console.log("✅ Magic link sent to:", email);
+    console.log("✅ Magic link sent to:", normalizedEmail);
 
     return NextResponse.json({ success: true });
   } catch (err) {
