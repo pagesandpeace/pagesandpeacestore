@@ -19,11 +19,6 @@ export type UserProfile = {
   role: "admin" | "customer";
 };
 
-type LoyaltyState = {
-  member: boolean;
-  tier?: string;
-};
-
 type SidebarProps = {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
@@ -46,7 +41,6 @@ export default function Sidebar({
   const router = useRouter();
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [loyalty, setLoyalty] = useState<LoyaltyState | null>(null);
 
   // 🔥 LOCAL PROFILE STATE (KEY FIX)
   const [localProfile, setLocalProfile] = useState<UserProfile | null>(profile);
@@ -61,35 +55,33 @@ export default function Sidebar({
   }, [profile]);
 
   /* -------------------------------------------------------
-   🔥 LISTEN FOR PROFILE UPDATES (FIXES AVATAR)
-------------------------------------------------------- */
-useEffect(() => {
-  const refreshProfile = async () => {
-    try {
-      const res = await fetch("/api/me");
-      const data = await res.json();
+     🔥 LISTEN FOR PROFILE UPDATES (FIXES AVATAR)
+  ------------------------------------------------------- */
+  useEffect(() => {
+    const refreshProfile = async () => {
+      try {
+        const res = await fetch("/api/me");
+        const data = await res.json();
 
-      if (!data) return;
+        if (!data) return;
 
-      setLocalProfile((prev) => ({
-        ...(prev ?? {}),
-        ...data,
-      }));
-    } catch (err) {
-      console.error("❌ Failed to refresh profile", err);
-    }
-  };
+        setLocalProfile((prev) => ({
+          ...(prev ?? {}),
+          ...data,
+        }));
+      } catch (err) {
+        console.error("❌ Failed to refresh profile", err);
+      }
+    };
 
-  window.addEventListener("pp:user-should-refresh", refreshProfile);
+    window.addEventListener("pp:user-should-refresh", refreshProfile);
 
-  return () =>
-    window.removeEventListener(
-      "pp:user-should-refresh",
-      refreshProfile
-    );
-}, []);
-
-
+    return () =>
+      window.removeEventListener(
+        "pp:user-should-refresh",
+        refreshProfile
+      );
+  }, []);
 
   /* -------------------------------------------------------
      Close dropdown when clicking outside
@@ -107,31 +99,6 @@ useEffect(() => {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  /* -------------------------------------------------------
-     Fetch loyalty status
-  ------------------------------------------------------- */
-  useEffect(() => {
-    if (!user) return;
-
-    let mounted = true;
-
-    (async () => {
-      try {
-        const res = await fetch("/api/loyalty/me");
-        if (!res.ok) return;
-
-        const data = await res.json();
-        if (mounted) setLoyalty(data);
-      } catch (err) {
-        console.error("❌ Failed to load loyalty status", err);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [user]);
 
   /* -------------------------------------------------------
      Sign out
@@ -189,30 +156,32 @@ useEffect(() => {
 
           {/* NAVIGATION */}
           <nav className="mt-6 space-y-4 text-sm text-left">
-            <button onClick={() => handleNav("/dashboard")} className="block hover:text-[#5DA865]">
+            <button
+              onClick={() => handleNav("/dashboard")}
+              className="block hover:text-[#5DA865]"
+            >
               Dashboard
             </button>
 
-            <button onClick={() => handleNav("/dashboard/events")} className="block hover:text-[#5DA865]">
+            <button
+              onClick={() => handleNav("/dashboard/events")}
+              className="block hover:text-[#5DA865]"
+            >
               Events
             </button>
 
-            <button onClick={() => handleNav("/dashboard/orders")} className="block hover:text-[#5DA865]">
+            <button
+              onClick={() => handleNav("/dashboard/orders")}
+              className="block hover:text-[#5DA865]"
+            >
               Orders
             </button>
 
-            <button onClick={() => handleNav("/shop")} className="block hover:text-[#5DA865]">
-              Shop
-            </button>
-
             <button
-              onClick={() => handleNav("/dashboard/chapters-club")}
-              className="flex items-center gap-2 hover:text-[#5DA865]"
+              onClick={() => handleNav("/shop")}
+              className="block hover:text-[#5DA865]"
             >
-              Chapters Club
-              <span className="bg-[#E5F7E4] text-[#2f6b3a] rounded-full border px-2 py-1 text-xs font-semibold">
-                Coming Soon 🚀
-              </span>
+              Shop
             </button>
           </nav>
         </div>
@@ -235,24 +204,10 @@ useEffect(() => {
             />
 
             <div className="flex flex-col leading-tight overflow-hidden">
-  <span className="font-medium text-xs truncate">
-    {localProfile?.name || user.email || "User"}
-  </span>
-
-  {loyalty?.member && (
-    <span className="mt-1 inline-flex w-fit items-center rounded-full 
-      bg-[#E5F7E4] border border-[#cce6cc] 
-      px-2 py-[2px] text-[10px] font-semibold text-[#2f6b3a]">
-      Chapters Club
-      {loyalty.tier && (
-        <span className="ml-1 opacity-70">
-          {loyalty.tier.charAt(0).toUpperCase() + loyalty.tier.slice(1)}
-        </span>
-      )}
-    </span>
-  )}
-</div>
-
+              <span className="font-medium text-xs truncate">
+                {localProfile?.name || user.email || "User"}
+              </span>
+            </div>
           </button>
 
           {menuOpen && (

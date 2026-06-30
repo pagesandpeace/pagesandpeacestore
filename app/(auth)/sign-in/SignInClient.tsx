@@ -14,12 +14,11 @@ export default function SignInClient() {
   const searchParams = useSearchParams();
 
   const callbackURL = searchParams.get("callbackURL") || "/dashboard";
-  const joinIntent = searchParams.get("join");
-
   const defaultEmail = searchParams.get("email") || "";
 
   const [email, setEmail] = useState(defaultEmail);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState("");
@@ -35,6 +34,10 @@ export default function SignInClient() {
   -------------------------------------------------- */
   async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault();
+
+    // Prevent double-click / double-submit
+    if (loading || emailSent) return;
+
     setLoading(true);
 
     try {
@@ -46,7 +49,6 @@ export default function SignInClient() {
         body: JSON.stringify({
           email,
           callbackURL,
-          joinIntent,
           intent: "signin", // 🔥 required
         }),
       });
@@ -63,28 +65,26 @@ export default function SignInClient() {
     } catch (err) {
       console.error(err);
       showError("Something went wrong");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   /* --------------------------------------------------
      GOOGLE SIGN-IN
   -------------------------------------------------- */
   async function handleGoogle() {
-    setLoading(true);
+    if (loading || googleLoading || emailSent) return;
+
+    setGoogleLoading(true);
 
     const params = new URLSearchParams();
 
     params.set("callbackURL", callbackURL);
-    params.set("intent", "signin"); // 🔥 required
+    params.set("intent", "signin");
 
     // ✅ IMPORTANT: explicitly mark no consent
     params.set("marketing_consent", "false");
-
-    if (joinIntent === "loyalty") {
-      params.set("join", "loyalty");
-    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -95,7 +95,7 @@ export default function SignInClient() {
 
     if (error) {
       showError(error.message);
-      setLoading(false);
+      setGoogleLoading(false);
     }
   }
 
@@ -120,7 +120,7 @@ export default function SignInClient() {
         </div>
 
         <div className="text-sm text-[#666] space-y-2">
-          <p>Click the link to access your account instantly.</p>
+          <p>Click the newest link once to access your account.</p>
           <p>⏱ It may take a minute to arrive.</p>
           <p>
             📬 Check your <strong>spam or junk folder</strong> if needed.
@@ -157,11 +157,13 @@ export default function SignInClient() {
       {/* GOOGLE */}
       <button
         onClick={handleGoogle}
-        disabled={loading}
-        className="w-full flex items-center justify-center gap-3 py-3 bg-white rounded-lg border border-[#D6C28B] hover:bg-[#f1ede4]"
+        disabled={loading || googleLoading || emailSent}
+        className="w-full flex items-center justify-center gap-3 py-3 bg-white rounded-lg border border-[#D6C28B] hover:bg-[#f1ede4] disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <Image src="/google_logo.svg" width={20} height={20} alt="Google" />
-        <span>{loading ? "Connecting…" : "Continue with Google"}</span>
+        <span>
+          {googleLoading ? "Connecting…" : "Continue with Google"}
+        </span>
       </button>
 
       {/* DIVIDER */}
@@ -182,12 +184,17 @@ export default function SignInClient() {
           type="email"
           required
           placeholder="Email address"
-          className="border p-3 w-full rounded-lg"
+          className="border p-3 w-full rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
           value={email}
+          disabled={loading || emailSent}
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <Button type="submit" disabled={loading} className="w-full">
+        <Button
+          type="submit"
+          disabled={loading || emailSent}
+          className="w-full"
+        >
           {loading ? "Sending link…" : "Send login link"}
         </Button>
       </form>
@@ -198,10 +205,7 @@ export default function SignInClient() {
 
       <p className="text-center text-sm">
         No account?{" "}
-        <Link
-          href={`/sign-up${joinIntent ? `?join=${joinIntent}` : ""}`}
-          className="underline font-semibold"
-        >
+        <Link href="/sign-up" className="underline font-semibold">
           Create one
         </Link>
       </p>

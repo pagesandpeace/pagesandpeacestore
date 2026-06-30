@@ -44,7 +44,8 @@ export default function CookiePolicyPage() {
         <ul className="list-disc list-inside space-y-2">
           <li>
             <strong>Essential cookies</strong> – required for the website to
-            function (e.g. keeping you signed in, remembering your basket).
+            function, such as keeping you signed in, maintaining your basket,
+            and supporting security.
           </li>
           <li>
             <strong>Non-essential cookies</strong> – used for analytics,
@@ -53,6 +54,7 @@ export default function CookiePolicyPage() {
         </ul>
 
         <h2 className="text-2xl font-semibold mt-8">2. How We Use Cookies</h2>
+
         <table className="w-full border border-[#ddd] text-sm mt-4">
           <thead className="bg-[var(--accent)] text-[var(--background)]">
             <tr>
@@ -64,53 +66,68 @@ export default function CookiePolicyPage() {
           <tbody>
             <tr className="border-t border-[#ddd]">
               <td className="p-3 font-medium">Essential</td>
-              <td className="p-3">Enable login, session management, security</td>
-              <td className="p-3">Better Auth session cookies</td>
+              <td className="p-3">
+                Enable login, session management, basket functionality, and
+                security
+              </td>
+              <td className="p-3">Authentication and session cookies</td>
             </tr>
+
             <tr className="border-t border-[#ddd]">
               <td className="p-3 font-medium">Analytics</td>
-              <td className="p-3">Help us understand traffic and improve site</td>
-              <td className="p-3">Google Analytics (only after consent)</td>
+              <td className="p-3">
+                Help us understand website traffic and improve the site
+              </td>
+              <td className="p-3">Google Analytics, only after consent</td>
             </tr>
+
             <tr className="border-t border-[#ddd]">
               <td className="p-3 font-medium">Functional</td>
-              <td className="p-3">Remember preferences or loyalty status</td>
-              <td className="p-3">Local storage keys</td>
+              <td className="p-3">
+                Remember preferences and improve your browsing experience
+              </td>
+              <td className="p-3">Local storage or preference settings</td>
             </tr>
+
             <tr className="border-t border-[#ddd]">
               <td className="p-3 font-medium">Marketing</td>
               <td className="p-3">
                 Personalise promotions and measure effectiveness
               </td>
-              <td className="p-3">Meta Pixel (if consented)</td>
+              <td className="p-3">Meta Pixel, if consented</td>
             </tr>
           </tbody>
         </table>
 
         <h2 className="text-2xl font-semibold mt-8">3. Third-Party Cookies</h2>
+
         <p>
           Some cookies are set by trusted third parties that help us operate the
           site or measure performance:
         </p>
+
         <ul className="list-disc list-inside space-y-1">
           <li>Google Analytics – anonymised usage statistics</li>
-          <li>Resend – for email delivery tracking (after signup)</li>
+          <li>Resend – for email delivery tracking after signup</li>
           <li>Stripe – for secure payment processing</li>
         </ul>
 
         <h2 className="text-2xl font-semibold mt-8">4. Managing Cookies</h2>
+
         <p>
           You can control and delete cookies through our banner or your browser
           settings. Blocking essential cookies may affect site functionality.
         </p>
 
         <h2 className="text-2xl font-semibold mt-8">5. Updates</h2>
+
         <p>
           We may update this policy occasionally. The latest version will always
           be available on this page.
         </p>
 
         <h2 className="text-2xl font-semibold mt-8">6. Contact Us</h2>
+
         <p>
           For any questions about cookies or data usage, please contact:
           <br />
@@ -118,7 +135,10 @@ export default function CookiePolicyPage() {
           <br />
           8 Eva Building, Rossington, Doncaster, United Kingdom, DN10PF
           <br />
-          📧 <a href="mailto:admin@pagesandpeace.co.uk">admin@pagesandpeace.co.uk</a>
+          📧{" "}
+          <a href="mailto:admin@pagesandpeace.co.uk">
+            admin@pagesandpeace.co.uk
+          </a>
         </p>
       </section>
     </main>

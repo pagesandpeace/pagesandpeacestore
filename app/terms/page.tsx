@@ -3,7 +3,7 @@ import BackLink from "@/components/BackLink";
 export const metadata = {
   title: "Terms of Service | Pages & Peace",
   description:
-    "Our terms of service outline the rules and responsibilities for using the Pages & Peace website and loyalty program.",
+    "Our terms of service outline the rules and responsibilities for using the Pages & Peace website and services.",
 };
 
 export default function TermsPage() {
@@ -24,12 +24,14 @@ export default function TermsPage() {
         website and services, you agree to these Terms of Service. Please read
         them carefully before using our platform.
       </p>
+
       <p className="mt-6">
-        These terms govern your use of our website, loyalty programme, and any
-        purchases made through our store. We may update them from time to time,
-        and continued use of the site constitutes acceptance of the latest
-        version.
+        These terms govern your use of our website, customer accounts, event
+        bookings, and any purchases made through our store. We may update them
+        from time to time, and continued use of the site constitutes acceptance
+        of the latest version.
       </p>
+
       <p className="mt-6">
         If you have any questions, contact us at{" "}
         <a

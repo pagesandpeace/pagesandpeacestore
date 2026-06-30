@@ -13,7 +13,6 @@ export default function SignUpClient() {
   const searchParams = useSearchParams();
 
   const callbackURL = searchParams.get("callbackURL") || "/dashboard";
-  const joinIntent = searchParams.get("join");
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -32,27 +31,14 @@ export default function SignUpClient() {
     setErrorOpen(true);
   }
 
-  /* --------------------------------------------------
-     AUTO LOYALTY (UNCHANGED)
-  -------------------------------------------------- */
-  async function autoJoinLoyaltyIfNeeded() {
-    if (joinIntent !== "loyalty") return;
+  function isAlreadyRegisteredError(message: string) {
+    const lowerMessage = message.toLowerCase();
 
-    try {
-      await fetch("/api/loyalty/optin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
-        },
-        body: JSON.stringify({
-          termsVersion: "v1.0",
-          marketingConsent: true,
-        }),
-      });
-
-      localStorage.setItem("pp:loyalty-confirmed", "true");
-    } catch {}
+    return (
+      lowerMessage.includes("already been registered") ||
+      lowerMessage.includes("already registered") ||
+      lowerMessage.includes("email_exists")
+    );
   }
 
   /* --------------------------------------------------
@@ -60,6 +46,10 @@ export default function SignUpClient() {
   -------------------------------------------------- */
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
+
+    // Prevent double-click / double-submit
+    if (loading || emailSent) return;
+
     setLoading(true);
 
     const fullName = `${firstName} ${lastName}`.trim();
@@ -69,7 +59,7 @@ export default function SignUpClient() {
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback?intent=signup&callbackURL=${encodeURIComponent(
           callbackURL
-        )}${joinIntent === "loyalty" ? "&join=loyalty" : ""}`,
+        )}`,
 
         data: {
           name: fullName,
@@ -80,31 +70,34 @@ export default function SignUpClient() {
     });
 
     if (error) {
-      showError(error.message);
+      if (isAlreadyRegisteredError(error.message)) {
+        showError(
+          "This email already has an account. Please use Sign In instead."
+        );
+      } else {
+        showError(error.message);
+      }
+
       setLoading(false);
       return;
     }
-
-    await autoJoinLoyaltyIfNeeded();
 
     setEmailSent(true);
     setLoading(false);
   }
 
   /* --------------------------------------------------
-     GOOGLE SIGN-UP (CLEAN)
+     GOOGLE SIGN-UP
   -------------------------------------------------- */
   async function handleGoogle() {
+    if (loading || googleLoading || emailSent) return;
+
     setGoogleLoading(true);
 
     const params = new URLSearchParams();
 
     params.set("intent", "signup");
     params.set("callbackURL", callbackURL);
-
-    if (joinIntent === "loyalty") {
-      params.set("join", "loyalty");
-    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -115,9 +108,8 @@ export default function SignUpClient() {
 
     if (error) {
       showError(error.message);
+      setGoogleLoading(false);
     }
-
-    setGoogleLoading(false);
   }
 
   /* --------------------------------------------------
@@ -141,7 +133,7 @@ export default function SignUpClient() {
         </div>
 
         <div className="text-sm text-[#666] space-y-2">
-          <p>Click the link to enter your account instantly.</p>
+          <p>Click the newest link once to enter your account.</p>
           <p>⏱ It can take a minute to arrive.</p>
           <p>
             📬 Check your <strong>spam or junk folder</strong> if needed.
@@ -178,8 +170,8 @@ export default function SignUpClient() {
       {/* GOOGLE */}
       <button
         onClick={handleGoogle}
-        disabled={googleLoading}
-        className="w-full flex items-center justify-center gap-3 py-3 bg-white rounded-lg border border-[#D6C28B] hover:bg-[#f1ede4]"
+        disabled={loading || googleLoading || emailSent}
+        className="w-full flex items-center justify-center gap-3 py-3 bg-white rounded-lg border border-[#D6C28B] hover:bg-[#f1ede4] disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <Image src="/google_logo.svg" width={20} height={20} alt="Google" />
         <span>
@@ -204,8 +196,9 @@ export default function SignUpClient() {
             type="text"
             placeholder="First name"
             required
-            className="border p-3 w-full rounded-lg"
+            className="border p-3 w-full rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
             value={firstName}
+            disabled={loading || emailSent}
             onChange={(e) => setFirstName(e.target.value)}
           />
 
@@ -213,8 +206,9 @@ export default function SignUpClient() {
             type="text"
             placeholder="Last name"
             required
-            className="border p-3 w-full rounded-lg"
+            className="border p-3 w-full rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
             value={lastName}
+            disabled={loading || emailSent}
             onChange={(e) => setLastName(e.target.value)}
           />
         </div>
@@ -223,12 +217,17 @@ export default function SignUpClient() {
           type="email"
           placeholder="Email address"
           required
-          className="border p-3 w-full rounded-lg"
+          className="border p-3 w-full rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
           value={email}
+          disabled={loading || emailSent}
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <Button type="submit" disabled={loading} className="w-full">
+        <Button
+          type="submit"
+          disabled={loading || emailSent}
+          className="w-full"
+        >
           {loading ? "Creating…" : "Continue"}
         </Button>
       </form>
@@ -239,10 +238,7 @@ export default function SignUpClient() {
 
       <p className="text-center text-sm">
         Already have an account{" "}
-        <Link
-          href={`/sign-in${joinIntent ? `?join=${joinIntent}` : ""}`}
-          className="underline font-semibold"
-        >
+        <Link href="/sign-in" className="underline font-semibold">
           Sign in
         </Link>
       </p>
