@@ -1,12 +1,63 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
+import { supabaseService } from "@/lib/supabase/service";
 import slugify from "slugify";
 
+type SupabaseServiceClient = ReturnType<typeof supabaseService>;
+
+async function cleanupPartialCreate({
+  supabase,
+  createdEventId,
+  createdProductId,
+}: {
+  supabase: SupabaseServiceClient;
+  createdEventId: string | null;
+  createdProductId: string | null;
+}) {
+  console.warn("🧹 [CREATE EVENT] cleaning up partial create:", {
+    createdEventId,
+    createdProductId,
+  });
+
+  if (createdEventId) {
+    await supabase
+      .from("event_ticket_types")
+      .delete()
+      .eq("event_id", createdEventId);
+
+    await supabase.from("events").delete().eq("id", createdEventId);
+  }
+
+  if (createdProductId) {
+    await supabase.from("products").delete().eq("id", createdProductId);
+  }
+}
+
 export async function POST(req: Request) {
+  let createdProductId: string | null = null;
+  let createdEventId: string | null = null;
+
   try {
     console.log("📩 Incoming create event request...");
 
+    /* -------------------------------------------------
+       1. Require admin
+    ------------------------------------------------- */
+    const { error: adminError } = await requireAdmin();
+
+    if (adminError) return adminError;
+
+    /*
+      Use service role only AFTER admin check.
+      This avoids RLS blocking admin event/product/ticket inserts.
+    */
+    const supabase = supabaseService();
+
+    /* -------------------------------------------------
+       2. Parse payload
+    ------------------------------------------------- */
     const body = await req.json();
+
     console.log("📥 Payload received:", body);
 
     const {
@@ -20,7 +71,7 @@ export async function POST(req: Request) {
       image_url,
       store_id,
       published,
-      booking_type = "ticketed", // ✅ NEW
+      booking_type = "ticketed",
     } = body;
 
     if (!title || !date || !store_id) {
@@ -30,66 +81,83 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = await supabaseServer();
+    const cleanTitle = String(title).trim();
 
-    const { data: authUser } = await supabase.auth.getUser();
-    console.log("👤 Auth user:", authUser);
+    if (!cleanTitle) {
+      return NextResponse.json(
+        { error: "Event title is required." },
+        { status: 400 }
+      );
+    }
+
+    const cleanBookingType = booking_type === "interest" ? "interest" : "ticketed";
+
+    const cleanCapacity =
+      typeof capacity === "number" && capacity >= 0 ? capacity : 0;
+
+    const cleanPricePence =
+      typeof price_pence === "number" && price_pence >= 0 ? price_pence : 0;
 
     const slug =
-      slugify(title, { lower: true, strict: true }) +
+      slugify(cleanTitle, { lower: true, strict: true }) +
       "-" +
       Date.now().toString().slice(-6);
 
-    let product = null;
+    let product: { id: string } | null = null;
 
     /* -------------------------------------------------
-       1️⃣ CREATE PRODUCT (ONLY IF TICKETED)
+       3. Create product only if ticketed
     ------------------------------------------------- */
-    if (booking_type === "ticketed") {
+    if (cleanBookingType === "ticketed") {
       const productPayload = {
-        name: `${title} – General Admission`,
+        name: `${cleanTitle} – General Admission`,
         slug: `${slug}-general`,
         description: subtitle || short_description || "",
-        price: (price_pence / 100).toFixed(2),
-        image_url,
+        price: (cleanPricePence / 100).toFixed(2),
+        image_url: image_url || null,
         product_type: "event",
-        inventory_count: capacity,
+        inventory_count: cleanCapacity,
+        fulfilment_mode: "made_to_order",
+        supply_source: "stock",
+        out_of_stock_behavior: "stop_selling",
       };
 
       const { data: productData, error: productError } = await supabase
         .from("products")
         .insert(productPayload)
-        .select()
+        .select("id")
         .single();
 
-      if (productError) {
-        console.error("❌ PRODUCT ERROR:", productError);
+      if (productError || !productData) {
+        console.error("❌ [CREATE EVENT] product error:", productError);
+
         return NextResponse.json(
-          { error: productError.message },
+          { error: productError?.message || "Failed to create product" },
           { status: 500 }
         );
       }
 
       product = productData;
+      createdProductId = productData.id;
     }
 
     /* -------------------------------------------------
-       2️⃣ CREATE EVENT
+       4. Create event
     ------------------------------------------------- */
     const eventPayload = {
-      title,
-      subtitle,
-      short_description,
-      description,
+      title: cleanTitle,
+      subtitle: subtitle || null,
+      short_description: short_description || null,
+      description: description || null,
       date,
-      capacity,
-      price_pence,
-      image_url,
+      capacity: cleanCapacity,
+      price_pence: cleanPricePence,
+      image_url: image_url || null,
       store_id,
-      published,
+      published: Boolean(published),
       slug,
-      product_id: product?.id ?? null, // ✅ safe
-      booking_type, // ✅ NEW
+      product_id: product?.id ?? null,
+      booking_type: cleanBookingType,
     };
 
     const { data: event, error: eventError } = await supabase
@@ -98,24 +166,47 @@ export async function POST(req: Request) {
       .select()
       .single();
 
-    if (eventError) {
-      console.error("❌ EVENT ERROR:", eventError);
+    if (eventError || !event) {
+      console.error("❌ [CREATE EVENT] event error:", eventError);
+
+      await cleanupPartialCreate({
+        supabase,
+        createdEventId,
+        createdProductId,
+      });
+
       return NextResponse.json(
-        { error: eventError.message },
+        { error: eventError?.message || "Failed to create event" },
         { status: 500 }
       );
     }
 
+    createdEventId = event.id;
+
     /* -------------------------------------------------
-       3️⃣ CREATE TICKET TYPE (ONLY IF TICKETED)
+       5. Create default ticket type only if ticketed
     ------------------------------------------------- */
-    if (booking_type === "ticketed") {
+    if (cleanBookingType === "ticketed") {
+      if (!product) {
+        await cleanupPartialCreate({
+          supabase,
+          createdEventId,
+          createdProductId,
+        });
+
+        return NextResponse.json(
+          { error: "Product missing for ticketed event." },
+          { status: 500 }
+        );
+      }
+
       const ticketPayload = {
         event_id: event.id,
         name: "General Admission",
         description: null,
-        price_pence,
-        inventory_count: capacity,
+        price_pence: cleanPricePence,
+        inventory_count: cleanCapacity,
+        sold_count: 0,
         product_id: product.id,
         is_default: true,
         is_active: true,
@@ -126,7 +217,14 @@ export async function POST(req: Request) {
         .insert(ticketPayload);
 
       if (ticketError) {
-        console.error("❌ TICKET ERROR:", ticketError);
+        console.error("❌ [CREATE EVENT] ticket error:", ticketError);
+
+        await cleanupPartialCreate({
+          supabase,
+          createdEventId,
+          createdProductId,
+        });
+
         return NextResponse.json(
           { error: ticketError.message },
           { status: 500 }
@@ -134,14 +232,12 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log("🎉 Event created successfully");
+    console.log("🎉 [CREATE EVENT] created successfully:", event.id);
 
     return NextResponse.json({ success: true, event });
   } catch (err) {
-    console.error("🔥 Route crashed:", err);
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    );
+    console.error("🔥 [CREATE EVENT] route crashed:", err);
+
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

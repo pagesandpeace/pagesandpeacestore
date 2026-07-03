@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
+import { supabaseService } from "@/lib/supabase/service";
 
 export async function GET(
   _req: Request,
@@ -7,7 +8,6 @@ export async function GET(
 ) {
   try {
     const { id: eventId } = await context.params;
-    const supabase = await supabaseServer();
 
     if (!eventId) {
       return NextResponse.json(
@@ -16,6 +16,23 @@ export async function GET(
       );
     }
 
+    /* --------------------------------------------------
+       1. Require admin
+    -------------------------------------------------- */
+    const { error: adminError } = await requireAdmin();
+
+    if (adminError) return adminError;
+
+    /*
+      Use service role after admin check so RLS cannot hide bookings.
+      This prevents the delete UI from incorrectly thinking an event
+      has no bookings.
+    */
+    const supabase = supabaseService();
+
+    /* --------------------------------------------------
+       2. Check whether event has bookings
+    -------------------------------------------------- */
     const { count, error } = await supabase
       .from("event_bookings")
       .select("*", { count: "exact", head: true })
@@ -23,6 +40,7 @@ export async function GET(
 
     if (error) {
       console.error("❌ [HAS BOOKINGS] query failed:", error);
+
       return NextResponse.json(
         { error: error.message },
         { status: 500 }
@@ -34,6 +52,7 @@ export async function GET(
     });
   } catch (err) {
     console.error("💥 [HAS BOOKINGS] crashed:", err);
+
     return NextResponse.json(
       { error: "Failed to check bookings" },
       { status: 500 }

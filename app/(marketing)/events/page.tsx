@@ -13,6 +13,7 @@ type EventRow = {
   capacity: number;
   image_url: string | null;
   is_test: boolean;
+  published: boolean;
   booking_type: "ticketed" | "interest";
   event_ticket_types: {
     price_pence: number;
@@ -29,7 +30,7 @@ export default async function EventsPage() {
   const now = new Date();
 
   /* -----------------------------
-     FETCH EVENTS (NO INNER JOIN)
+     FETCH PUBLIC EVENTS ONLY
   ----------------------------- */
   const { data: events, error: eventErr } = await supabase
     .from("events")
@@ -41,6 +42,7 @@ export default async function EventsPage() {
       capacity,
       image_url,
       is_test,
+      published,
       booking_type,
       event_ticket_types (
         price_pence,
@@ -48,6 +50,7 @@ export default async function EventsPage() {
       )
     `)
     .eq("is_test", false)
+    .eq("published", true)
     .order("date", { ascending: true });
 
   if (eventErr) {
@@ -57,7 +60,7 @@ export default async function EventsPage() {
   const allEvents: EventRow[] = events ?? [];
 
   /* -----------------------------
-     FETCH BOOKINGS (SYSTEM SCOPE)
+     FETCH BOOKINGS FOR SEAT COUNTS
   ----------------------------- */
   const supabaseAdmin = createClient(
     process.env.SUPABASE_URL!,
@@ -65,11 +68,15 @@ export default async function EventsPage() {
     { auth: { persistSession: false } }
   );
 
-  const { data: bookings } = await supabaseAdmin
+  const { data: bookings, error: bookingsErr } = await supabaseAdmin
     .from("event_bookings")
     .select("event_id")
     .eq("paid", true)
     .eq("cancelled", false);
+
+  if (bookingsErr) {
+    console.error("❌ Error loading event bookings:", bookingsErr);
+  }
 
   const allBookings: BookingRow[] = bookings ?? [];
 
@@ -85,11 +92,11 @@ export default async function EventsPage() {
   ----------------------------- */
   const eventRows: EventCardType[] = upcomingEvents.map((evt) => {
     const usedSeats = allBookings.filter(
-      (b) => b.event_id === evt.id
+      (booking) => booking.event_id === evt.id
     ).length;
 
     const defaultTicket = evt.event_ticket_types?.find(
-      (t) => t.is_default
+      (ticket) => ticket.is_default
     );
 
     return {
@@ -100,13 +107,12 @@ export default async function EventsPage() {
       imageUrl: evt.image_url,
       remaining: evt.capacity - usedSeats,
 
-      // ✅ HANDLE BOTH TYPES
       defaultPricePence:
         evt.booking_type === "ticketed"
           ? defaultTicket?.price_pence ?? 0
           : null,
 
-      bookingType: evt.booking_type, // ✅ NEW
+      bookingType: evt.booking_type,
     };
   });
 

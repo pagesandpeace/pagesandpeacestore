@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Input } from "@/components/ui/Input";
@@ -26,7 +26,7 @@ type EventItem = {
   image_url?: string | null;
   store_id: string;
   published: boolean;
-  booking_type: "ticketed" | "interest"
+  booking_type: "ticketed" | "interest";
 };
 
 type StoreItem = {
@@ -61,15 +61,54 @@ export default function EditEventForm({
   const [imageUrl, setImageUrl] = useState(event.image_url || "");
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [hasBookings, setHasBookings] = useState<boolean | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   /* ----------------------------------------------
      🔒 STABILISE TICKET EDITOR
   ---------------------------------------------- */
   const ticketEditor = useMemo(() => {
-  return <TicketEditor eventId={event.id} isAdmin />;
-}, [event.id]);
+    return <TicketEditor eventId={event.id} isAdmin />;
+  }, [event.id]);
 
+  /* ----------------------------------------------
+     CHECK BOOKINGS
+  ---------------------------------------------- */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkBookings() {
+      try {
+        const res = await fetch(`/api/admin/events/${event.id}/has-bookings`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        if (!cancelled) {
+          setHasBookings(Boolean(data.hasBookings));
+        }
+      } catch (err) {
+        console.error("Failed to check event bookings:", err);
+      }
+    }
+
+    checkBookings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [event.id]);
+
+  /* ----------------------------------------------
+     IMAGE UPLOAD
+  ---------------------------------------------- */
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -83,6 +122,7 @@ export default function EditEventForm({
     const res = await fetch("/api/admin/events/upload-image", {
       method: "POST",
       body: form,
+      credentials: "include",
     });
 
     const data = await res.json();
@@ -97,6 +137,9 @@ export default function EditEventForm({
     setUploading(false);
   }
 
+  /* ----------------------------------------------
+     SAVE EVENT
+  ---------------------------------------------- */
   async function handleSubmit() {
     setSubmitting(true);
     setErrorMsg(null);
@@ -116,6 +159,10 @@ export default function EditEventForm({
 
     const res = await fetch("/api/admin/events/update", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
       body: JSON.stringify(payload),
     });
 
@@ -129,12 +176,68 @@ export default function EditEventForm({
     router.push(`/admin/events/${event.id}`);
   }
 
+  /* ----------------------------------------------
+     DUPLICATE EVENT
+  ---------------------------------------------- */
+  async function handleDuplicate() {
+    setDuplicating(true);
+    setErrorMsg(null);
+
+    const res = await fetch(`/api/admin/events/${event.id}/duplicate`, {
+      method: "POST",
+      credentials: "include",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setErrorMsg(data.error || "Failed to duplicate event.");
+      setDuplicating(false);
+      return;
+    }
+
+    router.push(`/admin/events/${data.event.id}/edit`);
+  }
+
+  /* ----------------------------------------------
+     DELETE EVENT
+  ---------------------------------------------- */
+  async function handleDelete() {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this event? This cannot be undone."
+    );
+
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setErrorMsg(null);
+
+    const res = await fetch(`/api/admin/events/${event.id}/delete`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setErrorMsg(data.error || "Failed to delete event.");
+      setDeleting(false);
+      return;
+    }
+
+    router.push("/admin/events");
+  }
+
   return (
     <div className="max-w-3xl mx-auto py-10">
-      <h1 className="text-3xl font-bold mb-8">Edit Event</h1>
-<div className="text-sm text-neutral-500">
-  Type: {event.booking_type === "ticketed" ? "Ticketed Event" : "Interest Event"}
-</div>
+      <h1 className="text-3xl font-bold mb-2">Edit Event</h1>
+
+      <div className="mb-8 text-sm text-neutral-500">
+        Type:{" "}
+        {event.booking_type === "ticketed"
+          ? "Ticketed Event"
+          : "Interest Event"}
+      </div>
 
       <div className="space-y-6">
         {errorMsg && <Alert type="error" message={errorMsg} />}
@@ -144,12 +247,14 @@ export default function EditEventForm({
           <label className="block mb-1 text-sm font-medium">Title *</label>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
-        
 
         {/* SUBTITLE */}
         <div>
           <label className="block mb-1 text-sm font-medium">Subtitle</label>
-          <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
+          <Input
+            value={subtitle}
+            onChange={(e) => setSubtitle(e.target.value)}
+          />
         </div>
 
         {/* SHORT DESCRIPTION */}
@@ -239,13 +344,15 @@ export default function EditEventForm({
             onChange={(e) => setCapacity(Number(e.target.value))}
           />
         </div>
-{event.booking_type === "interest" && (
-  <div className="p-4 rounded-lg border bg-neutral-50 text-sm">
-    This is an interest-based event. No tickets or pricing apply.
-  </div>
-)}
+
+        {event.booking_type === "interest" && (
+          <div className="p-4 rounded-lg border bg-neutral-50 text-sm">
+            This is an interest-based event. No tickets or pricing apply.
+          </div>
+        )}
+
         {/* 🎟️ TICKET EDITOR (PRICING LIVES HERE) */}
-  {event.booking_type === "ticketed" && ticketEditor}
+        {event.booking_type === "ticketed" && ticketEditor}
 
         {/* PUBLISHED */}
         <div className="flex items-center gap-3">
@@ -257,10 +364,26 @@ export default function EditEventForm({
           <span className="text-sm">Published</span>
         </div>
 
+        {/* BOOKINGS WARNING */}
+        {hasBookings === true && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            This event has bookings, so it cannot be deleted. Unpublish it
+            instead.
+          </div>
+        )}
+
         {/* ACTIONS */}
-        <div className="flex gap-4 pt-6">
+        <div className="flex flex-wrap gap-4 pt-6">
           <Button disabled={submitting} onClick={handleSubmit}>
             {submitting ? "Saving…" : "Save Changes"}
+          </Button>
+
+          <Button
+            variant="neutral"
+            disabled={duplicating}
+            onClick={handleDuplicate}
+          >
+            {duplicating ? "Duplicating…" : "Duplicate Event"}
           </Button>
 
           <Button
@@ -269,6 +392,15 @@ export default function EditEventForm({
           >
             Cancel
           </Button>
+
+          <button
+            type="button"
+            disabled={deleting || hasBookings === true}
+            onClick={handleDelete}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deleting ? "Deleting…" : "Delete Event"}
+          </button>
         </div>
       </div>
     </div>

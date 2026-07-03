@@ -1,10 +1,27 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
+import { supabaseService } from "@/lib/supabase/service";
 
 export async function POST(req: Request) {
   console.log("📝 [EVENT UPDATE] route hit");
 
   try {
+    /* --------------------------------------------------
+       1. Require admin
+    -------------------------------------------------- */
+    const { error: adminError } = await requireAdmin();
+
+    if (adminError) return adminError;
+
+    /*
+      Use service role AFTER confirming admin.
+      This allows admin updates to unpublished/draft events.
+    */
+    const supabase = supabaseService();
+
+    /* --------------------------------------------------
+       2. Parse payload
+    -------------------------------------------------- */
     const body = await req.json();
     console.log("📝 [EVENT UPDATE] raw payload:", body);
 
@@ -12,12 +29,16 @@ export async function POST(req: Request) {
 
     if (!id) {
       console.error("❌ [EVENT UPDATE] missing event id");
+
       return NextResponse.json(
         { error: "Missing event ID" },
         { status: 400 }
       );
     }
 
+    /*
+      Price is handled by ticket types, not directly on event update.
+    */
     if ("price_pence" in updates) {
       console.warn(
         "⚠️ [EVENT UPDATE] price_pence ignored (tickets own pricing)"
@@ -27,14 +48,15 @@ export async function POST(req: Request) {
 
     const clean = Object.fromEntries(
       Object.entries(updates).filter(
-        ([_, v]) => v !== undefined && v !== null
+        (entry) => entry[1] !== undefined && entry[1] !== null
       )
     );
 
     console.log("📝 [EVENT UPDATE] cleaned payload:", clean);
 
-    const supabase = await supabaseServer();
-
+    /* --------------------------------------------------
+       3. Update event
+    -------------------------------------------------- */
     const { data, error } = await supabase
       .from("events")
       .update(clean)
@@ -61,6 +83,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, event: data });
   } catch (err) {
     console.error("💥 [EVENT UPDATE] crashed:", err);
+
     return NextResponse.json(
       { error: "Server error updating event" },
       { status: 500 }

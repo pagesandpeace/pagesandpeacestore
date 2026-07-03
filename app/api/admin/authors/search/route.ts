@@ -1,30 +1,47 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const q = searchParams.get("q") || "";
+  try {
+    /* --------------------------------------------------
+       1) Require admin
+    -------------------------------------------------- */
+    const { supabase, error: adminError } = await requireAdmin();
 
-  const supabase = await supabaseServer();
+    if (adminError) return adminError;
 
-  const query = supabase
-    .from("authors")
-    .select("id, name")
-    .order("name")
-    .limit(10);
+    /* --------------------------------------------------
+       2) Read search query
+    -------------------------------------------------- */
+    const { searchParams } = new URL(req.url);
+    const q = searchParams.get("q") || "";
 
-  if (q) {
-    query.ilike("name", `%${q}%`);
-  }
+    const query = supabase
+      .from("authors")
+      .select("id, name")
+      .order("name")
+      .limit(10);
 
-  const { data, error } = await query;
+    if (q) {
+      query.ilike("name", `%${q}%`);
+    }
 
-  if (error) {
+    const { data, error } = await query;
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(data);
+  } catch (err) {
+    console.error("🔥 Author search route crashed:", err);
+
     return NextResponse.json(
-      { error: error.message },
+      { error: "Server error" },
       { status: 500 }
     );
   }
-
-  return NextResponse.json(data);
 }

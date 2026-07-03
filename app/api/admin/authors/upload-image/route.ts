@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
+import { requireAdmin } from "@/lib/admin/requireAdmin";
 
 // 🔥 Uses the same Cloudinary env vars as events
 cloudinary.config({
@@ -14,6 +15,16 @@ type CloudinaryUploadResult = {
 
 export async function POST(req: Request) {
   try {
+    /* --------------------------------------------------
+       1) Require admin before upload
+    -------------------------------------------------- */
+    const { error: adminError } = await requireAdmin();
+
+    if (adminError) return adminError;
+
+    /* --------------------------------------------------
+       2) Read uploaded file
+    -------------------------------------------------- */
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
@@ -24,11 +35,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Convert file -> buffer
+    /* --------------------------------------------------
+       3) Convert file -> buffer
+    -------------------------------------------------- */
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Upload to Cloudinary
+    /* --------------------------------------------------
+       4) Upload to Cloudinary
+    -------------------------------------------------- */
     const result = await new Promise<CloudinaryUploadResult>(
       (resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -52,6 +67,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ url: result.secure_url });
   } catch (err) {
     console.error("Author image upload error:", err);
+
     return NextResponse.json(
       { error: "Image upload failed" },
       { status: 500 }

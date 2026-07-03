@@ -1,4 +1,4 @@
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseService } from "@/lib/supabase/service";
 import EditEventForm from "./EditEventForm";
 
 type PageParams = {
@@ -10,19 +10,27 @@ type PageParams = {
 export default async function EditEventPage({ params }: PageParams) {
   const { id } = await params;
 
-  const supabase = await supabaseServer();
+  const supabase = supabaseService();
 
   // Fetch event
-  const { data: event } = await supabase
+  const { data: event, error: eventError } = await supabase
     .from("events")
     .select("*")
     .eq("id", id)
     .single();
 
+  if (eventError) {
+    console.error("❌ [EDIT EVENT PAGE] event fetch error:", eventError);
+  }
+
   // Fetch stores
-  const { data: stores } = await supabase
+  const { data: stores, error: storesError } = await supabase
     .from("stores")
     .select("id, name");
+
+  if (storesError) {
+    console.error("❌ [EDIT EVENT PAGE] stores fetch error:", storesError);
+  }
 
   if (!event) {
     return (
