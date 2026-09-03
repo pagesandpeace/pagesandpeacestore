@@ -1,329 +1,209 @@
-"use client";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { appCoreDb } from "@/lib/app-core/service";
+import { requireAdminUser } from "@/lib/auth/require-admin-user";
 
-import { Input } from "@/components/ui/Input";
-import { TextArea } from "@/components/ui/TextArea";
-import { Button } from "@/components/ui/Button";
-import { Alert } from "@/components/ui/Alert";
+function value(formData: FormData, name: string) {
+  return String(formData.get(name) ?? "").trim();
+}
 
-import Image from "next/image";
+function slugify(input: string) {
+  return input
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 70);
+}
 
-type Store = {
-  id: string;
-  name: string;
-};
+async function uniqueSlug(title: string) {
+  const db = appCoreDb();
+  const base = slugify(title) || "event";
 
-export default function CreateEventPage() {
-  const router = useRouter();
+  for (let suffix = 0; suffix < 100; suffix += 1) {
+    const candidate = suffix === 0 ? base : `${base}-${suffix + 1}`;
+    const { data, error } = await db
+      .from("events")
+      .select("id")
+      .eq("slug", candidate)
+      .maybeSingle();
 
-  /* -------------------------------
-     FORM STATE
-  -------------------------------- */
-  const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [shortDescription, setShortDescription] = useState("");
-  const [description, setDescription] = useState("");
-
-  const [date, setDate] = useState("");
-  const [capacity, setCapacity] = useState(10);
-  const [price, setPrice] = useState(0);
-  const [published, setPublished] = useState(true);
-
-  // ✅ NEW
-  const [bookingType, setBookingType] = useState<"ticketed" | "interest">("ticketed");
-
-  /* -------------------------------
-     STORES
-  -------------------------------- */
-  const [stores, setStores] = useState<Store[]>([]);
-  const [storeId, setStoreId] = useState("");
-  const [loadingStores, setLoadingStores] = useState(true);
-
-  /* -------------------------------
-     IMAGE
-  -------------------------------- */
-  const [imageUrl, setImageUrl] = useState("");
-  const [uploading, setUploading] = useState(false);
-
-  /* -------------------------------
-     UI STATE
-  -------------------------------- */
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  /* -------------------------------
-     LOAD STORES
-  -------------------------------- */
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadStores() {
-      try {
-        const res = await fetch("/api/admin/stores/list", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        });
-
-        if (!res.ok) return;
-
-        const data = await res.json();
-
-        if (!cancelled) {
-          setStores(data);
-          if (data.length === 1) setStoreId(data[0].id);
-        }
-      } finally {
-        if (!cancelled) setLoadingStores(false);
-      }
-    }
-
-    loadStores();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  /* -------------------------------
-     IMAGE UPLOAD
-  -------------------------------- */
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    setErrorMsg(null);
-
-    const form = new FormData();
-    form.append("file", file);
-
-    const res = await fetch("/api/admin/events/upload-image", {
-      method: "POST",
-      body: form,
-      credentials: "include",
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setUploading(false);
-      setErrorMsg(data.error || "Image upload failed.");
-      return;
-    }
-
-    setImageUrl(data.url);
-    setUploading(false);
+    if (error) throw new Error("Unable to validate event slug");
+    if (!data) return candidate;
   }
 
-  /* -------------------------------
-     SUBMIT
-  -------------------------------- */
-  async function handleSubmit() {
-    setSubmitting(true);
-    setErrorMsg(null);
+  throw new Error("Unable to create a unique event link");
+}
 
-    if (!title || !date || !storeId) {
-      setSubmitting(false);
-      setErrorMsg("Please fill all required fields.");
-      return;
-    }
+async function createEvent(formData: FormData) {
+  "use server";
 
-    const isTicketed = bookingType === "ticketed";
+  const admin = await requireAdminUser();
+  if (!admin) redirect("/sign-in?callbackURL=/admin/events/new");
 
-    const payload = {
+  const title = value(formData, "title");
+  const description = value(formData, "description");
+  const startsAtInput = value(formData, "starts_at");
+  const capacity = Number(value(formData, "capacity"));
+  const ticketName = value(formData, "ticket_name");
+  const pricePence = Math.round(Number(value(formData, "ticket_price")) * 100);
+
+  if (
+    !title ||
+    !description ||
+    !startsAtInput ||
+    !Number.isInteger(capacity) ||
+    capacity < 1 ||
+    !ticketName ||
+    !Number.isInteger(pricePence) ||
+    pricePence < 0
+  ) {
+    throw new Error("Please complete the required event and ticket details.");
+  }
+
+  const startsAt = new Date(startsAtInput);
+  if (Number.isNaN(startsAt.getTime())) {
+    throw new Error("Please provide a valid event date and time.");
+  }
+
+  const db = appCoreDb();
+  const slug = await uniqueSlug(title);
+  const status = value(formData, "status") === "published" ? "published" : "draft";
+
+  const { data: event, error: eventError } = await db
+    .from("events")
+    .insert({
+      slug,
       title,
-      subtitle,
-      short_description: shortDescription,
+      subtitle: value(formData, "subtitle") || null,
+      short_description: value(formData, "short_description") || null,
       description,
-      date,
+      starts_at: startsAt.toISOString(),
       capacity,
-      price_pence: isTicketed ? Math.round(price * 100) : 0, // ✅ FIX
-      image_url: imageUrl,
-      store_id: storeId,
-      published,
-      booking_type: bookingType, // ✅ NEW
-    };
+      image_url: value(formData, "image_url") || null,
+      status,
+    })
+    .select("id")
+    .single();
 
-    const res = await fetch("/api/admin/events/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      console.error(await res.text());
-      setSubmitting(false);
-      setErrorMsg("Failed to create event.");
-      return;
-    }
-
-    router.push("/admin/events");
+  if (eventError || !event) {
+    throw new Error("Unable to create the event.");
   }
 
-  /* -------------------------------
-     UI
-  -------------------------------- */
+  const { error: ticketError } = await db.from("ticket_types").insert({
+    event_id: event.id,
+    name: ticketName,
+    description: value(formData, "ticket_description") || null,
+    price_pence: pricePence,
+    capacity: capacity,
+    is_active: true,
+  });
+
+  if (ticketError) {
+    throw new Error("Event was created but its ticket type could not be added.");
+  }
+
+  redirect("/admin/events");
+}
+
+export default async function CreateEventPage() {
+  const admin = await requireAdminUser();
+  if (!admin) redirect("/sign-in?callbackURL=/admin/events/new");
+
   return (
-    <div className="max-w-3xl mx-auto py-10">
-      <h1 className="text-3xl font-bold mb-8">Create New Event</h1>
+    <main className="mx-auto max-w-3xl px-6 py-10">
+      <div className="mb-8">
+        <Link href="/admin/events" className="text-sm underline underline-offset-4">
+          ← Events
+        </Link>
+        <h1 className="mt-4 text-3xl font-bold tracking-tight">Create event</h1>
+        <p className="mt-2 text-foreground/65">
+          This creates a first-class event and ticket type in the new app_core system.
+        </p>
+      </div>
 
-      <div className="space-y-6">
-        {errorMsg && <Alert type="error" message={errorMsg} />}
+      <form action={createEvent} className="space-y-8 rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Event details</h2>
 
-        {/* EVENT TYPE */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">
-            Event Type *
+          <label className="block text-sm font-medium">
+            Title
+            <input name="title" required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
 
-          <select
-            className="border rounded-md px-3 py-2 w-full"
-            value={bookingType}
-            onChange={(e) =>
-              setBookingType(e.target.value as "ticketed" | "interest")
-            }
-          >
-            <option value="ticketed">Ticketed (paid event)</option>
-            <option value="interest">Interest (no payment)</option>
-          </select>
-        </div>
+          <label className="block text-sm font-medium">
+            Subtitle
+            <input name="subtitle" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+          </label>
 
-        {/* TITLE */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">Title *</label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-        </div>
+          <label className="block text-sm font-medium">
+            Short description
+            <textarea name="short_description" rows={2} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+          </label>
 
-        {/* SUBTITLE */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">Subtitle</label>
-          <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
-        </div>
+          <label className="block text-sm font-medium">
+            Full description
+            <textarea name="description" required rows={6} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+          </label>
 
-        {/* SHORT DESCRIPTION */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">Short Description</label>
-          <TextArea
-            rows={3}
-            value={shortDescription}
-            onChange={(e) => setShortDescription(e.target.value)}
-          />
-        </div>
-
-        {/* DESCRIPTION */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">Description</label>
-          <TextArea
-            rows={5}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
-
-        {/* DATE */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">Event Date *</label>
-          <Input
-            type="datetime-local"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </div>
-
-        {/* STORE */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">Store *</label>
-
-          <select
-            className="border rounded-md px-3 py-2 w-full"
-            value={storeId}
-            onChange={(e) => setStoreId(e.target.value)}
-            disabled={loadingStores}
-          >
-            <option value="">
-              {loadingStores ? "Loading stores…" : "Select a store…"}
-            </option>
-
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* IMAGE */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">Event Image</label>
-
-          <input type="file" accept="image/*" onChange={handleUpload} />
-
-          {uploading && <p>Uploading…</p>}
-
-          {imageUrl && (
-            <Image
-              src={imageUrl}
-              alt="Preview"
-              width={300}
-              height={300}
-              className="mt-3 rounded border"
-            />
-          )}
-        </div>
-
-        {/* CAPACITY */}
-        <div>
-          <label className="block mb-1 text-sm font-medium">Capacity</label>
-          <Input
-            type="number"
-            min={1}
-            value={capacity}
-            onChange={(e) => setCapacity(Number(e.target.value))}
-          />
-        </div>
-
-        {/* PRICE (ONLY IF TICKETED) */}
-        {bookingType === "ticketed" && (
-          <div>
-            <label className="block mb-1 text-sm font-medium">
-              Default Ticket Price (£)
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-medium">
+              Date and time
+              <input name="starts_at" type="datetime-local" required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
             </label>
 
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(Number(e.target.value))}
-            />
+            <label className="block text-sm font-medium">
+              Total capacity
+              <input name="capacity" type="number" min="1" defaultValue="20" required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            </label>
           </div>
-        )}
 
-        {/* PUBLISHED */}
-        <div className="flex items-center gap-3">
-          <input
-            type="checkbox"
-            checked={published}
-            onChange={(e) => setPublished(e.target.checked)}
-          />
-          <span className="text-sm">Published</span>
-        </div>
+          <label className="block text-sm font-medium">
+            Image URL
+            <input name="image_url" type="url" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+          </label>
 
-        {/* ACTIONS */}
-        <div className="flex gap-4 pt-6">
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Creating…" : "Create Event"}
-          </Button>
+          <label className="block text-sm font-medium">
+            Visibility
+            <select name="status" defaultValue="draft" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal">
+              <option value="draft">Draft — private</option>
+              <option value="published">Published — public</option>
+            </select>
+          </label>
+        </section>
 
-          <Button variant="neutral" onClick={() => router.push("/admin/events")}>
+        <section className="space-y-4 border-t pt-8">
+          <h2 className="text-lg font-semibold">First ticket type</h2>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-medium">
+              Ticket name
+              <input name="ticket_name" required defaultValue="General admission" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            </label>
+
+            <label className="block text-sm font-medium">
+              Price (£)
+              <input name="ticket_price" type="number" min="0" step="0.01" required defaultValue="0.00" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            </label>
+          </div>
+
+          <label className="block text-sm font-medium">
+            Ticket description
+            <input name="ticket_description" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+          </label>
+        </section>
+
+        <div className="flex items-center gap-4 border-t pt-6">
+          <button type="submit" className="rounded-lg bg-black px-5 py-3 font-semibold text-white">
+            Create event
+          </button>
+          <Link href="/admin/events" className="text-sm underline underline-offset-4">
             Cancel
-          </Button>
+          </Link>
         </div>
-      </div>
-    </div>
+      </form>
+    </main>
   );
 }
