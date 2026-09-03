@@ -7,6 +7,8 @@ import { sendAppCoreBookingConfirmation } from "@/lib/app-core/email";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type Confirmation = { order_id: string; should_send_confirmation: boolean };
+
 function stripeClient() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("Stripe is not configured");
@@ -41,10 +43,11 @@ export async function POST(request: Request) {
     p_payload: { id: event.id, type: event.type, livemode: event.livemode, created: event.created },
   }).single();
 
-  if (error || !data) return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
+  const confirmation = data as Confirmation | null;
+  if (error || !confirmation) return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
 
   try {
-    await sendAppCoreBookingConfirmation(data.order_id);
+    await sendAppCoreBookingConfirmation(confirmation.order_id);
   } catch {
     return NextResponse.json({ error: "Confirmation retry required" }, { status: 500 });
   }
