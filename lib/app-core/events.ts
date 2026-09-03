@@ -22,6 +22,14 @@ export type CoreTicketType = {
   capacity: number | null;
 };
 
+function reportCoreQueryError(operation: string, error: { code?: string; message?: string }) {
+  console.error("app_core query failed", {
+    operation,
+    code: error.code ?? "unknown",
+    message: error.message ?? "unknown",
+  });
+}
+
 async function confirmedSeats(eventId: string) {
   const db = appCoreDb();
   const { data, error } = await db
@@ -30,7 +38,10 @@ async function confirmedSeats(eventId: string) {
     .eq("event_id", eventId)
     .in("status", ["pending", "confirmed"]);
 
-  if (error) throw new Error("Unable to load event availability");
+  if (error) {
+    reportCoreQueryError("confirmedSeats", error);
+    throw new Error("Unable to load event availability");
+  }
   return (data ?? []).reduce((total, booking) => total + booking.quantity, 0);
 }
 
@@ -43,7 +54,10 @@ export async function listPublishedEvents() {
     .gte("starts_at", new Date().toISOString())
     .order("starts_at", { ascending: true });
 
-  if (error) throw new Error("Unable to load events");
+  if (error) {
+    reportCoreQueryError("listPublishedEvents", error);
+    throw new Error("Unable to load events");
+  }
 
   return Promise.all(
     (data ?? []).map(async (event) => ({
@@ -71,7 +85,10 @@ export async function getPublishedEvent(slug: string) {
     .eq("is_active", true)
     .order("price_pence", { ascending: true });
 
-  if (ticketError) throw new Error("Unable to load ticket types");
+  if (ticketError) {
+    reportCoreQueryError("getPublishedEventTicketTypes", ticketError);
+    throw new Error("Unable to load ticket types");
+  }
 
   return {
     ...event,
