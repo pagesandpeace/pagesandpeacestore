@@ -48,7 +48,7 @@ export default function EventCheckoutPage() {
 
   function remove(ticketTypeId: string) {
     const next = items.filter((item) => item.ticketTypeId !== ticketTypeId);
-    setItems(next); window.localStorage.setItem("app_core_event_basket_v1", JSON.stringify(next));
+    setItems(next); window.localStorage.setItem("app_core_event_basket_v1", JSON.stringify(next)); window.dispatchEvent(new Event("app-core-basket-changed"));
     setDetails((current) => current.filter((detail) => detail.id !== ticketTypeId));
   }
 
