@@ -78,6 +78,12 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, []);
 
+  useEffect(() => {
+    const clearForSignOut = () => setCart([]);
+    window.addEventListener("pp:cart-cleared", clearForSignOut);
+    return () => window.removeEventListener("pp:cart-cleared", clearForSignOut);
+  }, []);
+
   /* -----------------------------
      SAVE TO STORAGE
   ----------------------------- */
