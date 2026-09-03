@@ -54,7 +54,8 @@ export async function POST(request: Request) {
 
   const typedReservation = reservation as Reservation | null;
   if (reservationError || !typedReservation) {
-    const message = reservationError?.message === "NOT_ENOUGH_SEATS" ? "NOT_ENOUGH_SEATS" : "CHECKOUT_UNAVAILABLE";
+    console.error("app_core checkout reservation failed", { code: reservationError?.code, message: reservationError?.message });
+    const message = reservationError?.message === "NOT_ENOUGH_SEATS" ? "NOT_ENOUGH_SEATS" : reservationError?.message === "AUTH_REQUIRED" ? "AUTH_REQUIRED" : "CHECKOUT_UNAVAILABLE";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
