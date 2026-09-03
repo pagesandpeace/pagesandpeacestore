@@ -17,6 +17,7 @@ export function EventTicketPicker({ tickets, soldOut }: { tickets: Ticket[]; sol
     const existing = previous.find((item) => item.ticketTypeId === selected);
     next.push({ ticketTypeId: selected, quantity: Math.min(10, (existing?.quantity ?? 0) + quantity) });
     window.localStorage.setItem(key, JSON.stringify(next));
+    window.dispatchEvent(new Event("app-core-basket-changed"));
     setMessage("Added to your basket.");
   }
 
