@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type BasketItem = { ticketTypeId?: unknown; quantity?: unknown };
+type Reservation = { order_id: string; total_pence: number; line_items: { item_name: string; quantity: number; unit_amount_pence: number }[] };
 
 function stripeClient() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -51,7 +52,8 @@ export async function POST(request: Request) {
     p_items: items,
   }).single();
 
-  if (reservationError || !reservation) {
+  const typedReservation = reservation as Reservation | null;
+  if (reservationError || !typedReservation) {
     const message = reservationError?.message === "NOT_ENOUGH_SEATS" ? "NOT_ENOUGH_SEATS" : "CHECKOUT_UNAVAILABLE";
     return NextResponse.json({ error: message }, { status: 400 });
   }
@@ -62,7 +64,7 @@ export async function POST(request: Request) {
       mode: "payment",
       customer_email: user.email ?? undefined,
       client_reference_id: user.id,
-      line_items: reservation.line_items.map((item: { item_name: string; quantity: number; unit_amount_pence: number }) => ({
+      line_items: typedReservation.line_items.map((item: { item_name: string; quantity: number; unit_amount_pence: number }) => ({
         quantity: item.quantity,
         price_data: {
           currency: "gbp",
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
           product_data: { name: item.item_name },
         },
       })),
-      metadata: { app_core_order_id: reservation.order_id },
+      metadata: { app_core_order_id: typedReservation.order_id },
       success_url: `${origin}/events/booking-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/events?checkout=cancelled`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
@@ -81,16 +83,16 @@ export async function POST(request: Request) {
     const { error: updateError } = await db
       .from("orders")
       .update({ stripe_checkout_session_id: checkout.id })
-      .eq("id", reservation.order_id)
+      .eq("id", typedReservation.order_id)
       .eq("status", "pending");
 
     if (updateError) throw new Error("Order could not be linked to checkout");
 
     return NextResponse.json({ url: checkout.url });
   } catch {
-    await db.from("orders").update({ status: "cancelled" }).eq("id", reservation.order_id).eq("status", "pending");
+    await db.from("orders").update({ status: "cancelled" }).eq("id", typedReservation.order_id).eq("status", "pending");
     await db.from("bookings").update({ status: "cancelled" }).in("order_line_id",
-      (await db.from("order_lines").select("id").eq("order_id", reservation.order_id)).data?.map((line) => line.id) ?? []
+      (await db.from("order_lines").select("id").eq("order_id", typedReservation.order_id)).data?.map((line) => line.id) ?? []
     );
     return NextResponse.json({ error: "CHECKOUT_UNAVAILABLE" }, { status: 503 });
   }
