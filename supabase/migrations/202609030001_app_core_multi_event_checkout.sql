@@ -208,6 +208,7 @@ $$;
 revoke all on function app_core.confirm_event_checkout(text, text, text, text, jsonb) from public, anon, authenticated;
 grant execute on function app_core.confirm_event_checkout(text, text, text, text, jsonb) to service_role;
 
+grant select, insert, update on table app_core.events to service_role;
 grant select, insert, update on table app_core.orders to service_role;
 grant select, insert on table app_core.order_lines to service_role;
 grant select, insert, update on table app_core.bookings to service_role;
