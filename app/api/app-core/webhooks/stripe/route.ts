@@ -24,7 +24,8 @@ export async function POST(request: Request) {
   try {
     event = stripeClient().webhooks.constructEvent(await request.text(), signature, secret);
   } catch {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+    console.warn("app_core Stripe webhook rejected: invalid signature");
+    return NextResponse.json({ error: "Invalid webhook" }, { status: 400 });
   }
 
   if (event.type !== "checkout.session.completed") {
@@ -32,7 +33,20 @@ export async function POST(request: Request) {
   }
 
   const session = event.data.object as Stripe.Checkout.Session;
-  if (session.payment_status !== "paid") return NextResponse.json({ received: true });
+  const appCoreOrderId = session.metadata?.app_core_order_id;
+  console.info("app_core Stripe checkout event received", {
+    eventId: event.id,
+    sessionId: session.id,
+    livemode: event.livemode,
+    paid: session.payment_status === "paid",
+    appCoreOrder: Boolean(appCoreOrderId),
+  });
+
+  // Stripe Dashboard's generic test event has no app_core order. Acknowledge it
+  // safely so it verifies the endpoint without touching booking data.
+  if (!appCoreOrderId || session.payment_status !== "paid") {
+    return NextResponse.json({ received: true });
+  }
 
   const db = appCoreDb();
   const { data, error } = await db.rpc("confirm_event_checkout", {
@@ -44,11 +58,15 @@ export async function POST(request: Request) {
   }).single();
 
   const confirmation = data as Confirmation | null;
-  if (error || !confirmation) return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
+  if (error || !confirmation) {
+    console.error("app_core Stripe checkout processing failed", { eventId: event.id, code: error?.code });
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
+  }
 
   try {
     await sendAppCoreBookingConfirmation(confirmation.order_id);
   } catch {
+    console.error("app_core booking confirmation email failed", { orderId: confirmation.order_id });
     return NextResponse.json({ error: "Confirmation retry required" }, { status: 500 });
   }
 
