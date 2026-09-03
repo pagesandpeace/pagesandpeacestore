@@ -13,10 +13,11 @@ export type EventOrder = OrderRow & {
   lines: Array<LineRow & { booking?: BookingRow; event?: EventRow; ticket?: TicketRow }>;
 };
 
-async function loadEventOrders(where: (query: ReturnType<ReturnType<typeof appCoreDb>["from"]>) => unknown) {
+async function loadEventOrders(authUserId?: string) {
   const db = appCoreDb();
-  const base = db.from("orders").select("id, auth_user_id, status, total_pence, currency, created_at").eq("status", "paid").order("created_at", { ascending: false }).limit(100);
-  const { data: orders, error } = await (where(base) as typeof base);
+  let query = db.from("orders").select("id, auth_user_id, status, total_pence, currency, created_at").eq("status", "paid");
+  if (authUserId) query = query.eq("auth_user_id", authUserId);
+  const { data: orders, error } = await query.order("created_at", { ascending: false }).limit(100);
   if (error) throw new Error("Could not load event orders");
 
   const typedOrders = (orders ?? []) as OrderRow[];
@@ -60,10 +61,10 @@ async function loadEventOrders(where: (query: ReturnType<ReturnType<typeof appCo
 }
 
 export async function getCustomerEventOrders(authUserId: string) {
-  const result = await loadEventOrders((query) => query.eq("auth_user_id", authUserId));
+  const result = await loadEventOrders(authUserId);
   return result.orders;
 }
 
 export async function getAdminEventOrders() {
-  return loadEventOrders((query) => query);
+  return loadEventOrders();
 }
