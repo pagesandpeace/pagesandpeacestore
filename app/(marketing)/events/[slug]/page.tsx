@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getPublishedEvent } from "@/lib/app-core/events";
+import { EventTicketPicker } from "@/components/app-core/event-ticket-picker";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -102,27 +103,14 @@ export default async function EventDetailPage({ params }: PageProps) {
             </div>
           </dl>
 
-          <div className="mt-7 border-t pt-6">
-            <h2 className="text-lg font-semibold text-foreground">Tickets</h2>
-            <ul className="mt-4 space-y-4">
-              {event.ticket_types.map((ticket) => (
-                <li key={ticket.id} className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-medium text-foreground">{ticket.name}</p>
-                    {ticket.description ? <p className="mt-1 text-sm text-foreground/65">{ticket.description}</p> : null}
-                  </div>
-                  <span className="shrink-0 font-semibold text-foreground">{formatPrice(ticket.price_pence)}</span>
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              disabled
-              className="mt-7 w-full rounded-lg bg-black px-4 py-3 font-semibold text-white opacity-55"
-            >
-              Booking checkout is being rebuilt
-            </button>
-          </div>
+          <EventTicketPicker
+            tickets={event.ticket_types.map((ticket) => ({
+              id: ticket.id,
+              name: ticket.name,
+              price_pence: ticket.price_pence,
+            }))}
+            soldOut={soldOut}
+          />
         </aside>
       </div>
     </main>
