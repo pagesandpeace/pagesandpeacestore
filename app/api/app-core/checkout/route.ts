@@ -12,7 +12,7 @@ type BasketItem = { ticketTypeId?: unknown; quantity?: unknown };
 function stripeClient() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("Stripe is not configured");
-  return new Stripe(key, { apiVersion: "2026-02-25.clover" });
+  return new Stripe(key, { apiVersion: "2025-11-17.clover" });
 }
 
 function validItems(value: unknown) {
