@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type Order = { status: string; total_pence: number; currency: string };
 
-export default function BookingSuccessPage() {
+function BookingSuccessContent() {
   const searchParams = useSearchParams();
   const [order, setOrder] = useState<Order | null>(null);
   const [message, setMessage] = useState("Confirming your payment…");
@@ -38,4 +38,8 @@ export default function BookingSuccessPage() {
     {order ? <p className="mt-5 text-lg font-semibold">Total paid: £{(order.total_pence / 100).toFixed(2)}</p> : null}
     <Link href="/events" className="mt-8 inline-flex rounded-lg bg-black px-5 py-3 font-semibold text-white">Browse events</Link>
   </main>;
+}
+
+export default function BookingSuccessPage() {
+  return <Suspense fallback={<main className="mx-auto min-h-screen max-w-xl px-6 py-20 text-center">Confirming your payment…</main>}><BookingSuccessContent /></Suspense>;
 }
