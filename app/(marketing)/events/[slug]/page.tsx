@@ -1,332 +1,129 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-import type { Metadata, ResolvingMetadata } from "next";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
-import { supabaseServer } from "@/lib/supabase/server";
-import BookNowButton from "@/components/events/BookNowButton";
-import EventCTAClient from "@/components/events/EventCTAClient";
+import { notFound } from "next/navigation";
 
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { getPublishedEvent } from "@/lib/app-core/events";
 
-interface Event {
-  id: string;
-  slug: string;
-  title: string;
-  subtitle: string | null;
-  short_description: string | null;
-  description: string | null;
-  date: string;
-  capacity: number;
-  price_pence: number;
-  image_url: string | null;
-  booking_type: "ticketed" | "interest";
-}
+type PageProps = {
+  params: Promise<{ slug: string }>;
+};
 
-interface Params {
-  slug: string;
-}
-
-interface EventCategory {
-  id: string;
-  name: string;
-}
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://pagesandpeace.co.uk";
-
-function absoluteUrl(url?: string | null) {
-  if (!url) return null;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `${SITE_URL}${url.startsWith("/") ? url : `/${url}`}`;
-}
-
-function formatEventDate(dateString: string) {
-  return new Date(dateString).toLocaleString("en-GB", {
+function formatEventDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "numeric",
     month: "long",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }).format(new Date(value));
 }
 
-async function getEventBySlug(slug: string): Promise<Event | null> {
-  const supabase = await supabaseServer();
-
-  const { data, error } = await supabase
-    .from("events")
-    .select("*")
-    .eq("slug", slug)
-    .single<Event>();
-
-  if (error || !data) return null;
-  return data;
+function formatPrice(pence: number) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(pence / 100);
 }
 
-export async function generateMetadata(
-  props: { params: Promise<Params> },
-  parent: ResolvingMetadata
-): Promise<Metadata> {
-  const { slug } = await props.params;
-  const event = await getEventBySlug(slug);
-  const parentMetadata = await parent;
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const event = await getPublishedEvent(slug);
 
   if (!event) {
-    return {
-      title: "Event Not Found",
-      description: "This event could not be found.",
-    };
+    return { title: "Event not found" };
   }
 
-  const title = event.title;
-  const description =
-    event.short_description ||
-    event.subtitle ||
-    `Join us for ${event.title} at Pages & Peace.`;
-
-  const pageUrl = `${SITE_URL}/events/${event.slug}`;
-
-  const eventImage = absoluteUrl(event.image_url);
-  const fallbackImages = parentMetadata.openGraph?.images || [];
-  const fallbackTwitterImages = parentMetadata.twitter?.images || [];
-
   return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      url: pageUrl,
-      siteName: "Pages & Peace",
-      type: "article",
-      images: eventImage
-        ? [
-            {
-              url: eventImage,
-              width: 1200,
-              height: 630,
-              alt: event.title,
-            },
-          ]
-        : fallbackImages,
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: eventImage ? [eventImage] : fallbackTwitterImages,
-    },
+    title: event.title,
+    description:
+      event.short_description ??
+      event.subtitle ??
+      `Join us for ${event.title} at Pages & Peace.`,
   };
 }
 
-export default async function EventDetailPage(props: { params: Promise<Params> }) {
-  const { slug } = await props.params;
+export default async function EventDetailPage({ params }: PageProps) {
+  const { slug } = await params;
+  const event = await getPublishedEvent(slug);
 
-  const supabase = await supabaseServer();
+  if (!event) notFound();
 
-  /* ------------------------ EVENT ------------------------ */
-  const { data: event, error: eventErr } = await supabase
-    .from("events")
-    .select("*")
-    .eq("slug", slug)
-    .single<Event>();
+  const soldOut = event.remaining_seats <= 0;
 
-  if (!event || eventErr) {
-    return (
-      <main className="min-h-screen bg-background flex items-center justify-center p-10">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-foreground mb-4">
-            Event Not Found
-          </h1>
-          <Link href="/events" className="text-accent underline">
-            ← Back to Events
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  const eventId = event.id;
-
-  /* ---------------------- USER ---------------------- */
-  const { data: auth } = await supabase.auth.getUser();
-  const user = auth?.user;
-
-  /* ---------------------- ADMIN CLIENT ---------------------- */
-  const supabaseAdmin = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
-
-  /* ---------------------- USER STATE ---------------------- */
-  let isInterested = false;
-  let isAttending = false;
-
-  if (user) {
-    const [{ data: interestRows }, { data: attendanceRows }] =
-      await Promise.all([
-        supabaseAdmin
-          .from("event_interest")
-          .select("id")
-          .eq("event_id", eventId)
-          .eq("user_id", user.id)
-          .limit(1),
-
-        supabaseAdmin
-          .from("event_attendance")
-          .select("id")
-          .eq("event_id", eventId)
-          .eq("user_id", user.id)
-          .limit(1),
-      ]);
-
-    isAttending = !!attendanceRows?.length;
-    isInterested = !!interestRows?.length;
-  }
-
-  /* -------------------- CATEGORIES -------------------- */
-  const { data: categoryLinksRaw } = await supabase
-    .from("event_category_links")
-    .select("category_id")
-    .eq("event_id", eventId);
-
-  const categoryIds = categoryLinksRaw?.map((c) => c.category_id) ?? [];
-
-  let categories: EventCategory[] = [];
-  if (categoryIds.length > 0) {
-    const { data: cats } = await supabase
-      .from("event_categories")
-      .select("*")
-      .in("id", categoryIds);
-
-    categories = cats ?? [];
-  }
-
-  /* ---------------------- CAPACITY ---------------------- */
-  const { data: paidSeats } = await supabaseAdmin
-    .from("event_bookings")
-    .select("id")
-    .eq("event_id", eventId)
-    .eq("paid", true)
-    .eq("cancelled", false);
-
-  const usedSeats = paidSeats?.length ?? 0;
-  const remainingSeats = event.capacity - usedSeats;
-
-  const soldOut =
-    event.booking_type === "ticketed" && remainingSeats <= 0;
-
-  const formattedDate = formatEventDate(event.date);
-
-  /* ---------------------- UI ---------------------- */
   return (
-    <main className="bg-background min-h-screen pb-20 font-[Montserrat]">
-      <div className="relative w-full h-[55vh] min-h-80">
-        <Image
-          src={event.image_url || "/coming_soon.svg"}
-          alt={event.title}
-          fill
-          className="object-cover object-center"
-          priority
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-        <h1 className="absolute bottom-8 left-8 text-white text-4xl font-extrabold drop-shadow-xl tracking-tight">
-          {event.title}
-        </h1>
+    <main className="min-h-screen bg-background pb-20 font-[Montserrat]">
+      <div className="relative min-h-80 h-[48vh] w-full bg-[#e8dfd6]">
+        {event.image_url ? (
+          <Image
+            src={event.image_url}
+            alt={event.title}
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 mx-auto max-w-5xl px-6 pb-10 text-white">
+          <Link href="/events" className="text-sm underline underline-offset-4">
+            ← All events
+          </Link>
+          <h1 className="mt-4 text-4xl font-bold tracking-tight md:text-5xl">
+            {event.title}
+          </h1>
+          {event.subtitle ? <p className="mt-3 text-xl text-white/90">{event.subtitle}</p> : null}
+        </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 mt-12 space-y-10">
-        {event.subtitle && (
-          <p className="text-xl text-foreground/80 italic text-center">
-            {event.subtitle}
-          </p>
-        )}
+      <div className="mx-auto grid max-w-5xl gap-10 px-6 py-12 lg:grid-cols-[1fr_20rem]">
+        <article className="space-y-7 text-lg leading-relaxed text-foreground/85">
+          {event.short_description ? (
+            <p className="text-xl font-medium text-foreground">{event.short_description}</p>
+          ) : null}
+          <div>
+            <h2 className="mb-3 text-2xl font-semibold text-foreground">About this event</h2>
+            <p className="whitespace-pre-line">{event.description}</p>
+          </div>
+        </article>
 
-        {event.short_description && (
-          <p className="text-center text-foreground/80 text-lg leading-relaxed max-w-2xl mx-auto">
-            {event.short_description}
-          </p>
-        )}
+        <aside className="h-fit rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
+          <dl className="space-y-4 text-sm">
+            <div>
+              <dt className="font-semibold text-foreground">Date &amp; time</dt>
+              <dd className="mt-1 text-foreground/70">{formatEventDate(event.starts_at)}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-foreground">Availability</dt>
+              <dd className="mt-1 text-foreground/70">
+                {soldOut ? "Sold out" : `${event.remaining_seats} place${event.remaining_seats === 1 ? "" : "s"} remaining`}
+              </dd>
+            </div>
+          </dl>
 
-        {categories.length > 0 && (
-          <section className="bg-white border border-accent/10 rounded-2xl p-6 shadow-sm">
-            <h2 className="text-lg font-semibold mb-4 text-foreground">
-              Categories
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {categories.map((c) => (
-                <Badge key={c.id} color="yellow">
-                  {c.name}
-                </Badge>
+          <div className="mt-7 border-t pt-6">
+            <h2 className="text-lg font-semibold text-foreground">Tickets</h2>
+            <ul className="mt-4 space-y-4">
+              {event.ticket_types.map((ticket) => (
+                <li key={ticket.id} className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-foreground">{ticket.name}</p>
+                    {ticket.description ? <p className="mt-1 text-sm text-foreground/65">{ticket.description}</p> : null}
+                  </div>
+                  <span className="shrink-0 font-semibold text-foreground">{formatPrice(ticket.price_pence)}</span>
+                </li>
               ))}
-            </div>
-          </section>
-        )}
-
-        <section className="space-y-6 text-foreground/90 text-lg">
-          <div className="border-b border-muted pb-4">
-            <strong>Date & Time</strong>
-            <div>{formattedDate}</div>
+            </ul>
+            <button
+              type="button"
+              disabled
+              className="mt-7 w-full rounded-lg bg-black px-4 py-3 font-semibold text-white opacity-55"
+            >
+              Booking checkout is being rebuilt
+            </button>
           </div>
-
-          <div className="border-b border-muted pb-4">
-            <strong>Availability</strong>
-            <div>
-              {event.booking_type === "ticketed"
-                ? soldOut
-                  ? "Sold Out"
-                  : "Seats available"
-                : "Open for interest"}
-            </div>
-          </div>
-
-          {event.description && (
-            <div>
-              <strong>About This Event</strong>
-              <p className="whitespace-pre-line">{event.description}</p>
-            </div>
-          )}
-        </section>
-
-        <section className="bg-white border rounded-2xl shadow-sm p-8 text-center">
-          <h2 className="text-2xl font-semibold mb-4">
-            {event.booking_type === "ticketed"
-              ? "Book Your Place"
-              : "Register Your Interest"}
-          </h2>
-
-          {event.booking_type === "ticketed" ? (
-            soldOut ? (
-              <Button disabled className="w-full">
-                Sold Out
-              </Button>
-            ) : (
-              <BookNowButton
-                eventId={event.id}
-                slug={event.slug}
-                remainingSeats={remainingSeats}
-              />
-            )
-          ) : (
-            <EventCTAClient
-              eventId={event.id}
-              initialInterested={isInterested}
-              initialAttending={isAttending}
-            />
-          )}
-
-          <Link
-            href="/legal/event-booking-terms"
-            className="mt-4 block text-accent underline text-sm"
-          >
-            Booking Terms & Conditions
-          </Link>
-        </section>
+        </aside>
       </div>
     </main>
   );
