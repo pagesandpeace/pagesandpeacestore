@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
@@ -19,7 +19,15 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const { user, loading } = useUser();
   const { cart } = useCart();
-  const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const [eventQty, setEventQty] = useState(0);
+  useEffect(() => {
+    const refresh = () => {
+      try { setEventQty((JSON.parse(window.localStorage.getItem("app_core_event_basket_v1") ?? "[]") as { quantity: number }[]).reduce((total, item) => total + item.quantity, 0)); } catch { setEventQty(0); }
+    };
+    refresh(); window.addEventListener("app-core-basket-changed", refresh); window.addEventListener("storage", refresh);
+    return () => { window.removeEventListener("app-core-basket-changed", refresh); window.removeEventListener("storage", refresh); };
+  }, []);
+  const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0) + eventQty;
 
   const toggleMenu = () => setOpen(!open);
   const closeMenu = () => setOpen(false);
@@ -55,7 +63,7 @@ export default function Navbar() {
 
         {/* CART + ACCOUNT */}
         <div className="flex items-center gap-4">
-          <Link href="/cart" className="relative">
+          <Link href="/events/checkout" className="relative">
             <span className="text-lg">🛒</span>
             {totalQty > 0 && (
               <span className="absolute -top-1 -right-3 w-5 h-5 text-xs bg-[var(--accent)] rounded-full flex items-center justify-center">
