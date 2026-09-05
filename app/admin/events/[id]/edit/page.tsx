@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { DeleteEventButton } from "@/components/app-core/delete-event-button";
+import { EventImageUpload } from "@/components/app-core/event-image-upload";
 import { appCoreDb } from "@/lib/app-core/service";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
 
@@ -82,7 +83,7 @@ export default async function EditEventPage({ params }: Props) {
 
   return <main className="mx-auto max-w-3xl px-6 py-10">
     <Link href="/admin/events" className="text-sm underline underline-offset-4">← Events</Link>
-    <h1 className="mt-4 text-3xl font-bold tracking-tight">Edit event</h1>
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><h1 className="text-3xl font-bold tracking-tight">Edit event</h1><Link href={`/admin/events/new?duplicate=${event.id}`} className="rounded-lg border border-black/15 px-4 py-2 text-sm font-semibold">Duplicate event</Link></div>
     <form action={save} className="mt-8 space-y-4 rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
       <label className="block text-sm font-medium">Title<input name="title" required defaultValue={event.title} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       <label className="block text-sm font-medium">Event series (optional)<input name="series_name" list="event-series-options" defaultValue={event.series_name ?? ""} placeholder="Choose an existing series or create one" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /><datalist id="event-series-options">{seriesOptions.map((series) => <option key={series} value={series} />)}</datalist><p className="mt-1 text-xs font-normal text-foreground/60">Choose a saved series or type a new one.</p></label>
@@ -93,7 +94,7 @@ export default async function EditEventPage({ params }: Props) {
         <label className="block text-sm font-medium">Date and time<input name="starts_at" type="datetime-local" required defaultValue={dateInput(event.starts_at)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
         <label className="block text-sm font-medium">Total capacity<input name="capacity" type="number" min="0" required defaultValue={event.capacity} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       </div>
-      <label className="block text-sm font-medium">Image URL<input name="image_url" type="url" defaultValue={event.image_url ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
+      <div><p className="text-sm font-medium">Event image</p><div className="mt-1"><EventImageUpload initialUrl={event.image_url} /></div></div>
       <label className="block text-sm font-medium">Visibility<select name="status" defaultValue={event.status} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal"><option value="draft">Draft — private</option><option value="published">Published — public</option><option value="cancelled">Cancelled — not for sale</option><option value="archived">Archived — removed from sale</option></select></label>
       {ticket ? <section className="space-y-4 border-t pt-6"><h2 className="text-lg font-semibold">Ticket type</h2><div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium">Ticket name<input name="ticket_name" required defaultValue={ticket.name} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="block text-sm font-medium">Price (£)<input name="ticket_price" type="number" min="0" step="0.01" required defaultValue={(ticket.price_pence / 100).toFixed(2)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label></div><label className="block text-sm font-medium">Ticket description<input name="ticket_description" defaultValue={ticket.description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="flex items-center gap-2 text-sm font-medium"><input name="ticket_active" type="checkbox" defaultChecked={ticket.is_active} /> Available for sale</label></section> : null}
       <div className="flex gap-4 border-t pt-5"><button type="submit" className="rounded-lg bg-black px-5 py-3 font-semibold text-white">Save changes</button><Link href="/admin/events" className="py-3 text-sm underline">Cancel</Link></div>
