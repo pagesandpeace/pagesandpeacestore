@@ -8,6 +8,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import DashboardKpiCards from "@/components/admin/dashboard/DashboardKpiCards";
 import LowStockWidget from "@/components/admin/dashboard/LowStockWidget";
 import AdminRevenueChart from "@/components/admin/dashboard/AdminRevenueChart";
+import AppCoreEventSalesSummary from "@/components/admin/app-core-event-sales-summary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -162,6 +163,8 @@ export default async function AdminDashboardPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-10 py-10">
       <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+
+      <AppCoreEventSalesSummary />
 
       <DashboardKpiCards
         totals={rpc?.totals ?? {}}
