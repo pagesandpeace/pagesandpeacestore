@@ -16,7 +16,7 @@ export default async function AdminEventsPage() {
   if (!admin) redirect("/sign-in?callbackURL=/admin/events");
 
   const db = appCoreDb();
-  const { data: events, error } = await db.from("events").select("id, title, slug, starts_at, status, capacity, created_at").order("starts_at", { ascending: false });
+  const { data: events, error } = await db.from("events").select("id, title, slug, starts_at, status, capacity, created_at").neq("status", "archived").order("starts_at", { ascending: false });
   if (error) throw new Error("Unable to load events");
 
   const eventIds = (events ?? []).map((event) => event.id);
