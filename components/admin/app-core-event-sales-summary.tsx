@@ -21,7 +21,7 @@ export default async function AppCoreEventSalesSummary() {
 
   const byEvent = new Map<string, { name: string; revenue: number; tickets: number }>();
   for (const line of lines) {
-    const name = line.event?.title ?? line.item_name;
+    const name = line.event?.series_name || line.event?.title || line.item_name;
     const current = byEvent.get(name) ?? { name, revenue: 0, tickets: 0 };
     current.revenue += line.quantity * line.unit_amount_pence;
     current.tickets += line.quantity;
@@ -58,7 +58,7 @@ export default async function AppCoreEventSalesSummary() {
     </section>
 
     <section className="rounded-2xl border bg-white p-6">
-      <div><h2 className="text-xl font-bold">Revenue by event</h2><p className="mt-1 text-sm text-foreground/60">Exact paid revenue and tickets for each event.</p></div>
+      <div><h2 className="text-xl font-bold">Revenue by event type</h2><p className="mt-1 text-sm text-foreground/60">Recurring events are grouped by Event series; other events use their own title.</p></div>
       {events.length ? <div className="mt-6 space-y-4">{events.map((event) => <div key={event.name}><div className="flex justify-between gap-4 text-sm"><span className="font-medium">{event.name} <span className="text-foreground/60">· {event.tickets} ticket{event.tickets === 1 ? "" : "s"}</span></span><span className="font-semibold">{money(event.revenue)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-[#f1ede7]"><div className="h-full rounded-full bg-emerald-700" style={{ width: `${(event.revenue / maxEventRevenue) * 100}%` }} /></div></div>)}</div> : <p className="mt-6 text-sm text-foreground/60">No paid rebuilt event orders yet.</p>}
     </section>
   </div>;
