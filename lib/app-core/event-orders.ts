@@ -5,7 +5,7 @@ import { appCoreDb } from "@/lib/app-core/service";
 type OrderRow = { id: string; auth_user_id: string; status: string; total_pence: number; currency: string; created_at: string };
 type LineRow = { id: string; order_id: string; item_name: string; quantity: number; unit_amount_pence: number; ticket_type_id: string | null };
 type BookingRow = { id: string; order_line_id: string; event_id: string; ticket_type_id: string; auth_user_id: string; quantity: number; status: string; created_at: string };
-type EventRow = { id: string; title: string; starts_at: string };
+type EventRow = { id: string; title: string; series_name: string | null; starts_at: string };
 type TicketRow = { id: string; name: string };
 type CustomerRow = { auth_user_id: string; email: string; display_name: string | null };
 
@@ -38,7 +38,7 @@ async function loadEventOrders(authUserId?: string) {
   const customerIds = [...new Set(typedOrders.map((order) => order.auth_user_id))];
 
   const [{ data: events }, { data: tickets }, { data: customers }] = await Promise.all([
-    eventIds.length ? db.from("events").select("id, title, starts_at").in("id", eventIds) : Promise.resolve({ data: [] }),
+    eventIds.length ? db.from("events").select("id, title, series_name, starts_at").in("id", eventIds) : Promise.resolve({ data: [] }),
     ticketIds.length ? db.from("ticket_types").select("id, name").in("id", ticketIds) : Promise.resolve({ data: [] }),
     customerIds.length ? db.from("customers").select("auth_user_id, email, display_name").in("auth_user_id", customerIds) : Promise.resolve({ data: [] }),
   ]);
