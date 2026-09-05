@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { appCoreDb } from "@/lib/app-core/service";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
+import { CreateEventSubmit } from "@/components/app-core/create-event-submit";
 
 function value(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
@@ -37,11 +38,18 @@ async function uniqueSlug(title: string) {
   throw new Error("Unable to create a unique event link");
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 async function createEvent(formData: FormData) {
   "use server";
 
   const admin = await requireAdminUser();
   if (!admin) redirect("/sign-in?callbackURL=/admin/events/new");
+
+  const eventId = value(formData, "event_id");
+  if (!isUuid(eventId)) throw new Error("Unable to create this event. Please refresh and try again.");
 
   const title = value(formData, "title");
   const description = value(formData, "description");
@@ -69,12 +77,24 @@ async function createEvent(formData: FormData) {
   }
 
   const db = appCoreDb();
+
+  // The browser supplies one stable ID for this form. A repeated submit therefore
+  // resolves to the same event instead of creating a duplicate.
+  const { data: existingEvent, error: existingError } = await db
+    .from("events")
+    .select("id")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (existingError) throw new Error("Unable to check the event request.");
+  if (existingEvent) redirect("/admin/events");
+
   const slug = await uniqueSlug(title);
   const status = value(formData, "status") === "published" ? "published" : "draft";
 
   const { data: event, error: eventError } = await db
     .from("events")
     .insert({
+      id: eventId,
       slug,
       title,
       subtitle: value(formData, "subtitle") || null,
@@ -89,6 +109,12 @@ async function createEvent(formData: FormData) {
     .single();
 
   if (eventError || !event) {
+    // A concurrent double-click can race the first insert. The primary key turns
+    // that second request into a harmless success path.
+    if (eventError?.code === "23505") {
+      const { data: duplicate } = await db.from("events").select("id").eq("id", eventId).maybeSingle();
+      if (duplicate) redirect("/admin/events");
+    }
     throw new Error("Unable to create the event.");
   }
 
@@ -108,6 +134,10 @@ async function createEvent(formData: FormData) {
   redirect("/admin/events");
 }
 
+function EventRequestId() {
+  return <input type="hidden" name="event_id" value={crypto.randomUUID()} />;
+}
+
 export default async function CreateEventPage() {
   const admin = await requireAdminUser();
   if (!admin) redirect("/sign-in?callbackURL=/admin/events/new");
@@ -125,6 +155,7 @@ export default async function CreateEventPage() {
       </div>
 
       <form action={createEvent} className="space-y-8 rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
+        <EventRequestId />
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Event details</h2>
 
@@ -196,9 +227,7 @@ export default async function CreateEventPage() {
         </section>
 
         <div className="flex items-center gap-4 border-t pt-6">
-          <button type="submit" className="rounded-lg bg-black px-5 py-3 font-semibold text-white">
-            Create event
-          </button>
+          <CreateEventSubmit />
           <Link href="/admin/events" className="text-sm underline underline-offset-4">
             Cancel
           </Link>
