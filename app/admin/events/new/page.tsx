@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { appCoreDb } from "@/lib/app-core/service";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
 import { CreateEventSubmit } from "@/components/app-core/create-event-submit";
+import { EventImageUpload } from "@/components/app-core/event-image-upload";
 
 function value(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
@@ -139,12 +140,25 @@ function EventRequestId() {
   return <input type="hidden" name="event_id" value={crypto.randomUUID()} />;
 }
 
-export default async function CreateEventPage() {
+type CreateEventProps = { searchParams: Promise<{ duplicate?: string | string[] }> };
+
+export default async function CreateEventPage({ searchParams }: CreateEventProps) {
   const admin = await requireAdminUser();
   if (!admin) redirect("/sign-in?callbackURL=/admin/events/new");
 
-  const { data: seriesRows, error: seriesError } = await appCoreDb().from("events").select("series_name").not("series_name", "is", null).order("series_name");
-  if (seriesError) throw new Error("Unable to load event series.");
+  const requestedDuplicate = (await searchParams).duplicate;
+  const duplicateId = typeof requestedDuplicate === "string" && isUuid(requestedDuplicate) ? requestedDuplicate : null;
+  const db = appCoreDb();
+  const [{ data: seriesRows, error: seriesError }, { data: sourceEvent, error: sourceError }] = await Promise.all([
+    db.from("events").select("series_name").not("series_name", "is", null).order("series_name"),
+    duplicateId ? db.from("events").select("id,title,series_name,subtitle,short_description,description,starts_at,capacity,image_url").eq("id", duplicateId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (seriesError || sourceError) throw new Error("Unable to load event details.");
+  const { data: sourceTickets, error: sourceTicketError } = sourceEvent
+    ? await db.from("ticket_types").select("name,description,price_pence").eq("event_id", sourceEvent.id).order("created_at", { ascending: true }).limit(1)
+    : { data: [], error: null };
+  if (sourceTicketError) throw new Error("Unable to load event ticket details.");
+  const sourceTicket = sourceTickets?.[0] ?? null;
   const seriesOptions = [...new Set((seriesRows ?? []).map((row) => row.series_name).filter((name): name is string => Boolean(name)))];
 
   return (
@@ -153,10 +167,8 @@ export default async function CreateEventPage() {
         <Link href="/admin/events" className="text-sm underline underline-offset-4">
           ← Events
         </Link>
-        <h1 className="mt-4 text-3xl font-bold tracking-tight">Create event</h1>
-        <p className="mt-2 text-foreground/65">
-          This creates a first-class event and ticket type in the new app_core system.
-        </p>
+        <h1 className="mt-4 text-3xl font-bold tracking-tight">{sourceEvent ? "Duplicate event" : "Create event"}</h1>
+        <p className="mt-2 text-foreground/65">{sourceEvent ? "The original is untouched. Review the copied details, choose a new date, then save this new draft." : "This creates a first-class event and ticket type in the new app_core system."}</p>
       </div>
 
       <form action={createEvent} className="space-y-8 rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
@@ -166,47 +178,44 @@ export default async function CreateEventPage() {
 
           <label className="block text-sm font-medium">
             Title
-            <input name="title" required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            <input name="title" required defaultValue={sourceEvent ? `Copy of ${sourceEvent.title}` : ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
 
           <label className="block text-sm font-medium">
             Event series (optional)
-            <input name="series_name" list="event-series-options" placeholder="Choose an existing series or create one, e.g. Bingo Night" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            <input name="series_name" list="event-series-options" defaultValue={sourceEvent?.series_name ?? ""} placeholder="Choose an existing series or create one, e.g. Bingo Night" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
             <datalist id="event-series-options">{seriesOptions.map((series) => <option key={series} value={series} />)}</datalist>
             <p className="mt-1 text-xs font-normal text-foreground/60">Choose a saved series or type a new one. A new name becomes available on the next event.</p>
           </label>
 
           <label className="block text-sm font-medium">
             Subtitle
-            <input name="subtitle" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            <input name="subtitle" defaultValue={sourceEvent?.subtitle ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
 
           <label className="block text-sm font-medium">
             Short description
-            <textarea name="short_description" rows={2} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            <textarea name="short_description" rows={2} defaultValue={sourceEvent?.short_description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
 
           <label className="block text-sm font-medium">
             Full description
-            <textarea name="description" required rows={6} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            <textarea name="description" required rows={6} defaultValue={sourceEvent?.description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium">
               Date and time
-              <input name="starts_at" type="datetime-local" required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+              <input name="starts_at" type="datetime-local" required defaultValue="" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
             </label>
 
             <label className="block text-sm font-medium">
               Total capacity
-              <input name="capacity" type="number" min="1" defaultValue="20" required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+              <input name="capacity" type="number" min="1" defaultValue={sourceEvent?.capacity ?? 20} required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
             </label>
           </div>
 
-          <label className="block text-sm font-medium">
-            Image URL
-            <input name="image_url" type="url" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
-          </label>
+          <div><p className="text-sm font-medium">Event image</p><div className="mt-1"><EventImageUpload initialUrl={sourceEvent?.image_url} /></div></div>
 
           <label className="block text-sm font-medium">
             Visibility
@@ -223,18 +232,18 @@ export default async function CreateEventPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium">
               Ticket name
-              <input name="ticket_name" required defaultValue="General admission" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+              <input name="ticket_name" required defaultValue={sourceTicket?.name ?? "General admission"} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
             </label>
 
             <label className="block text-sm font-medium">
               Price (£)
-              <input name="ticket_price" type="number" min="0" step="0.01" required defaultValue="0.00" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+              <input name="ticket_price" type="number" min="0" step="0.01" required defaultValue={sourceTicket ? (sourceTicket.price_pence / 100).toFixed(2) : "0.00"} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
             </label>
           </div>
 
           <label className="block text-sm font-medium">
             Ticket description
-            <input name="ticket_description" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            <input name="ticket_description" defaultValue={sourceTicket?.description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
         </section>
 
