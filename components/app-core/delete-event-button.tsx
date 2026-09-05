@@ -2,12 +2,10 @@
 
 import { useFormStatus } from "react-dom";
 
-export function DeleteEventButton({ hasBookings }: { hasBookings: boolean }) {
+export function DeleteEventButton() {
   const { pending } = useFormStatus();
-  const label = hasBookings ? "Archive event" : "Delete event";
-  const warning = hasBookings
-    ? "This event has bookings. It will be archived and removed from public sale, not deleted. Continue?"
-    : "Delete this unused event and its ticket types? This cannot be undone.";
+  const label = "Archive event";
+  const warning = "Archive this event and remove it from public sale? Booking history and data will be preserved.";
 
   return (
     <button
