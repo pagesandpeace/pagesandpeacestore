@@ -29,7 +29,7 @@ export default async function DashboardPage() {
       <section className="mb-10 rounded-2xl border border-border bg-white p-6">
         <div className="flex items-center justify-between gap-4">
           <div><h2 className="text-xl font-semibold">Upcoming events</h2><p className="mt-1 text-sm text-foreground/70">Your confirmed Pages & Peace bookings.</p></div>
-          <Link href="/dashboard/orders" className="rounded-full border-2 border-accent px-4 py-2 text-sm font-semibold text-accent">View all events</Link>
+          <Link href="/dashboard/events" className="rounded-full border-2 border-accent px-4 py-2 text-sm font-semibold text-accent">View all events</Link>
         </div>
         {upcoming.length ? <div className="mt-5 space-y-3">{upcoming.slice(0, 3).map((line) => <article key={line.id} className="rounded-xl bg-muted/40 p-4"><p className="font-semibold">{line.event!.title}</p><p className="mt-1 text-sm text-foreground/70">{new Date(line.event!.starts_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p><p className="mt-1 text-sm text-foreground/70">{line.ticket?.name ?? "Ticket"} × {line.quantity}</p></article>)}</div> : <p className="mt-5 text-sm text-foreground/70">You have no upcoming bookings yet. <Link href="/events" className="underline">Browse events</Link>.</p>}
       </section>
