@@ -14,12 +14,14 @@ export default async function EditEventPage({ params }: Props) {
   if (!admin) redirect(`/sign-in?callbackURL=/admin/events/${id}/edit`);
 
   const db = appCoreDb();
-  const [{ data: event, error }, { count: bookingCount, error: countError }] = await Promise.all([
+  const [{ data: event, error }, { data: tickets, error: ticketError }, { count: bookingCount, error: countError }] = await Promise.all([
     db.from("events").select("id,title,subtitle,short_description,description,starts_at,capacity,image_url,status").eq("id", id).maybeSingle(),
+    db.from("ticket_types").select("id,name,description,price_pence,is_active").eq("event_id", id).order("created_at", { ascending: true }).limit(1),
     db.from("bookings").select("id", { count: "exact", head: true }).eq("event_id", id),
   ]);
-  if (error || countError) throw new Error("Unable to load this event.");
+  if (error || ticketError || countError) throw new Error("Unable to load this event.");
   if (!event) notFound();
+  const ticket = tickets?.[0] ?? null;
   const hasBookings = (bookingCount ?? 0) > 0;
 
   async function save(formData: FormData) {
@@ -46,6 +48,20 @@ export default async function EditEventPage({ params }: Props) {
       image_url: read(formData, "image_url") || null,
     }).eq("id", id);
     if (updateError) throw new Error("Unable to save this event.");
+
+    if (ticket) {
+      const ticketName = read(formData, "ticket_name");
+      const pricePence = Math.round(Number(read(formData, "ticket_price")) * 100);
+      if (!ticketName || !Number.isInteger(pricePence) || pricePence < 0) throw new Error("Please provide a valid ticket name and price.");
+      const { error: ticketUpdateError } = await service.from("ticket_types").update({
+        name: ticketName,
+        description: read(formData, "ticket_description") || null,
+        price_pence: pricePence,
+        capacity,
+        is_active: read(formData, "ticket_active") === "on",
+      }).eq("id", ticket.id);
+      if (ticketUpdateError) throw new Error("Event saved but its ticket type could not be updated.");
+    }
     redirect("/admin/events");
   }
 
@@ -81,6 +97,7 @@ export default async function EditEventPage({ params }: Props) {
       </div>
       <label className="block text-sm font-medium">Image URL<input name="image_url" type="url" defaultValue={event.image_url ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       <label className="block text-sm font-medium">Visibility<select name="status" defaultValue={event.status} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal"><option value="draft">Draft — private</option><option value="published">Published — public</option><option value="cancelled">Cancelled — not for sale</option><option value="archived">Archived — removed from sale</option></select></label>
+      {ticket ? <section className="space-y-4 border-t pt-6"><h2 className="text-lg font-semibold">Ticket type</h2><div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium">Ticket name<input name="ticket_name" required defaultValue={ticket.name} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="block text-sm font-medium">Price (£)<input name="ticket_price" type="number" min="0" step="0.01" required defaultValue={(ticket.price_pence / 100).toFixed(2)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label></div><label className="block text-sm font-medium">Ticket description<input name="ticket_description" defaultValue={ticket.description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="flex items-center gap-2 text-sm font-medium"><input name="ticket_active" type="checkbox" defaultChecked={ticket.is_active} /> Available for sale</label></section> : null}
       <div className="flex gap-4 border-t pt-5"><button type="submit" className="rounded-lg bg-black px-5 py-3 font-semibold text-white">Save changes</button><Link href="/admin/events" className="py-3 text-sm underline">Cancel</Link></div>
     </form>
     <form action={remove} className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6">
