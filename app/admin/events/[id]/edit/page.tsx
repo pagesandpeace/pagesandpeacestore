@@ -21,6 +21,9 @@ export default async function EditEventPage({ params }: Props) {
   ]);
   if (error || ticketError || countError) throw new Error("Unable to load this event.");
   if (!event) notFound();
+  const { data: seriesRows, error: seriesError } = await db.from("events").select("series_name").not("series_name", "is", null).order("series_name");
+  if (seriesError) throw new Error("Unable to load event series.");
+  const seriesOptions = [...new Set((seriesRows ?? []).map((row) => row.series_name).filter((name): name is string => Boolean(name)))];
   const ticket = tickets?.[0] ?? null;
   const hasBookings = (bookingCount ?? 0) > 0;
 
