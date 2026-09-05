@@ -143,6 +143,10 @@ export default async function CreateEventPage() {
   const admin = await requireAdminUser();
   if (!admin) redirect("/sign-in?callbackURL=/admin/events/new");
 
+  const { data: seriesRows, error: seriesError } = await appCoreDb().from("events").select("series_name").not("series_name", "is", null).order("series_name");
+  if (seriesError) throw new Error("Unable to load event series.");
+  const seriesOptions = [...new Set((seriesRows ?? []).map((row) => row.series_name).filter((name): name is string => Boolean(name)))];
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <div className="mb-8">
@@ -167,7 +171,9 @@ export default async function CreateEventPage() {
 
           <label className="block text-sm font-medium">
             Event series (optional)
-            <input name="series_name" list="event-series-options" placeholder="Choose an existing series or create one, e.g. Bingo Night" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />\n            <datalist id="event-series-options">{seriesOptions.map((series) => <option key={series} value={series} />)}</datalist>\n            <p className="mt-1 text-xs font-normal text-foreground/60">Choose a saved series or type a new one. A new name becomes available on the next event.</p>
+            <input name="series_name" list="event-series-options" placeholder="Choose an existing series or create one, e.g. Bingo Night" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            <datalist id="event-series-options">{seriesOptions.map((series) => <option key={series} value={series} />)}</datalist>
+            <p className="mt-1 text-xs font-normal text-foreground/60">Choose a saved series or type a new one. A new name becomes available on the next event.</p>
           </label>
 
           <label className="block text-sm font-medium">
