@@ -15,7 +15,7 @@ export default async function EditEventPage({ params }: Props) {
 
   const db = appCoreDb();
   const [{ data: event, error }, { data: tickets, error: ticketError }, { count: bookingCount, error: countError }] = await Promise.all([
-    db.from("events").select("id,title,subtitle,short_description,description,starts_at,capacity,image_url,status").eq("id", id).maybeSingle(),
+    db.from("events").select("id,title,series_name,subtitle,short_description,description,starts_at,capacity,image_url,status").eq("id", id).maybeSingle(),
     db.from("ticket_types").select("id,name,description,price_pence,is_active").eq("event_id", id).order("created_at", { ascending: true }).limit(1),
     db.from("bookings").select("id", { count: "exact", head: true }).eq("event_id", id),
   ]);
@@ -43,6 +43,7 @@ export default async function EditEventPage({ params }: Props) {
 
     const { error: updateError } = await service.from("events").update({
       title, description, capacity, status, starts_at: date.toISOString(),
+      series_name: read(formData, "series_name") || null,
       subtitle: read(formData, "subtitle") || null,
       short_description: read(formData, "short_description") || null,
       image_url: read(formData, "image_url") || null,
@@ -81,6 +82,7 @@ export default async function EditEventPage({ params }: Props) {
     <h1 className="mt-4 text-3xl font-bold tracking-tight">Edit event</h1>
     <form action={save} className="mt-8 space-y-4 rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
       <label className="block text-sm font-medium">Title<input name="title" required defaultValue={event.title} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
+      <label className="block text-sm font-medium">Event series (optional)<input name="series_name" defaultValue={event.series_name ?? ""} placeholder="e.g. Bingo Night" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       <label className="block text-sm font-medium">Subtitle<input name="subtitle" defaultValue={event.subtitle ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       <label className="block text-sm font-medium">Short description<textarea name="short_description" rows={2} defaultValue={event.short_description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       <label className="block text-sm font-medium">Full description<textarea name="description" required rows={6} defaultValue={event.description} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
