@@ -71,15 +71,8 @@ export default async function EditEventPage({ params }: Props) {
     const service = appCoreDb();
     const { count, error: bookingError } = await service.from("bookings").select("id", { count: "exact", head: true }).eq("event_id", id);
     if (bookingError) throw new Error("Unable to check event history.");
-    if ((count ?? 0) > 0) {
-      const { error: archiveError } = await service.from("events").update({ status: "archived" }).eq("id", id);
-      if (archiveError) throw new Error("Unable to archive this event.");
-    } else {
-      const { error: ticketError } = await service.from("ticket_types").delete().eq("event_id", id);
-      if (ticketError) throw new Error("Unable to remove ticket types.");
-      const { error: deleteError } = await service.from("events").delete().eq("id", id);
-      if (deleteError) throw new Error("Unable to delete this event.");
-    }
+    const { error: archiveError } = await service.from("events").update({ status: "archived" }).eq("id", id);
+    if (archiveError) throw new Error("Unable to archive this event.");
     redirect("/admin/events");
   }
 
@@ -101,9 +94,9 @@ export default async function EditEventPage({ params }: Props) {
       <div className="flex gap-4 border-t pt-5"><button type="submit" className="rounded-lg bg-black px-5 py-3 font-semibold text-white">Save changes</button><Link href="/admin/events" className="py-3 text-sm underline">Cancel</Link></div>
     </form>
     <form action={remove} className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6">
-      <h2 className="font-semibold text-red-900">{hasBookings ? "Archive event" : "Delete unused event"}</h2>
-      <p className="mt-1 text-sm text-red-800">{hasBookings ? "Because bookings exist, this event will be safely archived—not deleted." : "This permanently removes an event with no booking history."}</p>
-      <div className="mt-4"><DeleteEventButton hasBookings={hasBookings} /></div>
+      <h2 className="font-semibold text-red-900">Archive event</h2>
+      <p className="mt-1 text-sm text-red-800">Archiving removes this event from public sale while preserving all history and avoids permanent data loss.</p>
+      <div className="mt-4"><DeleteEventButton /></div>
     </form>
   </main>;
 }
