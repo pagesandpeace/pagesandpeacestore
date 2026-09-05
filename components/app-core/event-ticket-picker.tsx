@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 type Ticket = { id: string; name: string; price_pence: number };
@@ -37,8 +38,7 @@ export function EventTicketPicker({ tickets, soldOut }: { tickets: Ticket[]; sol
       <button type="button" onClick={addToBasket} disabled={soldOut || !selected} className="mt-4 w-full rounded-lg bg-black px-4 py-3 font-semibold text-white disabled:opacity-50">
         {soldOut ? "Sold out" : "Add to basket"}
       </button>
-      <a href="/events/checkout" className="mt-3 block text-center text-sm underline underline-offset-4">View basket and checkout</a>
-      {message ? <p className="mt-3 text-sm text-green-700" role="status">{message}</p> : null}
+      {message ? <div className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900" role="status"><p className="font-medium">{message}</p><div className="mt-3 flex flex-wrap gap-3"><Link href="/events" className="rounded-md border border-emerald-700 px-3 py-2 font-semibold">Continue browsing events</Link><Link href="/events/checkout" className="rounded-md bg-emerald-800 px-3 py-2 font-semibold text-white">View basket &amp; checkout</Link></div></div> : <Link href="/events/checkout" className="mt-3 block text-center text-sm underline underline-offset-4">View basket and checkout</Link>}
     </div>
   );
 }
