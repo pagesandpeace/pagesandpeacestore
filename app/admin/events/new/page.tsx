@@ -97,6 +97,7 @@ async function createEvent(formData: FormData) {
       id: eventId,
       slug,
       title,
+      series_name: value(formData, "series_name") || null,
       subtitle: value(formData, "subtitle") || null,
       short_description: value(formData, "short_description") || null,
       description,
@@ -162,6 +163,11 @@ export default async function CreateEventPage() {
           <label className="block text-sm font-medium">
             Title
             <input name="title" required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+          </label>
+
+          <label className="block text-sm font-medium">
+            Event series (optional)
+            <input name="series_name" placeholder="e.g. Bingo Night" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
 
           <label className="block text-sm font-medium">
