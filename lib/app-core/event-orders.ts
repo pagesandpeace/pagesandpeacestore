@@ -17,7 +17,7 @@ async function loadEventOrders(authUserId?: string) {
   const db = appCoreDb();
   let query = db.from("orders").select("id, auth_user_id, status, total_pence, currency, created_at").eq("status", "paid");
   if (authUserId) query = query.eq("auth_user_id", authUserId);
-  const { data: orders, error } = await query.order("created_at", { ascending: false }).limit(100);
+  const { data: orders, error } = await query.order("created_at", { ascending: false }).limit(1000);
   if (error) throw new Error("Could not load event orders");
 
   const typedOrders = (orders ?? []) as OrderRow[];
