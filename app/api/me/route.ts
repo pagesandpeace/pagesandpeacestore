@@ -10,9 +10,6 @@ export async function GET() {
   try {
     const supabase = await supabaseServer();
 
-    /* -------------------------
-       AUTH
-    ------------------------- */
     const {
       data: { user },
       error: authErr,
@@ -29,14 +26,11 @@ export async function GET() {
       return NextResponse.json(null, { status: 401 });
     }
 
-    /* -------------------------
-       USERS TABLE (AUTHORITATIVE)
-    ------------------------- */
     const { data: profile, error: profileErr } = await supabase
       .from("users")
-      .select("id, email, name, image, role")
+      .select("id, email, name, image, role, marketing_consent, beehiiv_subscribed")
       .eq("auth_user_id", user.id)
-      .single(); // ✅ profile MUST exist
+      .single();
 
     console.log("📦 users lookup:", {
       profile,
@@ -44,7 +38,6 @@ export async function GET() {
     });
 
     if (profileErr || !profile) {
-      // This should never happen now
       console.error("❌ Authenticated user without profile", {
         userId: user.id,
         profileErr,
@@ -61,6 +54,8 @@ export async function GET() {
       name: profile.name ?? "",
       image: profile.image ?? null,
       role: profile.role ?? "customer",
+      marketingConsent: profile.marketing_consent === true,
+      beehiivSubscribed: profile.beehiiv_subscribed === true,
     });
   } catch (err) {
     console.error("🔥 /api/me HARD CRASH:", err);
