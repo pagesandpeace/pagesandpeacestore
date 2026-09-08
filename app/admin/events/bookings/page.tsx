@@ -13,7 +13,7 @@ export default async function AdminEventBookingsPage() {
 
   const { orders, customers } = await getAdminEventOrders();
   const groupedOrders = orders.map((order) => {
-    const customer = customers.get(order.auth_user_id);
+    const customer = order.auth_user_id ? customers.get(order.auth_user_id) : undefined;
     return {
       id: order.id,
       created_at: order.created_at,
