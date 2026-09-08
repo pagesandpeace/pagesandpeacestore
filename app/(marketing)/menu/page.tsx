@@ -79,6 +79,8 @@ export default async function MenuPage() {
     ].includes(c.name)
   );
 
+  const snacks = categoriesWithItems.filter((c) => c.name === "Snacks");
+
   return (
     <main className="min-h-screen bg-[#FAF6F1] text-[#111] font-[Montserrat] px-6 py-12">
       <section className="flex flex-col items-center mb-10 text-center">
@@ -99,7 +101,7 @@ export default async function MenuPage() {
         </p>
       </section>
 
-      <Tabs drinks={drinks} food={food} />
+      <Tabs drinks={drinks} food={food} snacks={snacks} />
 
       <div className="text-center mt-16">
         <Link
