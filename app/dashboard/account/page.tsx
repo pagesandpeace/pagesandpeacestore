@@ -12,17 +12,13 @@ export default function AccountPage() {
 
   const [avatarPreview, setAvatarPreview] = useState<string>("");
   const [editingName, setEditingName] = useState<string>("");
-
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [marketingBusy, setMarketingBusy] = useState(false);
+  const [marketingMessage, setMarketingMessage] = useState("");
 
-  /* --------------------------------------------------------
-     AVATAR UPLOAD
-  --------------------------------------------------------- */
-  async function handleAvatarChange(
-    e: React.ChangeEvent<HTMLInputElement>
-  ) {
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -47,15 +43,10 @@ export default function AccountPage() {
 
     setAvatarPreview(data.imageUrl);
     setSaveMessage("Saved ✓");
-
     window.dispatchEvent(new Event("pp:user-should-refresh"));
-
     setTimeout(() => setSaveMessage(""), 2500);
   }
 
-  /* --------------------------------------------------------
-     SAVE NAME
-  --------------------------------------------------------- */
   async function saveName() {
     const nameToSave = editingName.trim() || user?.name;
     if (!nameToSave) return;
@@ -78,13 +69,41 @@ export default function AccountPage() {
 
     setSaveMessage("Saved ✓");
     window.dispatchEvent(new Event("pp:user-should-refresh"));
-
     setTimeout(() => setSaveMessage(""), 2500);
   }
 
-  /* --------------------------------------------------------
-     RENDER
-  --------------------------------------------------------- */
+  async function subscribeToMarketing() {
+    if (marketingBusy) return;
+    setMarketingBusy(true);
+    setMarketingMessage("");
+
+    try {
+      const res = await fetch("/api/user/marketing-consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent: true }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        setMarketingMessage("We could not save your choice. Please try again.");
+        return;
+      }
+
+      if (data.subscribed === true) {
+        setMarketingMessage("You're signed up for Pages & Peace email updates ✓");
+      } else {
+        setMarketingMessage("Your consent was saved, but we could not complete the email subscription just now. Please try again later.");
+      }
+
+      window.dispatchEvent(new Event("pp:user-should-refresh"));
+    } catch {
+      setMarketingMessage("We could not save your choice. Please try again.");
+    } finally {
+      setMarketingBusy(false);
+    }
+  }
+
   if (!user) {
     return (
       <main className="min-h-screen bg-[#FAF6F1] flex items-center justify-center">
@@ -93,43 +112,25 @@ export default function AccountPage() {
     );
   }
 
-  const displayAvatar =
-    avatarPreview || user.image || "/user_avatar_placeholder.svg";
-
-  const displayName =
-    editingName || user.name || "";
+  const displayAvatar = avatarPreview || user.image || "/user_avatar_placeholder.svg";
+  const displayName = editingName || user.name || "";
+  const subscribedToMarketing = user.marketingConsent === true && user.beehiivSubscribed === true;
 
   return (
     <main className="min-h-screen bg-[#FAF6F1] px-6 py-10 md:px-10 font-[Montserrat]">
       <div className="mx-auto max-w-4xl">
-        <h1 className="text-3xl font-semibold tracking-wide">
-          My Account
-        </h1>
-        <p className="text-[#555] mt-1 mb-6">
-          Manage your profile.
-        </p>
+        <h1 className="text-3xl font-semibold tracking-wide">My Account</h1>
+        <p className="text-[#555] mt-1 mb-6">Manage your profile.</p>
 
-        <div
-          key={user.id}
-          className="grid gap-6 md:grid-cols-2"
-        >
-          {/* Avatar Card */}
+        <div key={user.id} className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>
-              <h2 className="text-lg font-semibold">
-                Profile Photo
-              </h2>
+              <h2 className="text-lg font-semibold">Profile Photo</h2>
             </CardHeader>
             <CardBody>
               <div className="flex items-center gap-4">
                 <div className="relative w-20 h-20 rounded-full overflow-hidden border bg-white">
-                  <Image
-                    src={displayAvatar}
-                    alt="Avatar"
-                    fill
-                    className="object-cover"
-                  />
-
+                  <Image src={displayAvatar} alt="Avatar" fill className="object-cover" />
                   {avatarUploading && (
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
                       <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -138,65 +139,79 @@ export default function AccountPage() {
                 </div>
 
                 <label className="cursor-pointer text-sm text-[var(--accent)] underline">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAvatarChange}
-                  />
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
                   Change photo
                 </label>
               </div>
 
-              {saveMessage && (
-                <p className="mt-3 text-sm text-[#2f7c3e]">
-                  {saveMessage}
-                </p>
-              )}
+              {saveMessage && <p className="mt-3 text-sm text-[#2f7c3e]">{saveMessage}</p>}
             </CardBody>
           </Card>
 
-          {/* Profile Info */}
           <Card>
             <CardHeader>
-              <h2 className="text-lg font-semibold">
-                Profile Info
-              </h2>
+              <h2 className="text-lg font-semibold">Profile Info</h2>
             </CardHeader>
             <CardBody className="space-y-4">
               <div>
-                <p className="text-xs uppercase tracking-wide text-[#777]">
-                  Name
-                </p>
-
-                <Input
-                  value={displayName}
-                  onChange={(e) =>
-                    setEditingName(e.target.value)
-                  }
-                  className="mt-1"
-                />
-
-                <Button
-                  className="mt-2"
-                  size="sm"
-                  onClick={saveName}
-                  disabled={savingName}
-                >
+                <p className="text-xs uppercase tracking-wide text-[#777]">Name</p>
+                <Input value={displayName} onChange={(e) => setEditingName(e.target.value)} className="mt-1" />
+                <Button className="mt-2" size="sm" onClick={saveName} disabled={savingName}>
                   {savingName ? "Saving…" : "Save Name"}
                 </Button>
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-wide text-[#777]">
-                  Email
-                </p>
-                <p className="text-sm break-all">
-                  {user.email}
-                </p>
+                <p className="text-xs uppercase tracking-wide text-[#777]">Email</p>
+                <p className="text-sm break-all">{user.email}</p>
               </div>
             </CardBody>
           </Card>
+
+          <div className="md:col-span-2">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-[#777]">Email updates</p>
+                    <h2 className="text-lg font-semibold">Pages &amp; Peace marketing emails</h2>
+                  </div>
+
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+                      subscribedToMarketing
+                        ? "bg-[#e8f5ea] text-[#2f7c3e]"
+                        : "bg-[#f0ece6] text-[#6b665d]"
+                    }`}
+                  >
+                    {subscribedToMarketing ? "✓ Subscribed" : "Not subscribed"}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardBody>
+                {subscribedToMarketing ? (
+                  <p className="text-sm leading-6 text-[#555]">
+                    You are signed up to receive Pages &amp; Peace event, book and café updates. To unsubscribe, use the unsubscribe link at the bottom of any marketing email you receive from us.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm leading-6 text-[#555]">
+                      You are not currently signed up to receive Pages &amp; Peace marketing emails. You can opt in at any time to receive event news, book recommendations and café updates.
+                    </p>
+                    <Button onClick={subscribeToMarketing} disabled={marketingBusy}>
+                      {marketingBusy ? "Signing you up…" : "Sign me up"}
+                    </Button>
+                  </div>
+                )}
+
+                {marketingMessage ? (
+                  <p className={`mt-3 text-sm ${marketingMessage.includes("✓") ? "text-[#2f7c3e]" : "text-[#8a5b24]"}`} role="status">
+                    {marketingMessage}
+                  </p>
+                ) : null}
+              </CardBody>
+            </Card>
+          </div>
         </div>
       </div>
     </main>

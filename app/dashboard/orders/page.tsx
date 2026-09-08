@@ -1,287 +1,74 @@
-import { supabaseServer } from "@/lib/supabase/server";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-type OrderItemRow = {
-  id: string;
-  name: string | null;
-  kind: string | null;
-};
+import { getCustomerEventOrders } from "@/lib/app-core/event-orders";
+import { supabaseAuthServer } from "@/lib/supabase/server";
 
-type OrderRow = {
-  id: string;
-  total: number | string;
-  status: string;
-  created_at: string;
-  order_items?: OrderItemRow[] | null;
-};
+export const dynamic = "force-dynamic";
 
-function shortId(id: string, n = 10) {
-  return id?.slice(0, n) ?? "";
-}
-
-function getOrderTitle(
-  orderItems?: { name: string | null; kind: string | null }[] | null
-) {
-  if (!orderItems || orderItems.length === 0) {
-    return { title: "Order item", meta: "" };
-  }
-
-  const firstNamed = orderItems.find((item) => item.name?.trim());
-  const first = firstNamed ?? orderItems[0];
-
-  const title = first?.name?.trim() || "Order item";
-  const extraCount = orderItems.length - 1;
-  const kind = first?.kind
-    ? first.kind[0].toUpperCase() + first.kind.slice(1)
-    : "";
-
-  let meta = kind;
-
-  if (extraCount > 0) {
-    meta = meta ? `${meta} • +${extraCount} more` : `+${extraCount} more`;
-  }
-
-  return { title, meta };
-}
-
-function getStatusClasses(status: string) {
-  if (status === "completed") {
-    return "bg-green-100 text-green-800";
-  }
-
-  if (status === "partially_refunded") {
-    return "bg-orange-100 text-orange-800";
-  }
-
-  if (status === "refunded") {
-    return "bg-red-100 text-red-800";
-  }
-
-  return "bg-gray-200 text-gray-700";
+function money(pence: number) {
+  return `£${(pence / 100).toFixed(2)}`;
 }
 
 export default async function OrdersPage() {
-  const supabase = await supabaseServer();
+  const auth = await supabaseAuthServer();
+  const { data: { user } } = await auth.auth.getUser();
+  if (!user) redirect("/sign-in");
 
-  const { data: auth } = await supabase.auth.getUser();
-  const user = auth?.user;
+  const orders = await getCustomerEventOrders(user.id);
 
-  if (!user) {
-    return (
-      <main className="p-8">
-        <p className="opacity-60 text-sm">
-          Please sign in to view your orders.
-        </p>
-      </main>
-    );
-  }
+  return <main className="min-h-screen bg-[#FAF6F1] px-6 py-12 text-[#111]">
+    <div className="mx-auto max-w-4xl">
+      <Link href="/dashboard" className="text-sm underline">← Dashboard</Link>
+      <h1 className="mt-4 text-3xl font-semibold">My event orders</h1>
+      <p className="mt-1 text-sm text-neutral-600">Confirmed event bookings, payments and refunds.</p>
+      <div className="mt-8 space-y-4">
+        {orders.length ? orders.map((order) => {
+          const originalPayment = order.lines.reduce((total, line) => total + Number(line.quantity) * Number(line.unit_amount_pence), 0);
+          const refunded = order.lines.reduce((total, line) => total + Number(line.refunded_amount_pence ?? 0), 0);
+          const netPaid = Math.max(0, originalPayment - refunded);
+          const fullyRefunded = originalPayment > 0 && refunded >= originalPayment;
+          const badge = fullyRefunded
+            ? { label: "Fully refunded", className: "bg-red-100 text-red-800" }
+            : refunded > 0
+              ? { label: "Partially refunded", className: "bg-amber-100 text-amber-800" }
+              : { label: "Paid", className: "bg-green-100 text-green-800" };
 
-  const { data, error } = await supabase
-    .from("orders")
-    .select(
-      `
-        id,
-        total,
-        status,
-        created_at,
-        order_items (
-          id,
-          name,
-          kind
-        )
-      `
-    )
-    .eq("user_id_uuid", user.id)
-    .order("created_at", { ascending: false });
+          return <article key={order.id} className="rounded-2xl border bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><p className="font-semibold">Order #{order.id.slice(0, 8)}</p><p className="text-sm text-neutral-600">{new Date(order.created_at).toLocaleDateString("en-GB")}</p></div>
+              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${badge.className}`}>{badge.label}</span>
+            </div>
 
-  if (error) {
-    console.error("❌ Failed to load orders:", error);
-    return (
-      <main className="p-8">
-        <p className="opacity-60 text-sm">Failed to load orders.</p>
-      </main>
-    );
-  }
+            <ul className="mt-4 space-y-3">{order.lines.map((line) => {
+              const refundedQty = Number(line.refunded_quantity ?? 0);
+              const remainingQty = Math.max(0, Number(line.quantity) - refundedQty);
+              const refundedPence = Number(line.refunded_amount_pence ?? 0);
+              const lineFullyRefunded = refundedQty >= Number(line.quantity) && Number(line.quantity) > 0;
 
-  const orders: OrderRow[] = data ?? [];
-
-  return (
-    <main className="min-h-screen bg-[#FAF6F1] text-[#111] px-4 py-10">
-      <div className="max-w-5xl mx-auto space-y-8">
-        <header className="pb-4 border-b">
-          <h1 className="text-3xl font-semibold tracking-wide">
-            My Orders 📦
-          </h1>
-          <p className="text-sm opacity-60 mt-1">
-            An overview of your recent purchases.
-          </p>
-        </header>
-
-        {orders.length === 0 && (
-          <div className="text-center py-20 opacity-70">
-            <p>No orders yet.</p>
-            <Link
-              href="/shop"
-              className="underline text-accent mt-2 inline-block"
-            >
-              Browse the shop →
-            </Link>
-          </div>
-        )}
-
-        <div className="space-y-4 md:hidden">
-          {orders.map((o) => {
-            const canRequestRefund =
-              o.status === "completed" ||
-              o.status === "partially_refunded";
-
-            const itemInfo = getOrderTitle(o.order_items);
-
-            return (
-              <div
-                key={o.id}
-                className="rounded-xl border bg-white p-4 shadow-sm space-y-3"
-              >
-                <div className="flex justify-between items-start gap-4">
+              return <li key={line.id} className="border-t pt-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm opacity-60">Order date</p>
-                    <p className="font-medium">
-                      {new Date(o.created_at).toLocaleDateString("en-GB")}
-                    </p>
-                    <p className="text-xs opacity-50 mt-1">
-                      Order #{shortId(o.id, 10)}
-                    </p>
+                    <p className="font-medium">{line.event?.title ?? line.item_name}</p>
+                    <p className="text-sm text-neutral-600">{line.ticket?.name ?? "Ticket"} × {line.quantity}{line.event ? ` · ${new Date(line.event.starts_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}` : ""}</p>
+                    {refundedQty > 0 ? <p className="mt-1 text-sm font-medium text-red-700">{lineFullyRefunded ? "Refunded" : `${refundedQty} ticket${refundedQty === 1 ? "" : "s"} refunded`} · {money(refundedPence)}</p> : null}
+                    {!lineFullyRefunded && refundedQty > 0 ? <p className="text-xs text-neutral-500">{remainingQty} ticket{remainingQty === 1 ? "" : "s"} remain active</p> : null}
                   </div>
-
-                  <span
-                    className={`text-xs px-2 py-1 rounded-md capitalize ${getStatusClasses(
-                      o.status
-                    )}`}
-                  >
-                    {o.status.replace("_", " ")}
-                  </span>
+                  {lineFullyRefunded ? <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">Refunded</span> : null}
                 </div>
+              </li>;
+            })}</ul>
 
-                <div>
-                  <p className="text-sm opacity-60">Item</p>
-                  <p className="font-medium">{itemInfo.title}</p>
-                  {itemInfo.meta ? (
-                    <p className="text-xs opacity-60 mt-1">{itemInfo.meta}</p>
-                  ) : null}
-                </div>
+            <div className="mt-5 rounded-xl bg-[#F8F5F1] p-4 text-sm">
+              <div className="flex justify-between gap-4"><span className="text-neutral-600">Original payment</span><strong>{money(originalPayment)}</strong></div>
+              {refunded > 0 ? <div className="mt-2 flex justify-between gap-4 text-red-700"><span>Refunded</span><strong>−{money(refunded)}</strong></div> : null}
+              <div className="mt-2 flex justify-between gap-4 border-t pt-2"><span className="font-medium">Net paid</span><strong>{money(netPaid)}</strong></div>
+            </div>
 
-                <div>
-                  <p className="text-sm opacity-60">Total</p>
-                  <p className="text-lg font-semibold">
-                    £{Number(o.total).toFixed(2)}
-                  </p>
-                </div>
-
-                <div className="flex justify-between items-center pt-2 border-t gap-3">
-                  <Link
-                    href={`/dashboard/orders/${o.id}`}
-                    className="text-accent underline"
-                  >
-                    View order →
-                  </Link>
-
-                  {canRequestRefund && (
-                    <a
-                      href={`mailto:admin@pagesandpeace.co.uk?subject=Refund request for order ${o.id}`}
-                      className="text-xs underline text-neutral-600 text-right"
-                    >
-                      Need a refund?
-                    </a>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {orders.length > 0 && (
-          <div className="hidden md:block overflow-x-auto rounded-lg border bg-white shadow-sm">
-            <table className="w-full text-sm">
-              <thead className="bg-[#F3ECE5] uppercase text-xs tracking-wider">
-                <tr>
-                  <th className="px-5 py-3 text-left">Date / Order</th>
-                  <th className="px-5 py-3 text-left">Item</th>
-                  <th className="px-5 py-3 text-left">Amount</th>
-                  <th className="px-5 py-3 text-left">Status</th>
-                  <th className="px-5 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {orders.map((o) => {
-                  const canRequestRefund =
-                    o.status === "completed" ||
-                    o.status === "partially_refunded";
-
-                  const itemInfo = getOrderTitle(o.order_items);
-
-                  return (
-                    <tr
-                      key={o.id}
-                      className="border-t hover:bg-[#FAF6F1]/60"
-                    >
-                      <td className="px-5 py-4">
-                        <div>
-                          {new Date(o.created_at).toLocaleDateString("en-GB")}
-                        </div>
-                        <div className="text-xs text-neutral-500 mt-1">
-                          Order #{shortId(o.id, 10)}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="font-medium">{itemInfo.title}</div>
-                        {itemInfo.meta ? (
-                          <div className="text-xs text-neutral-500 mt-1">
-                            {itemInfo.meta}
-                          </div>
-                        ) : null}
-                      </td>
-
-                      <td className="px-5 py-4 font-medium">
-                        £{Number(o.total).toFixed(2)}
-                      </td>
-
-                      <td className="px-5 py-4 capitalize">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs rounded-md ${getStatusClasses(
-                            o.status
-                          )}`}
-                        >
-                          {o.status.replace("_", " ")}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4 text-right space-x-3">
-                        <Link
-                          href={`/dashboard/orders/${o.id}`}
-                          className="text-accent underline"
-                        >
-                          View →
-                        </Link>
-
-                        {canRequestRefund && (
-                          <a
-                            href={`mailto:admin@pagesandpeace.co.uk?subject=Refund request for order ${o.id}`}
-                            className="text-xs underline text-neutral-600"
-                          >
-                            Need a refund?
-                          </a>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+            {refunded > 0 ? <p className="mt-3 text-xs text-neutral-500">Refunds are returned to the original payment method. Your bank or card provider may take a few working days to display the credit.</p> : null}
+          </article>;
+        }) : <section className="rounded-2xl border bg-white p-8 text-center"><p>No confirmed event orders yet.</p><Link href="/events" className="mt-3 inline-block underline">Browse events</Link></section>}
       </div>
-    </main>
-  );
+    </div>
+  </main>;
 }

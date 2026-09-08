@@ -14,6 +14,7 @@ import { HeadCell } from "@/components/table/HeadCell";
 
 import { TableSearch } from "@/components/table/TableSearch";
 import { TablePagination } from "@/components/table/TablePagination";
+import AppCoreEventOrdersPanel from "@/components/admin/app-core-event-orders-panel";
 
 export const revalidate = 0;
 
@@ -113,6 +114,8 @@ export default async function AdminOrdersPage({
   return (
     <div className="max-w-6xl mx-auto py-10 space-y-6">
       <h1 className="text-3xl font-semibold">Orders</h1>
+
+      <AppCoreEventOrdersPanel />
 
       <TableSearch
         placeholder="Search order ID, customer, email, item title"

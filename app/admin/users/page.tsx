@@ -1,250 +1,105 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useEffect, useState } from "react";
+import { requireAdminUser } from "@/lib/auth/require-admin-user";
+import { supabaseService } from "@/lib/supabase/service";
 
-import { TableSurface } from "@/components/table/TableSurface";
-import { Table } from "@/components/table/Table";
-import { TableHead } from "@/components/table/TableHead";
-import { TableBody } from "@/components/table/TableBody";
-import { TableRow } from "@/components/table/TableRow";
-import { Cell } from "@/components/table/Cell";
-import { HeadCell } from "@/components/table/HeadCell";
+export const dynamic = "force-dynamic";
 
-type User = {
-  id: string;
-  email: string;
-  created_at: string;
-
-  last_login_at: string | null;
-  last_magic_link_sent_at: string | null;
-
-  has_logged_in: boolean;
-  signup_status: string;
-
-  magic_link_send_count?: number;
+type MarketingProfile = {
+  auth_user_id: string | null;
+  marketing_consent: boolean | null;
+  marketing_consent_at: string | null;
+  beehiiv_subscribed: boolean | null;
+  beehiiv_subscribed_at: string | null;
 };
 
-export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "inactive">("inactive");
+export default async function UsersPage() {
+  const admin = await requireAdminUser();
+  if (!admin) redirect("/sign-in?callbackURL=/admin/users");
 
-  const [now, setNow] = useState(() => Date.now());
+  const service = supabaseService();
+  const [{ data: authData, error: authError }, { data: profileData, error: profileError }] = await Promise.all([
+    service.auth.admin.listUsers({ perPage: 1000 }),
+    service
+      .from("users")
+      .select("auth_user_id, marketing_consent, marketing_consent_at, beehiiv_subscribed, beehiiv_subscribed_at"),
+  ]);
 
-  /* -------------------------
-     ⏱ LIVE TIME
-  ------------------------- */
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 10000);
+  if (authError) throw new Error("Unable to load users.");
+  if (profileError) throw new Error("Unable to load user marketing status.");
 
-    return () => clearInterval(interval);
-  }, []);
+  const profiles = new Map(
+    ((profileData ?? []) as MarketingProfile[])
+      .filter((profile) => profile.auth_user_id)
+      .map((profile) => [profile.auth_user_id as string, profile])
+  );
 
-  /* -------------------------
-     INITIAL LOAD
-  ------------------------- */
-  useEffect(() => {
-    let mounted = true;
-
-    async function load() {
-      try {
-        const res = await fetch("/api/admin/users");
-        const data = await res.json();
-
-        if (!mounted) return;
-
-        setUsers(data.users || []);
-      } catch (err) {
-        console.error("Failed to load users", err);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    load();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  async function refreshUsers() {
-    const res = await fetch("/api/admin/users");
-    const data = await res.json();
-    setUsers(data.users || []);
-  }
-
-  async function sendLoginLink(email: string) {
-  const res = await fetch("/api/auth/send-magic-links", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      email,
-      intent: "signin",
-      callbackURL: "/dashboard",
-    }),
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    alert(data.error || "Failed to send login link");
-    return;
-  }
-
-  alert(`Login link sent to ${email}`);
-  await refreshUsers();
-}
-   
-
-  function fmtDate(date?: string | null) {
-    if (!date) return "—";
-
-    return new Date(date).toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
-  /* -------------------------
-     🔥 IMPROVED STATUS LOGIC
-  ------------------------- */
-  function getStatus(user: User) {
-    if (user.has_logged_in) return "active";
-
-    if (user.magic_link_send_count && user.magic_link_send_count >= 3) {
-      return "cold";
-    }
-
-    if (user.last_magic_link_sent_at) {
-      const diff =
-        now - new Date(user.last_magic_link_sent_at).getTime();
-
-      if (diff < 5 * 60 * 1000) return "recent";
-
-      return "pending";
-    }
-
-    return "new";
-  }
-
-  function StatusBadge({ user }: { user: User }) {
-    const status = getStatus(user);
-
-    const styles = {
-      active: "bg-green-100 text-green-700",
-      recent: "bg-blue-100 text-blue-700",
-      pending: "bg-yellow-100 text-yellow-700",
-      new: "bg-gray-100 text-gray-600",
-      cold: "bg-red-100 text-red-700",
-    };
-
-    const labels = {
-      active: "Active",
-      recent: "Link Sent",
-      pending: "Awaiting Login",
-      new: "New",
-      cold: "Cold",
-    };
-
-    return (
-      <span className={`text-xs px-2 py-1 rounded ${styles[status]}`}>
-        {labels[status]}
-      </span>
-    );
-  }
-
-  /* -------------------------
-     FILTER
-  ------------------------- */
-  const filtered =
-    filter === "inactive"
-      ? users.filter((u) => !u.has_logged_in)
-      : users;
-
-  if (loading) return <div className="p-8">Loading users...</div>;
+  const users = authData.users;
 
   return (
-    <div className="max-w-6xl mx-auto py-10 space-y-6">
-      <h1 className="text-3xl font-semibold">Users</h1>
-
-      <div className="flex gap-3">
-        <button onClick={() => setFilter("inactive")}>
-          Inactive
-        </button>
-        <button onClick={() => setFilter("all")}>
-          All
-        </button>
+    <main className="mx-auto max-w-7xl space-y-6 py-10">
+      <div>
+        <p className="text-sm font-medium text-foreground/60">Rebuild admin</p>
+        <h1 className="mt-1 text-3xl font-bold">Users</h1>
+        <p className="mt-2 text-foreground/65">All authenticated accounts in the staging project.</p>
       </div>
 
-      <TableSurface>
-        <Table>
-          <TableHead>
+      <div className="overflow-x-auto rounded-2xl border bg-white">
+        <table className="w-full min-w-[920px] text-left text-sm">
+          <thead className="bg-[#f8f5f1] text-foreground/60">
             <tr>
-              <HeadCell>Email</HeadCell>
-              <HeadCell>Status</HeadCell>
-              <HeadCell>Signed Up</HeadCell>
-              <HeadCell>Last Login</HeadCell>
-              <HeadCell>Last Login Link</HeadCell>
-              <HeadCell>Actions</HeadCell>
+              <th className="px-5 py-4">Customer</th>
+              <th className="px-5 py-4">Email</th>
+              <th className="px-5 py-4">Joined</th>
+              <th className="px-5 py-4">Email verified</th>
+              <th className="px-5 py-4">Marketing</th>
             </tr>
-          </TableHead>
-
-          <TableBody>
-            {filtered.map((user) => {
-              const recentlySent =
-                user.last_magic_link_sent_at &&
-                now -
-                  new Date(user.last_magic_link_sent_at).getTime() <
-                  5 * 60 * 1000;
-
-              const isActive = user.has_logged_in;
+          </thead>
+          <tbody>
+            {users.map((user) => {
+              const profile = profiles.get(user.id);
+              const subscribed = profile?.marketing_consent === true && profile?.beehiiv_subscribed === true;
+              const consentedButNotSynced = profile?.marketing_consent === true && profile?.beehiiv_subscribed !== true;
+              const declined = profile?.marketing_consent === false && profile?.marketing_consent_at != null;
 
               return (
-                <TableRow key={user.id}>
-                  <Cell>{user.email}</Cell>
-
-                  <Cell>
-                    <StatusBadge user={user} />
-                  </Cell>
-
-                  <Cell>{fmtDate(user.created_at)}</Cell>
-
-                  <Cell>{fmtDate(user.last_login_at)}</Cell>
-
-                  <Cell>
-                    {fmtDate(user.last_magic_link_sent_at)}
-                  </Cell>
-
-                  <Cell>
-                    <button
-                      onClick={() => sendLoginLink(user.email)}
-                      disabled={recentlySent || isActive}
-                      className={`text-xs px-3 py-1 border rounded ${
-                        recentlySent || isActive
-                          ? "opacity-50 cursor-not-allowed"
-                          : "hover:bg-gray-100"
-                      }`}
-                    >
-                      {isActive
-                        ? "Active"
-                        : recentlySent
-                        ? "Link Sent"
-                        : "Send Login Link"}
-                    </button>
-                  </Cell>
-                </TableRow>
+                <tr key={user.id} className="border-t align-top">
+                  <td className="px-5 py-4 font-medium">
+                    {typeof user.user_metadata?.name === "string" ? user.user_metadata.name : "Customer"}
+                  </td>
+                  <td className="px-5 py-4">{user.email ?? "—"}</td>
+                  <td className="px-5 py-4 text-foreground/65">
+                    {new Date(user.created_at).toLocaleDateString("en-GB")}
+                  </td>
+                  <td className="px-5 py-4 text-foreground/65">
+                    {user.email_confirmed_at ? "Confirmed" : "Unconfirmed"}
+                  </td>
+                  <td className="px-5 py-4">
+                    {subscribed ? (
+                      <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                        ✓ Subscribed
+                      </span>
+                    ) : consentedButNotSynced ? (
+                      <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                        Consent saved · not synced
+                      </span>
+                    ) : declined ? (
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                        No thanks
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                        Not chosen
+                      </span>
+                    )}
+                  </td>
+                </tr>
               );
             })}
-          </TableBody>
-        </Table>
-      </TableSurface>
-    </div>
+          </tbody>
+        </table>
+        {!users.length ? <p className="p-8 text-center text-foreground/60">No authenticated users yet.</p> : null}
+      </div>
+    </main>
   );
 }

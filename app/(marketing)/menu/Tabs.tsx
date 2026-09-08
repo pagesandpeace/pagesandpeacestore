@@ -3,72 +3,23 @@
 import { useState } from "react";
 import MenuSection from "./MenuSection";
 
-type MenuItem = {
-  id: string;
-  category_id: string;
-  name: string;
-  price: number;
-  position: number;
-  note: string | null;
-};
+type MenuItem = { id: string; category_id: string; name: string; price: number; position: number; note: string | null };
+type CategoryWithItems = { id: string; name: string; position: number; items: MenuItem[] };
+type SectionWithCategories = { id: string; name: string; slug: string; position: number; categories: CategoryWithItems[] };
 
-type CategoryWithItems = {
-  id: string;
-  name: string;
-  position: number;
-  items: MenuItem[];
-};
+export default function Tabs({ sections }: { sections: SectionWithCategories[] }) {
+  const [activeTab, setActiveTab] = useState(sections[0]?.id ?? "");
 
-export default function Tabs({
-  drinks,
-  food,
-}: {
-  drinks: CategoryWithItems[];
-  food: CategoryWithItems[];
-}) {
-  const [activeTab, setActiveTab] = useState<"drinks" | "food">("drinks");
+  if (!sections.length) return <div className="mx-auto max-w-3xl rounded-2xl border bg-white p-8 text-center text-[#666]">Menu coming soon.</div>;
 
-  return (
-    <>
-      <div className="flex justify-center mb-10 space-x-6">
-        <button
-          onClick={() => setActiveTab("drinks")}
-          className={`pb-2 text-xl font-medium ${
-            activeTab === "drinks"
-              ? "border-b-4 border-[#5DA865] text-[#5DA865]"
-              : "text-[#111]/70 hover:text-[#5DA865]"
-          }`}
-        >
-          Drinks
-        </button>
+  const active = sections.find((section) => section.id === activeTab) ?? sections[0];
 
-        <button
-          onClick={() => setActiveTab("food")}
-          className={`pb-2 text-xl font-medium ${
-            activeTab === "food"
-              ? "border-b-4 border-[#5DA865] text-[#5DA865]"
-              : "text-[#111]/70 hover:text-[#5DA865]"
-          }`}
-        >
-          Food
-        </button>
-      </div>
-
-      {activeTab === "drinks" && (
-        <div className="max-w-3xl mx-auto space-y-10">
-          {drinks.map((cat) => (
-            <MenuSection key={cat.id} title={cat.name} items={cat.items} />
-          ))}
-        </div>
-      )}
-
-      {activeTab === "food" && (
-        <div className="max-w-3xl mx-auto space-y-10">
-          {food.map((cat) => (
-            <MenuSection key={cat.id} title={cat.name} items={cat.items} />
-          ))}
-        </div>
-      )}
-    </>
-  );
+  return <>
+    <div className="mb-10 flex flex-wrap justify-center gap-6">
+      {sections.map((section) => <button key={section.id} onClick={() => setActiveTab(section.id)} className={`pb-2 text-xl font-medium ${active.id === section.id ? "border-b-4 border-[#5DA865] text-[#5DA865]" : "text-[#111]/70 hover:text-[#5DA865]"}`}>{section.name}</button>)}
+    </div>
+    <div className="mx-auto max-w-3xl space-y-10">
+      {active.categories.map((category) => <MenuSection key={category.id} title={category.name} items={category.items} />)}
+    </div>
+  </>;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import OpeningHours from "@/components/OpeningHours";
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
@@ -19,7 +20,6 @@ export default function ContactPage() {
           below — or send us a message directly.
         </p>
 
-        {/* Contact Details */}
         <div className="bg-white rounded-xl border border-[#e5e2dc] p-6 mb-12 shadow-sm">
           <h2 className="text-xl font-semibold mb-4 tracking-wide">
             Pages & Peace Coffee + Bookshop
@@ -56,20 +56,11 @@ export default function ContactPage() {
 
             <li className="pt-2">
               <strong>Opening Hours:</strong>
-              <ul className="mt-2 space-y-1">
-                <li>Monday: 9am – 9pm</li>
-                <li>Tuesday: 9am – 9pm</li>
-                <li>Wednesday: 9am – 5pm</li>
-                <li>Thursday: 9am – 5pm</li>
-                <li>Friday: 9am – 5pm</li>
-                <li>Saturday: 9am – 5pm</li>
-                <li>Sunday: 10am – 4pm</li>
-              </ul>
+              <OpeningHours />
             </li>
           </ul>
         </div>
 
-        {/* Contact Form */}
         <div className="bg-white rounded-xl border border-[#e5e2dc] p-6 shadow-sm">
           <h2 className="text-xl font-semibold mb-4 tracking-wide">
             Send Us a Message
@@ -143,14 +134,7 @@ export default function ContactPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="
-                  w-full rounded-full px-6 py-3
-                  bg-[var(--accent)]
-                  text-black font-semibold text-sm
-                  hover:bg-[var(--secondary)]
-                  transition
-                  disabled:opacity-50
-                "
+                className="w-full rounded-full px-6 py-3 bg-[var(--accent)] text-black font-semibold text-sm hover:bg-[var(--secondary)] transition disabled:opacity-50"
               >
                 {loading ? "Sending…" : "Send Message"}
               </button>

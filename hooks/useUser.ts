@@ -7,7 +7,9 @@ export type UserSession = {
   email: string;
   name?: string;
   image?: string | null;
-  role: "admin" | "user";
+  role: "admin" | "user" | "customer";
+  marketingConsent?: boolean;
+  beehiivSubscribed?: boolean;
 };
 
 export function useUser() {
