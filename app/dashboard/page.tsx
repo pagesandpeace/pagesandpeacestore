@@ -13,10 +13,10 @@ export default async function DashboardPage() {
   if (!user) redirect("/sign-in");
 
   const [{ data: profile }, orders] = await Promise.all([
-    auth.from("users").select("marketing_consent").eq("auth_user_id", user.id).maybeSingle(),
+    auth.from("users").select("marketing_consent, marketing_consent_at").eq("auth_user_id", user.id).maybeSingle(),
     getCustomerEventOrders(user.id),
   ]);
-  const showMarketingConsent = profile?.marketing_consent !== true;
+  const showMarketingConsent = profile?.marketing_consent_at == null;
 
   const upcoming = orders.flatMap((order) => order.lines)
     .filter((line) => line.event && new Date(line.event.starts_at) > new Date())
