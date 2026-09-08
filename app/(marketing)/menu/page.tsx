@@ -44,10 +44,12 @@ export default async function MenuPage() {
     ).values()
   );
 
-  const categoriesWithItems = cats.map((cat) => ({
-    ...cat,
-    items: uniqueItems.filter((i) => i.category_id === cat.id),
-  }));
+  const categoriesWithItems = cats
+    .map((cat) => ({
+      ...cat,
+      items: uniqueItems.filter((i) => i.category_id === cat.id),
+    }))
+    .filter((category) => category.items.length > 0);
 
   const drinks = categoriesWithItems.filter((c) =>
     [
