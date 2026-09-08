@@ -11,7 +11,7 @@ export async function GET() {
   const admin = await requireAdminUser();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = supabaseService();
+  const db = supabaseService().schema("app_core");
   const [{ data: sections, error: sectionError }, { data: categories, error: categoryError }, { data: items, error: itemError }] = await Promise.all([
     db.from("menu_sections").select("id, name, slug, position, is_visible").order("position"),
     db.from("menu_categories").select("id, name, position, section_id").order("position"),
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const type = String(body?.type || "");
-  const db = supabaseService();
+  const db = supabaseService().schema("app_core");
 
   if (type === "section") {
     const name = String(body?.name || "").trim();
@@ -89,7 +89,7 @@ export async function PATCH(req: Request) {
 
   const body = await req.json();
   const type = String(body?.type || "item");
-  const db = supabaseService();
+  const db = supabaseService().schema("app_core");
 
   if (type === "section") {
     const id = String(body?.id || "");
