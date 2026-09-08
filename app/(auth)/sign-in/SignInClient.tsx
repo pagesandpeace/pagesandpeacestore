@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import Image from "next/image";
-import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { useSearchParams } from "next/navigation";
 import ErrorModal from "@/components/ui/ErrorModal";
@@ -17,6 +16,7 @@ export default function SignInClient() {
   const defaultEmail = searchParams.get("email") || "";
 
   const [email, setEmail] = useState(defaultEmail);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -49,7 +49,8 @@ export default function SignInClient() {
         body: JSON.stringify({
           email,
           callbackURL,
-          intent: "signin", // 🔥 required
+          intent: "join",
+          marketingConsent,
         }),
       });
 
@@ -81,10 +82,8 @@ export default function SignInClient() {
     const params = new URLSearchParams();
 
     params.set("callbackURL", callbackURL);
-    params.set("intent", "signin");
-
-    // ✅ IMPORTANT: explicitly mark no consent
-    params.set("marketing_consent", "false");
+    params.set("intent", "join");
+    if (marketingConsent) params.set("marketing_consent", "true");
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -112,7 +111,7 @@ export default function SignInClient() {
         </h1>
 
         <p className="text-[#555]">
-          We’ve sent you a secure login link:
+          We’ve sent you a secure sign-in link:
         </p>
 
         <div className="font-medium text-[#111] break-all">
@@ -151,7 +150,7 @@ export default function SignInClient() {
       />
 
       <h1 className="text-3xl font-semibold text-[#111]">
-        Sign In
+        Continue to Pages &amp; Peace
       </h1>
 
       {/* GOOGLE */}
@@ -190,24 +189,28 @@ export default function SignInClient() {
           onChange={(e) => setEmail(e.target.value)}
         />
 
+        <label className="flex items-start gap-3 rounded-lg border border-[#e4ddd5] p-3 text-sm text-[#555]">
+          <input
+            type="checkbox"
+            checked={marketingConsent}
+            disabled={loading || emailSent}
+            onChange={(e) => setMarketingConsent(e.target.checked)}
+            className="mt-1 h-4 w-4"
+          />
+          <span>Email me about Pages &amp; Peace events, books and café news. You can unsubscribe at any time.</span>
+        </label>
+
         <Button
           type="submit"
           disabled={loading || emailSent}
           className="w-full"
         >
-          {loading ? "Sending link…" : "Send login link"}
+          {loading ? "Sending link…" : "Continue with email"}
         </Button>
       </form>
 
       <p className="text-xs text-[#6b665d] text-center">
-        We’ll email you a secure link — no password needed.
-      </p>
-
-      <p className="text-center text-sm">
-        No account?{" "}
-        <Link href="/sign-up" className="underline font-semibold">
-          Create one
-        </Link>
+        New here? This creates your account. Returning customers simply sign in. No password needed.
       </p>
     </div>
   );

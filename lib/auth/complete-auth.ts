@@ -13,16 +13,18 @@ function adminDb() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-async function subscribeToBeehiiv(email: string, sendWelcomeEmail: boolean) {
+type BeehiivOutcome = "not_requested" | "not_configured" | "subscribed" | "failed";
+
+async function subscribeToBeehiiv(email: string, sendWelcomeEmail: boolean): Promise<BeehiivOutcome> {
   const publicationId = process.env.BEEHIIV_PUBLICATION_ID;
   const apiKey = process.env.BEEHIIV_API_KEY;
-  if (!publicationId || !apiKey) return false;
+  if (!publicationId || !apiKey) return "not_configured";
   const response = await fetch(`https://api.beehiiv.com/v2/publications/${publicationId}/subscriptions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ email, reactivate_existing: true, send_welcome_email: sendWelcomeEmail }),
   });
-  return response.ok;
+  return response.ok ? "subscribed" : "failed";
 }
 
 /** Mirrors a verified Auth user into the legacy profile. Consent is only applied on first account creation. */
@@ -71,9 +73,11 @@ export async function completeAuthenticatedUser(user: User, options: CompleteAut
     });
     if (error) return { ok: false as const, reason: "profile_create" };
     created = true;
-    if (marketingConsent && await subscribeToBeehiiv(email, true).catch(() => false)) {
+    const beehiiv = marketingConsent ? await subscribeToBeehiiv(email, true).catch(() => "failed" as const) : "not_requested";
+    if (beehiiv === "subscribed") {
       await db.from("users").update({ beehiiv_subscribed: true, beehiiv_subscribed_at: now, updated_at: now }).eq("auth_user_id", user.id);
     }
+    console.info("[auth] customer profile created", { consent: marketingConsent, beehiiv });
   } else {
     const { error } = await db.from("users").update({
       auth_user_id: user.id, email_verified: Boolean(user.email_confirmed_at),

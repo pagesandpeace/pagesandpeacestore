@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   if (error) return signInRedirect(request, "sign-in-failed");
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return signInRedirect(request, "sign-in-failed");
-  const consent = intent === "signup" && url.searchParams.get("marketing_consent") === "true";
+  const consent = url.searchParams.get("marketing_consent") === "true";
   const complete = await completeAuthenticatedUser(user, { allowMarketingConsent: consent });
   if (!complete.ok) return signInRedirect(request, "profile-setup-failed");
   return response;

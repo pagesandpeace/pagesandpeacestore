@@ -23,19 +23,21 @@ export async function POST(request: Request) {
   ]);
   if (emailLimit.error || ipLimit.error || emailLimit.data !== true || ipLimit.data !== true) return genericSuccess();
 
-  const intent = body.intent === "signup" ? "signup" : "signin";
+  const intent = body.intent === "join" || body.intent === "signup" ? "join" : "signin";
   const callbackURL = typeof body.callbackURL === "string" && allowedPaths.has(body.callbackURL) ? body.callbackURL : "/dashboard";
   const redirect = new URL("/auth/callback", request.url);
   redirect.searchParams.set("intent", intent); redirect.searchParams.set("callbackURL", callbackURL);
-  const marketingConsent = intent === "signup" && body.marketingConsent === true;
+  // Consent is applied only when a new profile is created. Existing customers'
+  // preference is never changed by a sign-in request.
+  const marketingConsent = body.marketingConsent === true;
   if (marketingConsent) redirect.searchParams.set("marketing_consent", "true");
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: redirect.toString(), shouldCreateUser: intent === "signup",
-      data: intent === "signup" ? { name, first_name: typeof body.firstName === "string" ? body.firstName.slice(0, 60) : "", last_name: typeof body.lastName === "string" ? body.lastName.slice(0, 60) : "", marketing_consent: marketingConsent } : undefined,
+      emailRedirectTo: redirect.toString(), shouldCreateUser: intent === "join",
+      data: intent === "join" ? { name, first_name: typeof body.firstName === "string" ? body.firstName.slice(0, 60) : "", last_name: typeof body.lastName === "string" ? body.lastName.slice(0, 60) : "", marketing_consent: marketingConsent } : undefined,
     },
   });
   // Same public response prevents account enumeration.

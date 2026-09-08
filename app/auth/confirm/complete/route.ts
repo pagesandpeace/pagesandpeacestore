@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   if (error) return signInRedirect(request, "link-expired-or-used");
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return signInRedirect(request, "sign-in-failed");
-  const consent = form.get("intent") === "signup" && form.get("marketing_consent") === "true";
+  const consent = form.get("marketing_consent") === "true";
   const complete = await completeAuthenticatedUser(user, { allowMarketingConsent: consent });
   if (!complete.ok) return signInRedirect(request, "profile-setup-failed");
   return response;
