@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import MarketingConsentCard from "@/app/dashboard/(ui)/MarketingConsentCard";
 import { getCustomerEventOrders } from "@/lib/app-core/event-orders";
 import { supabaseAuthServer } from "@/lib/supabase/server";
 
@@ -11,13 +12,20 @@ export default async function DashboardPage() {
   const { data: { user } } = await auth.auth.getUser();
   if (!user) redirect("/sign-in");
 
-  const orders = await getCustomerEventOrders(user.id);
+  const [{ data: profile }, orders] = await Promise.all([
+    auth.from("users").select("marketing_consent").eq("auth_user_id", user.id).maybeSingle(),
+    getCustomerEventOrders(user.id),
+  ]);
+  const showMarketingConsent = profile?.marketing_consent !== true;
+
   const upcoming = orders.flatMap((order) => order.lines)
     .filter((line) => line.event && new Date(line.event.starts_at) > new Date())
     .sort((a, b) => new Date(a.event!.starts_at).getTime() - new Date(b.event!.starts_at).getTime());
 
   return <main className="flex-1 w-full bg-background text-foreground font-[Montserrat]">
     <div className="max-w-4xl mx-auto px-6 py-10">
+      {showMarketingConsent ? <MarketingConsentCard /> : null}
+
       <section className="mb-10 p-6 rounded-2xl border border-border bg-muted/40 text-center">
         <h2 className="text-xl font-semibold mb-2">🍽️ Pre-order food for your event</h2>
         <p className="text-sm text-foreground/70 mb-4">Skip the queue and have everything ready when you arrive.</p>
