@@ -10,7 +10,7 @@ type MenuItem = { id: string; category_id: string; name: string; price: number; 
 export const dynamic = "force-dynamic";
 
 export default async function MenuPage() {
-  const supabase = await supabaseServer();
+  const supabase = (await supabaseServer()).schema("app_core");
 
   const [{ data: sections }, { data: categories }, { data: items }] = await Promise.all([
     supabase.from("menu_sections").select("id, name, slug, position").eq("is_visible", true).order("position"),
