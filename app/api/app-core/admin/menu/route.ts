@@ -22,6 +22,66 @@ export async function GET() {
   return NextResponse.json({ categories: categories ?? [], items: items ?? [] });
 }
 
+export async function POST(req: Request) {
+  const admin = await requireAdminUser();
+  if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json();
+  const type = String(body?.type || "");
+  const db = supabaseService();
+
+  if (type === "category") {
+    const name = String(body?.name || "").trim();
+    if (!name) return NextResponse.json({ error: "Category name is required" }, { status: 400 });
+
+    const { data: last } = await db.from("menu_categories").select("position").order("position", { ascending: false }).limit(1).maybeSingle();
+    const position = Number(last?.position ?? -1) + 1;
+
+    const { data, error } = await db
+      .from("menu_categories")
+      .insert({ name, position })
+      .select("id, name, position")
+      .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, category: data });
+  }
+
+  if (type === "item") {
+    const category_id = String(body?.category_id || "");
+    const name = String(body?.name || "").trim();
+    const price = Number(body?.price);
+    const note = body?.note == null ? null : String(body.note).trim() || null;
+
+    if (!category_id || !name || !Number.isFinite(price) || price < 0) {
+      return NextResponse.json({ error: "Category, name and a valid price are required" }, { status: 400 });
+    }
+
+    const { data: category } = await db.from("menu_categories").select("id").eq("id", category_id).maybeSingle();
+    if (!category) return NextResponse.json({ error: "Category not found" }, { status: 400 });
+
+    const { data: last } = await db
+      .from("menu_items")
+      .select("position")
+      .eq("category_id", category_id)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const position = Number(last?.position ?? -1) + 1;
+
+    const { data, error } = await db
+      .from("menu_items")
+      .insert({ category_id, name, price, note, position, is_visible: true })
+      .select("id, category_id, name, price, position, note, is_visible")
+      .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, item: data });
+  }
+
+  return NextResponse.json({ error: "Invalid menu action" }, { status: 400 });
+}
+
 export async function PATCH(req: Request) {
   const admin = await requireAdminUser();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
