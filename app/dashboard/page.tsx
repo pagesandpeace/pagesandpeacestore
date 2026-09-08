@@ -19,7 +19,7 @@ export default async function DashboardPage() {
   const showMarketingConsent = profile?.marketing_consent_at == null;
 
   const upcoming = orders.flatMap((order) => order.lines)
-    .filter((line) => line.event && new Date(line.event.starts_at) > new Date())
+    .filter((line) => line.event && new Date(line.event.starts_at) > new Date() && Number(line.quantity) - Number(line.refunded_quantity ?? 0) > 0)
     .sort((a, b) => new Date(a.event!.starts_at).getTime() - new Date(b.event!.starts_at).getTime());
 
   return <main className="flex-1 w-full bg-background text-foreground font-[Montserrat]">
@@ -39,7 +39,10 @@ export default async function DashboardPage() {
           <div><h2 className="text-xl font-semibold">Upcoming events</h2><p className="mt-1 text-sm text-foreground/70">Your confirmed Pages & Peace bookings.</p></div>
           <Link href="/dashboard/events" className="rounded-full border-2 border-accent px-4 py-2 text-sm font-semibold text-accent">View all events</Link>
         </div>
-        {upcoming.length ? <div className="mt-5 space-y-3">{upcoming.slice(0, 3).map((line) => <article key={line.id} className="rounded-xl bg-muted/40 p-4"><p className="font-semibold">{line.event!.title}</p><p className="mt-1 text-sm text-foreground/70">{new Date(line.event!.starts_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p><p className="mt-1 text-sm text-foreground/70">{line.ticket?.name ?? "Ticket"} × {line.quantity}</p></article>)}</div> : <p className="mt-5 text-sm text-foreground/70">You have no upcoming bookings yet. <Link href="/events" className="underline">Browse events</Link>.</p>}
+        {upcoming.length ? <div className="mt-5 space-y-3">{upcoming.slice(0, 3).map((line) => {
+          const remainingQty = Number(line.quantity) - Number(line.refunded_quantity ?? 0);
+          return <article key={line.id} className="rounded-xl bg-muted/40 p-4"><p className="font-semibold">{line.event!.title}</p><p className="mt-1 text-sm text-foreground/70">{new Date(line.event!.starts_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p><p className="mt-1 text-sm text-foreground/70">{line.ticket?.name ?? "Ticket"} × {remainingQty}</p></article>;
+        })}</div> : <p className="mt-5 text-sm text-foreground/70">You have no upcoming bookings yet. <Link href="/events" className="underline">Browse events</Link>.</p>}
       </section>
 
       <section className="py-6 border-b">
