@@ -21,13 +21,6 @@ function formatEventDate(value: string) {
   }).format(new Date(value));
 }
 
-function formatPrice(pence: number) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(pence / 100);
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const event = await getPublishedEvent(slug);
@@ -110,6 +103,7 @@ export default async function EventDetailPage({ params }: PageProps) {
               price_pence: ticket.price_pence,
             }))}
             soldOut={soldOut}
+            remainingSeats={event.remaining_seats}
           />
         </aside>
       </div>
