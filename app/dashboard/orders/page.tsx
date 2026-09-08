@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCustomerEventOrders } from "@/lib/app-core/event-orders";
+import { getLegacyEventBookings } from "@/lib/app-core/legacy-event-history";
 import { supabaseAuthServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export default async function OrdersPage() {
   const { data: { user } } = await auth.auth.getUser();
   if (!user) redirect("/sign-in");
 
-  const orders = await getCustomerEventOrders(user.id);
+  const [orders, legacyBookings] = await Promise.all([getCustomerEventOrders(user.id), getLegacyEventBookings(user.id)]);
 
   return <main className="min-h-screen bg-[#FAF6F1] px-6 py-12 text-[#111]">
     <div className="mx-auto max-w-4xl">
@@ -67,6 +68,23 @@ export default async function OrdersPage() {
             {refunded > 0 ? <p className="mt-3 text-xs text-neutral-500">Refunds are returned to the original payment method. Your bank or card provider may take a few working days to display the credit.</p> : null}
           </article>;
         }) : <section className="rounded-2xl border bg-white p-8 text-center"><p>No confirmed event orders yet.</p><Link href="/events" className="mt-3 inline-block underline">Browse events</Link></section>}
+      <section className="mt-10 rounded-2xl border bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-semibold">Previous event bookings</h2>
+        <p className="mt-1 text-sm text-neutral-600">Bookings from the previous system. These are preserved historical records.</p>
+        {legacyBookings.length ? <div className="mt-5 space-y-3">{legacyBookings.map((booking) => (
+          <article key={booking.id} className="rounded-xl bg-[#F8F5F1] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold">{booking.title}</p>
+                <p className="mt-1 text-sm text-neutral-600">{new Date(booking.starts_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p>
+                <p className="mt-1 text-sm text-neutral-600">Tickets × {booking.quantity}</p>
+              </div>
+              {booking.refunded ? <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">Refunded</span> : booking.cancelled ? <span className="rounded-full bg-neutral-200 px-2.5 py-1 text-xs font-semibold text-neutral-700">Cancelled</span> : <span className="rounded-full bg-neutral-200 px-2.5 py-1 text-xs font-semibold text-neutral-700">Past event</span>}
+            </div>
+          </article>
+        ))}</div> : <p className="mt-5 text-sm text-neutral-600">No earlier event bookings were found.</p>}
+      </section>
+
       </div>
     </div>
   </main>;
