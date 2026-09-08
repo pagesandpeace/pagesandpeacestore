@@ -17,6 +17,7 @@ function stripeClient() {
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
+  // This endpoint has its own Stripe signing secret; legacy/product webhooks use STRIPE_WEBHOOK_SECRET.
   const secret = process.env.STRIPE_APP_CORE_WEBHOOK_SECRET;
   if (!signature || !secret) return NextResponse.json({ error: "Invalid webhook" }, { status: 400 });
 
