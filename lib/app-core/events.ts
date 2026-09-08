@@ -30,19 +30,41 @@ function reportCoreQueryError(operation: string, error: { code?: string; message
   });
 }
 
-async function confirmedSeats(eventId: string) {
+async function reservedSeats(eventId: string) {
   const db = appCoreDb();
-  const { data, error } = await db
+  const { data: bookings, error } = await db
     .from("bookings")
-    .select("quantity")
+    .select("quantity, status, order_line_id")
     .eq("event_id", eventId)
     .in("status", ["pending", "confirmed"]);
 
   if (error) {
-    reportCoreQueryError("confirmedSeats", error);
+    reportCoreQueryError("reservedSeats", error);
     throw new Error("Unable to load event availability");
   }
-  return (data ?? []).reduce((total, booking) => total + booking.quantity, 0);
+
+  const orderLineIds = (bookings ?? []).map((booking) => booking.order_line_id);
+  const refundedByLine = new Map<string, number>();
+
+  if (orderLineIds.length) {
+    const { data: lines, error: lineError } = await db
+      .from("order_lines")
+      .select("id, refunded_quantity")
+      .in("id", orderLineIds);
+
+    if (lineError) {
+      reportCoreQueryError("reservedSeatsOrderLines", lineError);
+      throw new Error("Unable to load event availability");
+    }
+
+    for (const line of lines ?? []) refundedByLine.set(line.id, Number(line.refunded_quantity ?? 0));
+  }
+
+  return (bookings ?? []).reduce((total, booking) => {
+    if (booking.status === "pending") return total + Number(booking.quantity);
+    const refunded = refundedByLine.get(booking.order_line_id) ?? 0;
+    return total + Math.max(0, Number(booking.quantity) - refunded);
+  }, 0);
 }
 
 export async function listPublishedEvents() {
@@ -62,7 +84,7 @@ export async function listPublishedEvents() {
   return Promise.all(
     (data ?? []).map(async (event) => ({
       ...event,
-      remaining_seats: Math.max(event.capacity - (await confirmedSeats(event.id)), 0),
+      remaining_seats: Math.max(event.capacity - (await reservedSeats(event.id)), 0),
     }))
   );
 }
@@ -93,6 +115,6 @@ export async function getPublishedEvent(slug: string) {
   return {
     ...event,
     ticket_types: ticketTypes ?? [],
-    remaining_seats: Math.max(event.capacity - (await confirmedSeats(event.id)), 0),
+    remaining_seats: Math.max(event.capacity - (await reservedSeats(event.id)), 0),
   };
 }
