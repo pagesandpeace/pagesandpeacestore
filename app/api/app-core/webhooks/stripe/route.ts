@@ -42,18 +42,20 @@ export async function POST(request: Request) {
     appCoreOrder: Boolean(appCoreOrderId),
   });
 
-  // Stripe Dashboard's generic test event has no app_core order. Acknowledge it
-  // safely so it verifies the endpoint without touching booking data.
   if (!appCoreOrderId || session.payment_status !== "paid") {
     return NextResponse.json({ received: true });
   }
 
   const db = appCoreDb();
+  const paymentIntentId = typeof session.payment_intent === "string"
+    ? session.payment_intent
+    : session.payment_intent?.id ?? null;
+
   const { data, error } = await db.rpc("confirm_event_checkout", {
     p_stripe_event_id: event.id,
     p_event_type: event.type,
     p_checkout_session_id: session.id,
-    p_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null,
+    p_payment_intent_id: paymentIntentId,
     p_payload: { id: event.id, type: event.type, livemode: event.livemode, created: event.created },
   }).single();
 
@@ -61,6 +63,51 @@ export async function POST(request: Request) {
   if (error || !confirmation) {
     console.error("app_core Stripe checkout processing failed", { eventId: event.id, code: error?.code });
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
+  }
+
+  try {
+    const stripe = stripeClient();
+    const paymentIntent = paymentIntentId
+      ? await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ["latest_charge"] })
+      : null;
+    const latestCharge = paymentIntent?.latest_charge;
+    const charge = typeof latestCharge === "string"
+      ? await stripe.charges.retrieve(latestCharge)
+      : latestCharge && latestCharge.object === "charge"
+        ? latestCharge
+        : null;
+
+    const customerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+    const customerName = session.customer_details?.name ?? null;
+    const paymentMethodType = charge?.payment_method_details?.type ?? null;
+    const cardBrand = charge?.payment_method_details?.card?.brand ?? paymentMethodType;
+    const cardLast4 = charge?.payment_method_details?.card?.last4 ?? null;
+
+    const { error: orderSnapshotError } = await db.from("orders").update({
+      customer_email: customerEmail?.toLowerCase() ?? null,
+      customer_name: customerName,
+      stripe_receipt_url: charge?.receipt_url ?? null,
+      stripe_card_brand: cardBrand,
+      stripe_last4: cardLast4,
+    }).eq("id", confirmation.order_id);
+    if (orderSnapshotError) throw orderSnapshotError;
+
+    const { data: orderLines, error: orderLinesError } = await db.from("order_lines").select("id").eq("order_id", confirmation.order_id);
+    if (orderLinesError) throw orderLinesError;
+    const orderLineIds = (orderLines ?? []).map((line) => line.id);
+
+    if (orderLineIds.length) {
+      const { error: bookingSnapshotError } = await db.from("bookings").update({
+        stripe_checkout_session_id: session.id,
+        stripe_payment_intent_id: paymentIntentId,
+        customer_email: customerEmail?.toLowerCase() ?? null,
+        customer_name: customerName,
+      }).in("order_line_id", orderLineIds);
+      if (bookingSnapshotError) throw bookingSnapshotError;
+    }
+  } catch (snapshotError) {
+    console.error("app_core payment snapshot failed", { orderId: confirmation.order_id, eventId: event.id, snapshotError });
+    return NextResponse.json({ error: "Payment snapshot retry required" }, { status: 500 });
   }
 
   try {

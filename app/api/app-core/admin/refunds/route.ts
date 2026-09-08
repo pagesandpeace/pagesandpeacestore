@@ -99,6 +99,7 @@ export async function POST(req: Request) {
       refunded_quantity: refundedQuantity,
       reason: body.reason?.trim() || "customer_requested",
       notes: body.notes?.trim() || null,
+      stripe_payment_intent_id: order.stripe_payment_intent_id,
       status: "initiated",
       initiated_by_auth_user_id: admin.id,
       initiated_by_email: admin.email ?? null,
@@ -133,9 +134,6 @@ export async function POST(req: Request) {
       throw error;
     }
 
-    // Critical checkpoint: do not mutate local order/ticket state until the
-    // exact Stripe refund ID is durably recorded. A retry uses the same
-    // deterministic idempotency key, so Stripe will return the same refund.
     await updateRefundAudit(audit.id, {
       stripe_refund_id: refund.id,
       status: "stripe_succeeded_syncing",
@@ -150,7 +148,15 @@ export async function POST(req: Request) {
         if (lineError) throw new Error(lineError.message);
 
         const fullyRefunded = newRefundedQty >= Number(line.quantity);
-        const { error: bookingError } = await db.from("bookings").update({ status: fullyRefunded ? "refunded" : "confirmed", updated_at: new Date().toISOString() }).eq("order_line_id", line.id);
+        const bookingUpdate: Record<string, unknown> = {
+          status: fullyRefunded ? "refunded" : "confirmed",
+          updated_at: new Date().toISOString(),
+        };
+        if (fullyRefunded) {
+          bookingUpdate.stripe_refund_id = refund.id;
+          bookingUpdate.refund_processed_at = new Date().toISOString();
+        }
+        const { error: bookingError } = await db.from("bookings").update(bookingUpdate).eq("order_line_id", line.id);
         if (bookingError) throw new Error(bookingError.message);
       }
       await recalcOrder(order.id);
