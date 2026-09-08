@@ -92,13 +92,19 @@ export async function POST(request: Request) {
     }).eq("id", confirmation.order_id);
     if (orderSnapshotError) throw orderSnapshotError;
 
-    const { error: bookingSnapshotError } = await db.from("bookings").update({
-      stripe_checkout_session_id: session.id,
-      stripe_payment_intent_id: paymentIntentId,
-      customer_email: customerEmail?.toLowerCase() ?? null,
-      customer_name: customerName,
-    }).eq("auth_user_id", session.client_reference_id).eq("status", "confirmed").is("stripe_checkout_session_id", null);
-    if (bookingSnapshotError) throw bookingSnapshotError;
+    const { data: orderLines, error: orderLinesError } = await db.from("order_lines").select("id").eq("order_id", confirmation.order_id);
+    if (orderLinesError) throw orderLinesError;
+    const orderLineIds = (orderLines ?? []).map((line) => line.id);
+
+    if (orderLineIds.length) {
+      const { error: bookingSnapshotError } = await db.from("bookings").update({
+        stripe_checkout_session_id: session.id,
+        stripe_payment_intent_id: paymentIntentId,
+        customer_email: customerEmail?.toLowerCase() ?? null,
+        customer_name: customerName,
+      }).in("order_line_id", orderLineIds);
+      if (bookingSnapshotError) throw bookingSnapshotError;
+    }
   } catch (snapshotError) {
     console.error("app_core payment snapshot failed", { orderId: confirmation.order_id, eventId: event.id, snapshotError });
     return NextResponse.json({ error: "Payment snapshot retry required" }, { status: 500 });
