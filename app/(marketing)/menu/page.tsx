@@ -29,6 +29,7 @@ export default async function MenuPage() {
   const { data: items } = await supabase
     .from("menu_items")
     .select("*")
+    .eq("is_visible", true)
     .order("position", { ascending: true });
 
   const cats = (categories ?? []) as MenuCategory[];
@@ -52,6 +53,7 @@ export default async function MenuPage() {
     [
       "Hot Drinks",
       "Cold Drinks",
+      "Milkshakes",
       "Smoothies",
       "Alt Milk",
       "Syrups",
@@ -70,6 +72,8 @@ export default async function MenuPage() {
       "Waffles",
       "Paninis",
       "Yogurt Pots",
+      "Jacket Potatoes",
+      "Filled Croissants",
     ].includes(c.name)
   );
 
