@@ -87,6 +87,22 @@ export async function POST(req: Request) {
     const amountPence = refundable.reduce((sum, line) => sum + line.amountPence, 0);
     if (amountPence <= 0) return NextResponse.json({ error: "Nothing left to refund" }, { status: 400 });
 
+    const paymentIntent = await stripe.paymentIntents.retrieve(order.stripe_payment_intent_id, {
+      expand: ["latest_charge"],
+    });
+    const latestCharge = paymentIntent.latest_charge;
+    const charge = typeof latestCharge === "string" ? await stripe.charges.retrieve(latestCharge) : latestCharge;
+    if (!charge || charge.object !== "charge") {
+      return NextResponse.json({ error: "Could not verify Stripe charge before refund" }, { status: 409 });
+    }
+    const stripeRemainingPence = Math.max(0, Number(charge.amount_captured ?? charge.amount) - Number(charge.amount_refunded ?? 0));
+    if (stripeRemainingPence <= 0) {
+      return NextResponse.json({ error: "Stripe shows this payment is already fully refunded. Refresh the order before trying again." }, { status: 409 });
+    }
+    if (amountPence > stripeRemainingPence) {
+      return NextResponse.json({ error: `Refund exceeds Stripe refundable balance. Stripe has £${(stripeRemainingPence / 100).toFixed(2)} remaining.` }, { status: 409 });
+    }
+
     const { data: customer } = await db
       .from("customers")
       .select("email, display_name")
@@ -132,9 +148,6 @@ export async function POST(req: Request) {
       throw error;
     }
 
-    // Record Stripe success before any local sync. If a later DB write fails,
-    // retries use the same deterministic Stripe idempotency key and cannot
-    // create a duplicate refund for the unchanged local refund state.
     await db.from("refund_audit_logs").update({
       stripe_refund_id: refund.id,
       status: "stripe_succeeded_syncing",
