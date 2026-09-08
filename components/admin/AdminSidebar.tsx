@@ -16,6 +16,8 @@ export default function AdminSidebar({ user, profile }: { user: User; profile: U
     { label: "Events", href: "/admin/events" },
     { label: "Event bookings", href: "/admin/events/bookings" },
     { label: "Users", href: "/admin/users" },
+    { label: "Menu", href: "/admin/menu" },
+    { label: "Opening hours", href: "/admin/store-settings" },
   ];
 
   return <aside className="fixed left-0 top-0 z-50 flex min-h-dvh w-64 flex-col justify-between border-r border-[#dcd6cf] bg-[#FAF6F1]">
