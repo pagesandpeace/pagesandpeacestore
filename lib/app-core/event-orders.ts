@@ -2,8 +2,8 @@ import "server-only";
 
 import { appCoreDb } from "@/lib/app-core/service";
 
-type OrderRow = { id: string; auth_user_id: string; status: string; total_pence: number; currency: string; created_at: string };
-type LineRow = { id: string; order_id: string; item_name: string; quantity: number; unit_amount_pence: number; ticket_type_id: string | null };
+type OrderRow = { id: string; auth_user_id: string; status: string; total_pence: number; currency: string; created_at: string; refund_status: string; refunded_total_pence: number };
+type LineRow = { id: string; order_id: string; item_name: string; quantity: number; unit_amount_pence: number; ticket_type_id: string | null; refunded_quantity: number; refunded_amount_pence: number };
 type BookingRow = { id: string; order_line_id: string; event_id: string; ticket_type_id: string; auth_user_id: string; quantity: number; status: string; created_at: string };
 type EventRow = { id: string; slug: string; title: string; series_name: string | null; starts_at: string };
 type TicketRow = { id: string; name: string };
@@ -15,7 +15,7 @@ export type EventOrder = OrderRow & {
 
 async function loadEventOrders(authUserId?: string) {
   const db = appCoreDb();
-  let query = db.from("orders").select("id, auth_user_id, status, total_pence, currency, created_at").eq("status", "paid");
+  let query = db.from("orders").select("id, auth_user_id, status, total_pence, currency, created_at, refund_status, refunded_total_pence").eq("status", "paid");
   if (authUserId) query = query.eq("auth_user_id", authUserId);
   const { data: orders, error } = await query.order("created_at", { ascending: false }).limit(1000);
   if (error) throw new Error("Could not load event orders");
@@ -24,12 +24,12 @@ async function loadEventOrders(authUserId?: string) {
   const orderIds = typedOrders.map((order) => order.id);
   if (!orderIds.length) return { orders: [] as EventOrder[], customers: new Map<string, CustomerRow>() };
 
-  const { data: lines } = await db.from("order_lines").select("id, order_id, item_name, quantity, unit_amount_pence, ticket_type_id").in("order_id", orderIds);
+  const { data: lines } = await db.from("order_lines").select("id, order_id, item_name, quantity, unit_amount_pence, ticket_type_id, refunded_quantity, refunded_amount_pence").in("order_id", orderIds);
   const typedLines = (lines ?? []) as LineRow[];
   const lineIds = typedLines.map((line) => line.id);
 
   const { data: bookings } = lineIds.length
-    ? await db.from("bookings").select("id, order_line_id, event_id, ticket_type_id, auth_user_id, quantity, status, created_at").in("order_line_id", lineIds).eq("status", "confirmed")
+    ? await db.from("bookings").select("id, order_line_id, event_id, ticket_type_id, auth_user_id, quantity, status, created_at").in("order_line_id", lineIds)
     : { data: [] };
   const typedBookings = (bookings ?? []) as BookingRow[];
 
