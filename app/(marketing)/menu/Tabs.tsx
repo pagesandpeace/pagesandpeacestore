@@ -22,11 +22,13 @@ type CategoryWithItems = {
 export default function Tabs({
   drinks,
   food,
+  snacks,
 }: {
   drinks: CategoryWithItems[];
   food: CategoryWithItems[];
+  snacks: CategoryWithItems[];
 }) {
-  const [activeTab, setActiveTab] = useState<"drinks" | "food">("drinks");
+  const [activeTab, setActiveTab] = useState<"drinks" | "food" | "snacks">("drinks");
 
   return (
     <>
@@ -52,6 +54,13 @@ export default function Tabs({
         >
           Food
         </button>
+
+        <button
+          onClick={() => setActiveTab("snacks")}
+          className={`pb-2 text-xl font-medium ${activeTab === "snacks" ? "border-b-4 border-[#5DA865] text-[#5DA865]" : "text-[#111]/70 hover:text-[#5DA865]"}`}
+        >
+          Snacks
+        </button>
       </div>
 
       {activeTab === "drinks" && (
@@ -65,6 +74,14 @@ export default function Tabs({
       {activeTab === "food" && (
         <div className="max-w-3xl mx-auto space-y-10">
           {food.map((cat) => (
+            <MenuSection key={cat.id} title={cat.name} items={cat.items} />
+          ))}
+        </div>
+      )}
+
+      {activeTab === "snacks" && (
+        <div className="max-w-3xl mx-auto space-y-10">
+          {snacks.map((cat) => (
             <MenuSection key={cat.id} title={cat.name} items={cat.items} />
           ))}
         </div>
