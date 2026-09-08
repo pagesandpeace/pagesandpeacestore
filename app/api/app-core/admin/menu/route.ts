@@ -5,13 +5,15 @@ import { supabaseService } from "@/lib/supabase/service";
 
 export const runtime = "nodejs";
 
+const validAreas = new Set(["drinks", "food", "snacks", "merch"]);
+
 export async function GET() {
   const admin = await requireAdminUser();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = supabaseService();
   const [{ data: categories, error: categoryError }, { data: items, error: itemError }] = await Promise.all([
-    db.from("menu_categories").select("id, name, position").order("position"),
+    db.from("menu_categories").select("id, name, position, website_area").order("position"),
     db.from("menu_items").select("id, category_id, name, price, position, note, is_visible").order("position"),
   ]);
 
@@ -32,15 +34,18 @@ export async function POST(req: Request) {
 
   if (type === "category") {
     const name = String(body?.name || "").trim();
-    if (!name) return NextResponse.json({ error: "Category name is required" }, { status: 400 });
+    const website_area = String(body?.website_area || "food");
+    if (!name || !validAreas.has(website_area)) {
+      return NextResponse.json({ error: "Category name and website area are required" }, { status: 400 });
+    }
 
     const { data: last } = await db.from("menu_categories").select("position").order("position", { ascending: false }).limit(1).maybeSingle();
     const position = Number(last?.position ?? -1) + 1;
 
     const { data, error } = await db
       .from("menu_categories")
-      .insert({ name, position })
-      .select("id, name, position")
+      .insert({ name, position, website_area })
+      .select("id, name, position, website_area")
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -87,6 +92,28 @@ export async function PATCH(req: Request) {
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
+  const type = String(body?.type || "item");
+  const db = supabaseService();
+
+  if (type === "category") {
+    const id = String(body?.id || "");
+    const name = String(body?.name || "").trim();
+    const website_area = String(body?.website_area || "");
+    if (!id || !name || !validAreas.has(website_area)) {
+      return NextResponse.json({ error: "Invalid category" }, { status: 400 });
+    }
+
+    const { data, error } = await db
+      .from("menu_categories")
+      .update({ name, website_area })
+      .eq("id", id)
+      .select("id, name, position, website_area")
+      .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, category: data });
+  }
+
   const id = String(body?.id || "");
   const name = String(body?.name || "").trim();
   const price = Number(body?.price);
@@ -98,7 +125,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Invalid menu item" }, { status: 400 });
   }
 
-  const { data, error } = await supabaseService()
+  const { data, error } = await db
     .from("menu_items")
     .update({ name, price, note, is_visible, position })
     .eq("id", id)
