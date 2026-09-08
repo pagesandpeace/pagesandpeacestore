@@ -4,25 +4,11 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function GET() {
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("📥 [/api/me] HIT");
-
   try {
     const supabase = await supabaseServer();
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
 
-    const {
-      data: { user },
-      error: authErr,
-    } = await supabase.auth.getUser();
-
-    console.log("👤 getUser():", {
-      id: user?.id,
-      email: user?.email,
-      error: authErr,
-    });
-
-    if (!user) {
-      console.log("🔓 No authenticated user");
+    if (authErr || !user) {
       return NextResponse.json(null, { status: 401 });
     }
 
@@ -32,21 +18,10 @@ export async function GET() {
       .eq("auth_user_id", user.id)
       .single();
 
-    console.log("📦 users lookup:", {
-      profile,
-      error: profileErr,
-    });
-
     if (profileErr || !profile) {
-      console.error("❌ Authenticated user without profile", {
-        userId: user.id,
-        profileErr,
-      });
-
+      console.error("Authenticated user profile lookup failed", { userId: user.id });
       return NextResponse.json(null, { status: 500 });
     }
-
-    console.log("✅ /api/me SUCCESS");
 
     return NextResponse.json({
       id: profile.id,
@@ -57,10 +32,8 @@ export async function GET() {
       marketingConsent: profile.marketing_consent === true,
       beehiivSubscribed: profile.beehiiv_subscribed === true,
     });
-  } catch (err) {
-    console.error("🔥 /api/me HARD CRASH:", err);
+  } catch {
+    console.error("/api/me failed");
     return NextResponse.json(null, { status: 500 });
-  } finally {
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   }
 }
