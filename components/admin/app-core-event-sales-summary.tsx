@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { getAdminEventOrders } from "@/lib/app-core/event-orders";
+import { appCoreDb } from "@/lib/app-core/service";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
 
 const money = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
@@ -10,7 +11,18 @@ export default async function AppCoreEventSalesSummary() {
   const admin = await requireAdminUser();
   if (!admin) return null;
 
-  const { orders } = await getAdminEventOrders();
+  const [{ orders }, { data: legacyBookingRows, error: legacyBookingsError }] = await Promise.all([
+    getAdminEventOrders(),
+    appCoreDb().schema("public").from("event_bookings").select("id, quantity, cancelled, refunded, events!inner(title, date, is_test)").eq("paid", true),
+  ]);
+  if (legacyBookingsError) throw new Error("Could not load historical event bookings");
+  const nowTimestamp = Date.now();
+  const legacyBookings = (legacyBookingRows ?? []).flatMap((booking: any) => {
+    const event = Array.isArray(booking.events) ? booking.events[0] : booking.events;
+    if (!event || event.is_test || new Date(event.date).getTime() >= nowTimestamp) return [];
+    return [{ ...booking, event }];
+  });
+  const legacyTickets = legacyBookings.reduce((total: number, booking: any) => total + Number(booking.quantity ?? 1), 0);
   const lines = orders.flatMap((order) => order.lines.map((line) => ({ ...line, created_at: order.created_at })));
   const netQuantity = (line: (typeof lines)[number]) => Math.max(0, Number(line.quantity) - Number(line.refunded_quantity ?? 0));
   const netRevenue = (line: (typeof lines)[number]) => Math.max(0, Number(line.quantity) * Number(line.unit_amount_pence) - Number(line.refunded_amount_pence ?? 0));
@@ -61,6 +73,14 @@ export default async function AppCoreEventSalesSummary() {
     <section className="rounded-2xl border bg-white p-6">
       <div><h2 className="text-xl font-bold">Monthly event revenue</h2><p className="mt-1 text-sm text-foreground/60">Last six calendar months, net of refunds.</p></div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">{trend.map((month) => <div key={month.key} className="rounded-xl bg-[#f8f5f1] p-3"><p className="text-xs font-medium text-foreground/60">{month.label}</p><div className="mt-3 flex h-28 items-end"><div className="w-full rounded-t bg-emerald-700" style={{ height: `${Math.max((month.amount / maxMonthRevenue) * 100, month.amount ? 7 : 0)}%` }} /></div><p className="mt-2 text-sm font-semibold">{money(month.amount)}</p></div>)}</div>
+    </section>
+
+    <section className="rounded-2xl border border-sky-200 bg-sky-50 p-6">
+      <div><p className="text-sm font-medium text-sky-800">Previous system</p><h2 className="mt-1 text-xl font-bold">Historical event bookings</h2><p className="mt-1 text-sm text-sky-900/70">Read-only records retained from before the rebuilt checkout system. They are kept separate from the refund-aware live totals above.</p></div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <Metric label="Historical paid bookings" value={legacyBookings.length.toLocaleString("en-GB")} />
+        <Metric label="Historical tickets" value={legacyTickets.toLocaleString("en-GB")} />
+      </div>
     </section>
 
     <section className="rounded-2xl border bg-white p-6">
