@@ -2,7 +2,8 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAuthServer } from "@/lib/supabase/server";
+import { supabaseService } from "@/lib/supabase/service";
 import cloudinary from "cloudinary";
 
 cloudinary.v2.config({
@@ -13,107 +14,33 @@ cloudinary.v2.config({
 });
 
 export async function PATCH(req: Request) {
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("📥 [API] PATCH /api/user/avatar");
-
   try {
-    /* ----------------------------------------
-       AUTH
-    ---------------------------------------- */
-    const supabase = await supabaseServer();
-    const { data: auth, error: authErr } = await supabase.auth.getUser();
+    const auth = await supabaseAuthServer();
+    const { data: { user }, error: authErr } = await auth.auth.getUser();
+    if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    console.log("👤 Auth:", {
-      id: auth?.user?.id,
-      email: auth?.user?.email,
-      error: authErr,
-    });
-
-    if (authErr || !auth?.user) {
-      console.warn("🚫 Unauthorized");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    /* ----------------------------------------
-       FILE PARSE
-    ---------------------------------------- */
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
+    if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
 
-    console.log("📄 File:", {
-      name: file?.name,
-      size: file?.size,
-      type: file?.type,
-    });
-
-    if (!file) {
-      return NextResponse.json(
-        { error: "No file uploaded" },
-        { status: 400 }
-      );
-    }
-
-    /* ----------------------------------------
-       CLOUDINARY UPLOAD
-    ---------------------------------------- */
     const buffer = Buffer.from(await file.arrayBuffer());
     const dataUri = `data:${file.type};base64,${buffer.toString("base64")}`;
-
-    console.log("☁️ Uploading to Cloudinary…");
-
     const upload = await cloudinary.v2.uploader.upload(dataUri, {
-      folder: `pagesandpeace/avatars/${auth.user.id}`,
+      folder: `pagesandpeace/avatars/${user.id}`,
       public_id: "avatar",
       overwrite: true,
       resource_type: "image",
-      transformation: [
-        {
-          width: 400,
-          height: 400,
-          crop: "fill",
-          gravity: "auto",
-          quality: "auto",
-        },
-      ],
+      transformation: [{ width: 400, height: 400, crop: "fill", gravity: "auto", quality: "auto" }],
     });
 
-    console.log("✅ Cloudinary URL:", upload.secure_url);
+    const { error } = await supabaseService().schema("app_core").from("customers")
+      .update({ profile_image: upload.secure_url, updated_at: new Date().toISOString() })
+      .eq("auth_user_id", user.id);
+    if (error) return NextResponse.json({ error: "Avatar not persisted" }, { status: 500 });
 
-    /* ----------------------------------------
-       DATABASE UPDATE (CRITICAL PART)
-    ---------------------------------------- */
-    const { data, error } = await supabase
-      .from("users")
-      .update({
-        image: upload.secure_url,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("auth_user_id", auth.user.id)
-      .select("id, image");
-
-    console.log("🧪 DB UPDATE RESULT:", { data, error });
-
-    if (error || !data || data.length === 0) {
-      console.error("💥 Avatar update FAILED");
-      return NextResponse.json(
-        { error: "Avatar not persisted" },
-        { status: 500 }
-      );
-    }
-
-    console.log("🎉 Avatar persisted for:", auth.user.email);
-
-    return NextResponse.json({
-      success: true,
-      imageUrl: upload.secure_url,
-    });
+    return NextResponse.json({ success: true, imageUrl: upload.secure_url });
   } catch (err: any) {
-    console.error("🔥 Avatar upload crashed:", err);
-    return NextResponse.json(
-      { error: "Avatar upload failed", details: err?.message },
-      { status: 500 }
-    );
-  } finally {
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.error("Avatar upload failed", { message: err?.message });
+    return NextResponse.json({ error: "Avatar upload failed" }, { status: 500 });
   }
 }
