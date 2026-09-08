@@ -13,7 +13,7 @@ export async function GET() {
 
   const db = supabaseService();
   const [{ data: sections, error: sectionError }, { data: categories, error: categoryError }, { data: items, error: itemError }] = await Promise.all([
-    db.from("menu_sections").select("id, name, slug, position, display_mode, is_visible").order("position"),
+    db.from("menu_sections").select("id, name, slug, position, is_visible").order("position"),
     db.from("menu_categories").select("id, name, position, section_id").order("position"),
     db.from("menu_items").select("id, category_id, name, price, position, note, is_visible").order("position"),
   ]);
@@ -36,13 +36,12 @@ export async function POST(req: Request) {
   if (type === "section") {
     const name = String(body?.name || "").trim();
     const slug = slugify(String(body?.slug || name));
-    const display_mode = body?.display_mode === "standalone" ? "standalone" : "menu_tab";
     if (!name || !slug) return NextResponse.json({ error: "Section name is required" }, { status: 400 });
 
     const { data: last } = await db.from("menu_sections").select("position").order("position", { ascending: false }).limit(1).maybeSingle();
     const { data, error } = await db.from("menu_sections")
-      .insert({ name, slug, display_mode, position: Number(last?.position ?? -1) + 1, is_visible: true })
-      .select("id, name, slug, position, display_mode, is_visible").single();
+      .insert({ name, slug, display_mode: "menu_tab", position: Number(last?.position ?? -1) + 1, is_visible: true })
+      .select("id, name, slug, position, is_visible").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true, section: data });
   }
@@ -96,13 +95,12 @@ export async function PATCH(req: Request) {
     const id = String(body?.id || "");
     const name = String(body?.name || "").trim();
     const slug = slugify(String(body?.slug || name));
-    const display_mode = body?.display_mode === "standalone" ? "standalone" : "menu_tab";
     const is_visible = Boolean(body?.is_visible);
     if (!id || !name || !slug) return NextResponse.json({ error: "Invalid section" }, { status: 400 });
 
     const { data, error } = await db.from("menu_sections")
-      .update({ name, slug, display_mode, is_visible, updated_at: new Date().toISOString() })
-      .eq("id", id).select("id, name, slug, position, display_mode, is_visible").single();
+      .update({ name, slug, display_mode: "menu_tab", is_visible, updated_at: new Date().toISOString() })
+      .eq("id", id).select("id, name, slug, position, is_visible").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true, section: data });
   }
