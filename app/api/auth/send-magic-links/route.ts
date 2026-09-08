@@ -1,69 +1,44 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { appCoreDb } from "@/lib/app-core/service";
 
-export async function POST(req: Request) {
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("📥 SEND MAGIC LINK");
+export const runtime = "nodejs";
 
-  try {
-    const body = await req.json();
-    const { email, callbackURL, intent } = body;
+const allowedPaths = new Set(["/dashboard", "/admin", "/account", "/reset-password"]);
+const hash = (value: string) => crypto.createHash("sha256").update(value).digest("hex");
+const genericSuccess = () => NextResponse.json({ success: true });
 
-    if (!email) {
-      return NextResponse.json(
-        { error: "Email required" },
-        { status: 400 }
-      );
-    }
+export async function POST(request: Request) {
+  let body: { email?: unknown; callbackURL?: unknown; intent?: unknown; name?: unknown; firstName?: unknown; lastName?: unknown; marketingConsent?: unknown };
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid request" }, { status: 400 }); }
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 254) return genericSuccess();
 
-    const normalizedEmail = String(email).trim().toLowerCase();
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const db = appCoreDb();
+  const [emailLimit, ipLimit] = await Promise.all([
+    db.rpc("consume_auth_rate_limit", { p_bucket: `email:${hash(email)}`, p_limit: 3, p_window_seconds: 900 }).single(),
+    db.rpc("consume_auth_rate_limit", { p_bucket: `ip:${hash(forwarded)}`, p_limit: 10, p_window_seconds: 3600 }).single(),
+  ]);
+  if (emailLimit.error || ipLimit.error || emailLimit.data !== true || ipLimit.data !== true) return genericSuccess();
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
-    const safeIntent = intent === "signup" ? "signup" : "signin";
-
-    const redirectTo = `${
-      process.env.NEXT_PUBLIC_SITE_URL
-    }/auth/callback?intent=${safeIntent}&callbackURL=${encodeURIComponent(
-      callbackURL || "/dashboard"
-    )}`;
-
-    console.log("📧 Email:", normalizedEmail);
-    console.log("🎯 Intent:", safeIntent);
-    console.log("🔁 Redirect:", redirectTo);
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        emailRedirectTo: redirectTo,
-
-        // Important:
-        // Sign-in should never create/invite users.
-        shouldCreateUser: safeIntent === "signup",
-      },
-    });
-
-    if (error) {
-      console.error("❌ Magic link error:", error);
-
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 }
-      );
-    }
-
-    console.log("✅ Magic link sent to:", normalizedEmail);
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("❌ Server crash:", err);
-
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    );
-  }
+  const intent = body.intent === "signup" ? "signup" : "signin";
+  const callbackURL = typeof body.callbackURL === "string" && allowedPaths.has(body.callbackURL) ? body.callbackURL : "/dashboard";
+  const redirect = new URL("/auth/callback", request.url);
+  redirect.searchParams.set("intent", intent); redirect.searchParams.set("callbackURL", callbackURL);
+  const marketingConsent = intent === "signup" && body.marketingConsent === true;
+  if (marketingConsent) redirect.searchParams.set("marketing_consent", "true");
+  const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: redirect.toString(), shouldCreateUser: intent === "signup",
+      data: intent === "signup" ? { name, first_name: typeof body.firstName === "string" ? body.firstName.slice(0, 60) : "", last_name: typeof body.lastName === "string" ? body.lastName.slice(0, 60) : "", marketing_consent: marketingConsent } : undefined,
+    },
+  });
+  // Same public response prevents account enumeration.
+  if (error) console.warn("magic link request rejected", { code: error.code ?? "unknown" });
+  return genericSuccess();
 }

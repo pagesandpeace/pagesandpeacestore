@@ -17,6 +17,7 @@ export default function SignUpClient() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [marketingConsent, setMarketingConsent] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -29,16 +30,6 @@ export default function SignUpClient() {
   function showError(msg: string) {
     setErrorMessage(msg);
     setErrorOpen(true);
-  }
-
-  function isAlreadyRegisteredError(message: string) {
-    const lowerMessage = message.toLowerCase();
-
-    return (
-      lowerMessage.includes("already been registered") ||
-      lowerMessage.includes("already registered") ||
-      lowerMessage.includes("email_exists")
-    );
   }
 
   /* --------------------------------------------------
@@ -54,36 +45,19 @@ export default function SignUpClient() {
 
     const fullName = `${firstName} ${lastName}`.trim();
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?intent=signup&callbackURL=${encodeURIComponent(
-          callbackURL
-        )}`,
-
-        data: {
-          name: fullName,
-          first_name: firstName,
-          last_name: lastName,
-        },
-      },
-    });
-
-    if (error) {
-      if (isAlreadyRegisteredError(error.message)) {
-        showError(
-          "This email already has an account. Please use Sign In instead."
-        );
-      } else {
-        showError(error.message);
-      }
-
+    try {
+      const response = await fetch("/api/auth/send-magic-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, callbackURL, intent: "signup", name: fullName, firstName, lastName, marketingConsent }),
+      });
+      if (!response.ok) throw new Error("Unable to start sign-up");
+      setEmailSent(true);
+    } catch {
+      showError("We could not send your sign-up link. Please try again shortly.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setEmailSent(true);
-    setLoading(false);
   }
 
   /* --------------------------------------------------
@@ -98,6 +72,7 @@ export default function SignUpClient() {
 
     params.set("intent", "signup");
     params.set("callbackURL", callbackURL);
+    if (marketingConsent) params.set("marketing_consent", "true");
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -222,6 +197,17 @@ export default function SignUpClient() {
           disabled={loading || emailSent}
           onChange={(e) => setEmail(e.target.value)}
         />
+
+        <label className="flex items-start gap-3 rounded-lg border border-[#e4ddd5] p-3 text-sm text-[#555]">
+          <input
+            type="checkbox"
+            checked={marketingConsent}
+            disabled={loading || emailSent}
+            onChange={(e) => setMarketingConsent(e.target.checked)}
+            className="mt-1 h-4 w-4"
+          />
+          <span>Email me about Pages &amp; Peace events, books and café news. You can unsubscribe at any time.</span>
+        </label>
 
         <Button
           type="submit"

@@ -1,99 +1,60 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { appCoreDb } from "@/lib/app-core/service";
+import { supabaseService } from "@/lib/supabase/service";
 
-/* ----------------------------------
-   TYPES
----------------------------------- */
-type BeehiivWebhook = {
-  event_type: string; // ✅ FIXED (was "type")
-  data?: {
-    email?: string;
-  };
-};
+type BeehiivWebhook = { event_type?: string; data?: { email?: string } };
 
-/* ----------------------------------
-   HANDLER
----------------------------------- */
-export async function POST(req: Request) {
+function safeEqual(left: string, right: string) {
+  const a = Buffer.from(left); const b = Buffer.from(right);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function verifySvix(body: string, id: string | null, timestamp: string | null, signature: string | null) {
+  const secret = process.env.BEEHIIV_WEBHOOK_SIGNING_SECRET;
+  if (!secret || !id || !timestamp || !signature) return false;
+  const time = Number(timestamp);
+  if (!Number.isFinite(time) || Math.abs(Date.now() / 1000 - time) > 5 * 60) return false;
   try {
-    const body = (await req.json()) as BeehiivWebhook;
+    const encodedSecret = secret.startsWith("whsec_") ? secret.slice(6) : secret;
+    const key = Buffer.from(encodedSecret, "base64");
+    const expected = crypto.createHmac("sha256", key).update(`${id}.${timestamp}.${body}`).digest("base64");
+    return signature.split(" ").some((item) => {
+      const [, candidate] = item.split(",", 2);
+      return candidate ? safeEqual(expected, candidate) : false;
+    });
+  } catch { return false; }
+}
 
-    console.log("📩 Beehiiv webhook received:", body);
-
-    // ✅ FIXED: correct field
-    const event = body?.event_type;
-    const email = body?.data?.email?.toLowerCase();
-
-    if (!email) {
-      console.log("⚠️ No email in webhook");
-      return NextResponse.json({ ok: true });
-    }
-
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false } }
-    );
-
-    /* -------------------------
-       SUBSCRIBE
-    ------------------------- */
-    if (event === "subscription.created") {
-      const { data, error } = await supabaseAdmin
-        .from("users")
-        .update({
-          marketing_consent: true,
-          beehiiv_subscribed: true,
-          beehiiv_subscribed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("email", email)
-        .select();
-
-      if (error) {
-        console.error("❌ DB update error (subscribe):", error);
-      } else {
-        console.log("✅ Subscribed:", email, data);
-      }
-    }
-
-    /* -------------------------
-       UNSUBSCRIBE (CRITICAL)
-    ------------------------- */
-    if (event === "subscription.deleted") {
-      const { data, error } = await supabaseAdmin
-        .from("users")
-        .update({
-          marketing_consent: false,
-          beehiiv_subscribed: false,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("email", email)
-        .select();
-
-      if (error) {
-        console.error("❌ DB update error (unsubscribe):", error);
-      } else {
-        console.log("❌ Unsubscribed:", email, data);
-      }
-    }
-
-    /* -------------------------
-       UNKNOWN EVENT (SAFE LOG)
-    ------------------------- */
-    if (
-      event !== "subscription.created" &&
-      event !== "subscription.deleted"
-    ) {
-      console.log("ℹ️ Unhandled Beehiiv event:", event);
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("❌ Webhook error:", err);
-    return NextResponse.json({ ok: true });
+export async function POST(request: Request) {
+  const body = await request.text();
+  const id = request.headers.get("svix-id");
+  if (!verifySvix(body, id, request.headers.get("svix-timestamp"), request.headers.get("svix-signature"))) {
+    return NextResponse.json({ error: "Invalid webhook" }, { status: 401 });
   }
+
+  let payload: BeehiivWebhook;
+  try { payload = JSON.parse(body) as BeehiivWebhook; } catch { return NextResponse.json({ error: "Invalid payload" }, { status: 400 }); }
+  const event = payload.event_type;
+  const email = payload.data?.email?.trim().toLowerCase();
+  if (!id || !email || !["subscription.created", "subscription.deleted"].includes(event ?? "")) return NextResponse.json({ received: true });
+
+  const receipt = await appCoreDb().from("webhook_receipts").insert({ id, source: "beehiiv" });
+  if (receipt.error?.code === "23505") return NextResponse.json({ received: true });
+  if (receipt.error) return NextResponse.json({ error: "Unable to record webhook" }, { status: 500 });
+
+  const now = new Date().toISOString();
+  const update = event === "subscription.created"
+    ? { marketing_consent: true, marketing_consent_at: now, beehiiv_subscribed: true, beehiiv_subscribed_at: now, updated_at: now }
+    : { marketing_consent: false, beehiiv_subscribed: false, updated_at: now };
+  const { error } = await supabaseService().from("users").update(update).eq("email", email);
+  if (error) {
+    // Permit Beehiiv's retry to process the event if the profile update failed.
+    await appCoreDb().from("webhook_receipts").delete().eq("id", id);
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
+  }
+  return NextResponse.json({ received: true });
 }
