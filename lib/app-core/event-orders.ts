@@ -2,8 +2,8 @@ import "server-only";
 
 import { appCoreDb } from "@/lib/app-core/service";
 
-type OrderRow = { id: string; auth_user_id: string; status: string; total_pence: number; currency: string; created_at: string; refund_status: string; refunded_total_pence: number };
-type LineRow = { id: string; order_id: string; item_name: string; quantity: number; unit_amount_pence: number; ticket_type_id: string | null; refunded_quantity: number; refunded_amount_pence: number };
+type OrderRow = { id: string; auth_user_id: string | null; status: string; total_pence: number; currency: string; created_at: string; refund_status: string; refunded_total_pence: number };
+type LineRow = { id: string; order_id: string; item_type: string; item_name: string; quantity: number; unit_amount_pence: number; ticket_type_id: string | null; refunded_quantity: number; refunded_amount_pence: number };
 type BookingRow = { id: string; order_line_id: string; event_id: string; ticket_type_id: string; auth_user_id: string; quantity: number; status: string; created_at: string };
 type EventRow = { id: string; slug: string; title: string; series_name: string | null; starts_at: string };
 type TicketRow = { id: string; name: string };
@@ -15,27 +15,39 @@ export type EventOrder = OrderRow & {
 
 async function loadEventOrders(authUserId?: string) {
   const db = appCoreDb();
-  let query = db.from("orders").select("id, auth_user_id, status, total_pence, currency, created_at, refund_status, refunded_total_pence").eq("status", "paid");
+  let query = db
+    .from("orders")
+    .select("id, auth_user_id, status, total_pence, currency, created_at, refund_status, refunded_total_pence")
+    .in("status", ["paid", "partially_refunded", "refunded"]);
   if (authUserId) query = query.eq("auth_user_id", authUserId);
-  const { data: orders, error } = await query.order("created_at", { ascending: false }).limit(1000);
+  const { data: orders, error } = await query.order("created_at", { ascending: false }).limit(2000);
   if (error) throw new Error("Could not load event orders");
 
   const typedOrders = (orders ?? []) as OrderRow[];
   const orderIds = typedOrders.map((order) => order.id);
   if (!orderIds.length) return { orders: [] as EventOrder[], customers: new Map<string, CustomerRow>() };
 
-  const { data: lines } = await db.from("order_lines").select("id, order_id, item_name, quantity, unit_amount_pence, ticket_type_id, refunded_quantity, refunded_amount_pence").in("order_id", orderIds);
+  const { data: lines, error: linesError } = await db
+    .from("order_lines")
+    .select("id, order_id, item_type, item_name, quantity, unit_amount_pence, ticket_type_id, refunded_quantity, refunded_amount_pence")
+    .in("order_id", orderIds)
+    .eq("item_type", "event_ticket");
+  if (linesError) throw new Error("Could not load event order lines");
+
   const typedLines = (lines ?? []) as LineRow[];
+  const eventOrderIds = new Set(typedLines.map((line) => line.order_id));
+  const eventOrders = typedOrders.filter((order) => eventOrderIds.has(order.id));
   const lineIds = typedLines.map((line) => line.id);
 
-  const { data: bookings } = lineIds.length
+  const { data: bookings, error: bookingsError } = lineIds.length
     ? await db.from("bookings").select("id, order_line_id, event_id, ticket_type_id, auth_user_id, quantity, status, created_at").in("order_line_id", lineIds)
-    : { data: [] };
+    : { data: [], error: null };
+  if (bookingsError) throw new Error("Could not load event bookings");
   const typedBookings = (bookings ?? []) as BookingRow[];
 
   const eventIds = [...new Set(typedBookings.map((booking) => booking.event_id))];
   const ticketIds = [...new Set(typedBookings.map((booking) => booking.ticket_type_id))];
-  const customerIds = [...new Set(typedOrders.map((order) => order.auth_user_id))];
+  const customerIds = [...new Set(eventOrders.map((order) => order.auth_user_id).filter((id): id is string => Boolean(id)))];
 
   const [{ data: events }, { data: tickets }, { data: customers }] = await Promise.all([
     eventIds.length ? db.from("events").select("id, slug, title, series_name, starts_at").in("id", eventIds) : Promise.resolve({ data: [] }),
@@ -49,7 +61,7 @@ async function loadEventOrders(authUserId?: string) {
   const customersById = new Map(((customers ?? []) as CustomerRow[]).map((customer) => [customer.auth_user_id, customer]));
 
   return {
-    orders: typedOrders.map((order) => ({
+    orders: eventOrders.map((order) => ({
       ...order,
       lines: typedLines.filter((line) => line.order_id === order.id).map((line) => {
         const booking = bookingsByLine.get(line.id);
