@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Montserrat, Geist } from "next/font/google";
 import "./globals.css";
 
-import { CartProvider } from "@/context/CartContext";
 import CookieBanner from "@/components/CookieBanner";
 import Footer from "@/components/Footer";
 import { Toaster } from "@/components/ui/Toaster";
@@ -74,13 +73,9 @@ export default function RootLayout({
       >
         <Toaster />
         <AuthRefresh />
-
-        <CartProvider>
-          <div className="flex-1 min-h-0">{children}</div>
-
-          <Footer />
-          <CookieBanner />
-        </CartProvider>
+        <div className="flex-1 min-h-0">{children}</div>
+        <Footer />
+        <CookieBanner />
       </body>
     </html>
   );
