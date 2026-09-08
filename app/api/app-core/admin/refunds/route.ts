@@ -35,6 +35,12 @@ function refundStateKey(lines: Array<{ id: string; refunded_quantity: number | n
   return lines.map((line) => `${line.id}:${Number(line.refunded_quantity ?? 0)}:${Number(line.refunded_amount_pence ?? 0)}`).sort().join("|");
 }
 
+async function updateRefundAudit(auditId: string, values: Record<string, unknown>) {
+  const db = appCoreDb();
+  const { error } = await db.from("refund_audit_logs").update(values).eq("id", auditId);
+  if (error) throw new Error(`Could not update refund audit: ${error.message}`);
+}
+
 export async function POST(req: Request) {
   const admin = await requireAdminUser();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -119,11 +125,22 @@ export async function POST(req: Request) {
         },
       }, { idempotencyKey });
     } catch (error) {
-      await db.from("refund_audit_logs").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", audit.id);
+      try {
+        await updateRefundAudit(audit.id, { status: "failed", updated_at: new Date().toISOString() });
+      } catch (auditUpdateError) {
+        console.error("Could not mark failed refund audit", auditUpdateError);
+      }
       throw error;
     }
 
-    await db.from("refund_audit_logs").update({ stripe_refund_id: refund.id, status: "stripe_succeeded_syncing", updated_at: new Date().toISOString() }).eq("id", audit.id);
+    // Critical checkpoint: do not mutate local order/ticket state until the
+    // exact Stripe refund ID is durably recorded. A retry uses the same
+    // deterministic idempotency key, so Stripe will return the same refund.
+    await updateRefundAudit(audit.id, {
+      stripe_refund_id: refund.id,
+      status: "stripe_succeeded_syncing",
+      updated_at: new Date().toISOString(),
+    });
 
     try {
       for (const line of refundable) {
@@ -137,9 +154,13 @@ export async function POST(req: Request) {
         if (bookingError) throw new Error(bookingError.message);
       }
       await recalcOrder(order.id);
-      await db.from("refund_audit_logs").update({ status: "succeeded", updated_at: new Date().toISOString() }).eq("id", audit.id);
+      await updateRefundAudit(audit.id, { status: "succeeded", updated_at: new Date().toISOString() });
     } catch (error) {
-      await db.from("refund_audit_logs").update({ status: "stripe_succeeded_sync_failed", updated_at: new Date().toISOString() }).eq("id", audit.id);
+      try {
+        await updateRefundAudit(audit.id, { status: "stripe_succeeded_sync_failed", updated_at: new Date().toISOString() });
+      } catch (auditUpdateError) {
+        console.error("Could not mark refund sync failure", auditUpdateError);
+      }
       throw error;
     }
 
@@ -162,10 +183,14 @@ export async function POST(req: Request) {
         }, { idempotencyKey: `refund-confirmation/${audit.id}` });
         if (emailError) throw new Error(emailError.message || "Resend returned an error");
         emailSent = true;
-        await db.from("refund_audit_logs").update({ email_status: "sent", resend_email_id: emailData?.id ?? null, email_error: null, updated_at: new Date().toISOString() }).eq("id", audit.id);
+        await updateRefundAudit(audit.id, { email_status: "sent", resend_email_id: emailData?.id ?? null, email_error: null, updated_at: new Date().toISOString() });
       } catch (emailError) {
         console.error("Refund succeeded but confirmation email failed", emailError);
-        await db.from("refund_audit_logs").update({ email_status: "failed", email_error: emailError instanceof Error ? emailError.message.slice(0, 500) : "Unknown email error", updated_at: new Date().toISOString() }).eq("id", audit.id);
+        try {
+          await updateRefundAudit(audit.id, { email_status: "failed", email_error: emailError instanceof Error ? emailError.message.slice(0, 500) : "Unknown email error", updated_at: new Date().toISOString() });
+        } catch (auditUpdateError) {
+          console.error("Could not record refund email failure", auditUpdateError);
+        }
       }
     }
 
