@@ -10,6 +10,7 @@ export async function GET() {
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data, error } = await supabaseService()
+    .schema("app_core")
     .from("opening_hours")
     .select("day_of_week, day_name, open_time, close_time, is_closed")
     .order("day_of_week");
@@ -39,7 +40,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Invalid opening hours" }, { status: 400 });
   }
 
-  const { error } = await supabaseService().from("opening_hours").upsert(rows, { onConflict: "day_of_week" });
+  const { error } = await supabaseService().schema("app_core").from("opening_hours").upsert(rows, { onConflict: "day_of_week" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ success: true });
