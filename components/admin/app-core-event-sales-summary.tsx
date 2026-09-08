@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { getAdminEventOrders } from "@/lib/app-core/event-orders";
-import { appCoreDb } from "@/lib/app-core/service";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
 
 const money = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
@@ -11,21 +10,8 @@ export default async function AppCoreEventSalesSummary() {
   const admin = await requireAdminUser();
   if (!admin) return null;
 
-  const [{ orders }, { data: legacyRows, error: legacyError }] = await Promise.all([
-    getAdminEventOrders(),
-    appCoreDb()
-      .schema("public")
-      .from("order_items")
-      .select("id, order_id, name, quantity, price, refunded_quantity, refunded_amount, orders!inner(created_at, status, is_test)")
-      .eq("kind", "event")
-      .eq("orders.is_test", false)
-      .in("orders.status", ["completed", "partially_refunded", "refunded"]),
-  ]);
-
-  if (legacyError) throw new Error("Could not load legacy event sales");
-
-  const rebuiltLines = orders.flatMap((order) => order.lines.map((line) => ({
-    source: "rebuilt" as const,
+  const { orders } = await getAdminEventOrders();
+  const lines = orders.flatMap((order) => order.lines.map((line) => ({
     orderId: order.id,
     name: line.event?.series_name || line.event?.title || line.item_name,
     createdAt: order.created_at,
@@ -35,21 +21,6 @@ export default async function AppCoreEventSalesSummary() {
     refundedPence: Number(line.refunded_amount_pence ?? 0),
   })));
 
-  const legacyLines = (legacyRows ?? []).map((row: any) => {
-    const order = Array.isArray(row.orders) ? row.orders[0] : row.orders;
-    return {
-      source: "legacy" as const,
-      orderId: String(row.order_id),
-      name: String(row.name || "Event"),
-      createdAt: String(order.created_at),
-      quantity: Number(row.quantity ?? 0),
-      refundedQuantity: Number(row.refunded_quantity ?? 0),
-      grossPence: Math.round(Number(row.price ?? 0) * Number(row.quantity ?? 0) * 100),
-      refundedPence: Math.round(Number(row.refunded_amount ?? 0) * 100),
-    };
-  });
-
-  const lines = [...legacyLines, ...rebuiltLines];
   const netQuantity = (line: (typeof lines)[number]) => Math.max(0, line.quantity - line.refundedQuantity);
   const netRevenue = (line: (typeof lines)[number]) => Math.max(0, line.grossPence - line.refundedPence);
 
@@ -58,7 +29,7 @@ export default async function AppCoreEventSalesSummary() {
   const tickets = lines.reduce((total, line) => total + netQuantity(line), 0);
 
   const orderNet = new Map<string, number>();
-  for (const line of lines) orderNet.set(`${line.source}:${line.orderId}`, (orderNet.get(`${line.source}:${line.orderId}`) ?? 0) + netRevenue(line));
+  for (const line of lines) orderNet.set(line.orderId, (orderNet.get(line.orderId) ?? 0) + netRevenue(line));
   const activeOrders = [...orderNet.values()].filter((amount) => amount > 0).length;
 
   const now = new Date();
