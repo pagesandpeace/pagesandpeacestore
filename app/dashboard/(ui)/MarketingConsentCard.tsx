@@ -18,6 +18,7 @@ export default function MarketingConsentCard() {
       const response = await fetch("/api/user/marketing-consent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent: true }),
       });
       const data = await response.json().catch(() => null);
 
