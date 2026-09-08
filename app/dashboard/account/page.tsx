@@ -15,6 +15,8 @@ export default function AccountPage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [marketingBusy, setMarketingBusy] = useState(false);
+  const [marketingMessage, setMarketingMessage] = useState("");
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -68,6 +70,38 @@ export default function AccountPage() {
     setSaveMessage("Saved ✓");
     window.dispatchEvent(new Event("pp:user-should-refresh"));
     setTimeout(() => setSaveMessage(""), 2500);
+  }
+
+  async function subscribeToMarketing() {
+    if (marketingBusy) return;
+    setMarketingBusy(true);
+    setMarketingMessage("");
+
+    try {
+      const res = await fetch("/api/user/marketing-consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent: true }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        setMarketingMessage("We could not save your choice. Please try again.");
+        return;
+      }
+
+      if (data.subscribed === true) {
+        setMarketingMessage("You're signed up for Pages & Peace email updates ✓");
+      } else {
+        setMarketingMessage("Your consent was saved, but we could not complete the email subscription just now. Please try again later.");
+      }
+
+      window.dispatchEvent(new Event("pp:user-should-refresh"));
+    } catch {
+      setMarketingMessage("We could not save your choice. Please try again.");
+    } finally {
+      setMarketingBusy(false);
+    }
   }
 
   if (!user) {
@@ -160,10 +194,21 @@ export default function AccountPage() {
                     You are signed up to receive Pages &amp; Peace event, book and café updates. To unsubscribe, use the unsubscribe link at the bottom of any marketing email you receive from us.
                   </p>
                 ) : (
-                  <p className="text-sm leading-6 text-[#555]">
-                    You are not currently signed up to receive Pages &amp; Peace marketing emails.
-                  </p>
+                  <div className="space-y-4">
+                    <p className="text-sm leading-6 text-[#555]">
+                      You are not currently signed up to receive Pages &amp; Peace marketing emails. You can opt in at any time to receive event news, book recommendations and café updates.
+                    </p>
+                    <Button onClick={subscribeToMarketing} disabled={marketingBusy}>
+                      {marketingBusy ? "Signing you up…" : "Sign me up"}
+                    </Button>
+                  </div>
                 )}
+
+                {marketingMessage ? (
+                  <p className={`mt-3 text-sm ${marketingMessage.includes("✓") ? "text-[#2f7c3e]" : "text-[#8a5b24]"}`} role="status">
+                    {marketingMessage}
+                  </p>
+                ) : null}
               </CardBody>
             </Card>
           </div>
