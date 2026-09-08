@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { Resend } from "resend";
 
 import { appCoreDb } from "@/lib/app-core/service";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
@@ -8,6 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 type RefundBody = {
   scope: "order" | "order_line";
@@ -36,6 +38,13 @@ async function recalcOrder(orderId: string) {
   if (updateError) throw new Error(updateError.message);
 }
 
+function refundStateKey(lines: Array<{ id: string; refunded_quantity: number | null; refunded_amount_pence: number | null }>) {
+  return lines
+    .map((line) => `${line.id}:${Number(line.refunded_quantity ?? 0)}:${Number(line.refunded_amount_pence ?? 0)}`)
+    .sort()
+    .join("|");
+}
+
 export async function POST(req: Request) {
   const admin = await requireAdminUser();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -49,7 +58,7 @@ export async function POST(req: Request) {
     const db = appCoreDb();
     const { data: order, error: orderError } = await db
       .from("orders")
-      .select("id, status, stripe_payment_intent_id, refund_status")
+      .select("id, auth_user_id, status, stripe_payment_intent_id, refund_status")
       .eq("id", body.orderId)
       .single();
 
@@ -78,6 +87,12 @@ export async function POST(req: Request) {
     const amountPence = refundable.reduce((sum, line) => sum + line.amountPence, 0);
     if (amountPence <= 0) return NextResponse.json({ error: "Nothing left to refund" }, { status: 400 });
 
+    const { data: customer } = await db
+      .from("customers")
+      .select("email, display_name")
+      .eq("auth_user_id", order.auth_user_id)
+      .maybeSingle();
+
     const { data: audit, error: auditError } = await db.from("refund_audit_logs").insert({
       order_id: order.id,
       order_line_id: body.scope === "order_line" ? body.orderLineId ?? null : null,
@@ -88,11 +103,18 @@ export async function POST(req: Request) {
       status: "initiated",
       initiated_by_auth_user_id: admin.id,
       initiated_by_email: admin.email ?? null,
+      customer_email: customer?.email ?? null,
+      customer_name: customer?.display_name ?? null,
+      email_status: "not_attempted",
     }).select("id").single();
     if (auditError || !audit) throw new Error(auditError?.message || "Could not create refund audit record");
 
+    const stateKey = refundStateKey(refundable);
+    const idempotencyKey = `app-core-refund-${order.id}-${body.scope}-${body.orderLineId ?? "all"}-${amountPence}-${stateKey}`.slice(0, 255);
+
+    let refund: Stripe.Refund;
     try {
-      const refund = await stripe.refunds.create({
+      refund = await stripe.refunds.create({
         payment_intent: order.stripe_payment_intent_id,
         amount: amountPence,
         metadata: {
@@ -101,10 +123,25 @@ export async function POST(req: Request) {
           scope: body.scope,
           order_line_id: body.orderLineId ?? "",
         },
-      }, {
-        idempotencyKey: `app-core-refund-${audit.id}`,
-      });
+      }, { idempotencyKey });
+    } catch (error) {
+      await db.from("refund_audit_logs").update({
+        status: "failed",
+        updated_at: new Date().toISOString(),
+      }).eq("id", audit.id);
+      throw error;
+    }
 
+    // Record Stripe success before any local sync. If a later DB write fails,
+    // retries use the same deterministic Stripe idempotency key and cannot
+    // create a duplicate refund for the unchanged local refund state.
+    await db.from("refund_audit_logs").update({
+      stripe_refund_id: refund.id,
+      status: "stripe_succeeded_syncing",
+      updated_at: new Date().toISOString(),
+    }).eq("id", audit.id);
+
+    try {
       for (const line of refundable) {
         const newRefundedQty = Number(line.refunded_quantity ?? 0) + line.remainingQty;
         const newRefundedAmount = Number(line.refunded_amount_pence ?? 0) + line.amountPence;
@@ -123,16 +160,62 @@ export async function POST(req: Request) {
 
       await recalcOrder(order.id);
       await db.from("refund_audit_logs").update({
-        stripe_refund_id: refund.id,
         status: "succeeded",
         updated_at: new Date().toISOString(),
       }).eq("id", audit.id);
-
-      return NextResponse.json({ success: true, refundId: refund.id, amountPence });
     } catch (error) {
-      await db.from("refund_audit_logs").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", audit.id);
+      await db.from("refund_audit_logs").update({
+        status: "stripe_succeeded_sync_failed",
+        updated_at: new Date().toISOString(),
+      }).eq("id", audit.id);
       throw error;
     }
+
+    let emailSent = false;
+    if (customer?.email && process.env.RESEND_API_KEY) {
+      try {
+        const refundItem = body.scope === "order_line"
+          ? refundable[0]?.item_name || "your event booking"
+          : refundable.length === 1
+            ? refundable[0].item_name
+            : `${refundable.length} items in your order`;
+
+        const { data: emailData, error: emailError } = await resend.emails.send({
+          from: "Pages & Peace <admin@pagesandpeace.co.uk>",
+          to: customer.email,
+          template: {
+            id: "refund-confirmation",
+            variables: {
+              CUSTOMER_NAME: customer.display_name || "there",
+              REFUND_ITEM: refundItem,
+              REFUND_AMOUNT: (amountPence / 100).toFixed(2),
+              ORDER_REFERENCE: order.id.slice(0, 8),
+              REFUND_TYPE: body.scope === "order" ? "Full or remaining order refund" : "Event refund",
+            },
+          },
+        }, {
+          idempotencyKey: `refund-confirmation/${audit.id}`,
+        });
+
+        if (emailError) throw new Error(emailError.message || "Resend returned an error");
+        emailSent = true;
+        await db.from("refund_audit_logs").update({
+          email_status: "sent",
+          resend_email_id: emailData?.id ?? null,
+          email_error: null,
+          updated_at: new Date().toISOString(),
+        }).eq("id", audit.id);
+      } catch (emailError) {
+        console.error("Refund succeeded but confirmation email failed", emailError);
+        await db.from("refund_audit_logs").update({
+          email_status: "failed",
+          email_error: emailError instanceof Error ? emailError.message.slice(0, 500) : "Unknown email error",
+          updated_at: new Date().toISOString(),
+        }).eq("id", audit.id);
+      }
+    }
+
+    return NextResponse.json({ success: true, refundId: refund.id, amountPence, emailSent });
   } catch (error) {
     console.error("App core refund failed", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "Refund failed" }, { status: 500 });
