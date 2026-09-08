@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const { data, error } = await supabaseService()
+    .schema("app_core")
     .from("opening_hours")
     .select("day_of_week, day_name, open_time, close_time, is_closed")
     .order("day_of_week");
