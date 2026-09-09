@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, CircleDollarSign, RotateCcw, TriangleAlert } from "lucide-react";
+import { CheckCircle2, RotateCcw, TriangleAlert } from "lucide-react";
 import AppCoreRefundButton from "@/components/admin/app-core-refund-button";
 
 type Line = {
@@ -46,7 +46,7 @@ export default function EventOrdersTable({ orders }: { orders: Order[] }) {
         <table className="w-full text-left text-sm">
           <thead className="bg-[#F3ECE5] text-xs uppercase tracking-wide text-neutral-600">
             <tr>
-              <th className="px-5 py-3">Order</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Purchased</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Refunded</th><th className="px-5 py-3">Net</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Refund</th>
+              <th className="px-5 py-3">Order</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Purchased</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Refunded</th><th className="px-5 py-3">Net</th><th className="px-5 py-3">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -79,25 +79,10 @@ export default function EventOrdersTable({ orders }: { orders: Order[] }) {
                   <td className="px-5 py-4 text-red-700">{refunded > 0 ? `£${(refunded / 100).toFixed(2)}` : "—"}</td>
                   <td className="px-5 py-4 font-semibold">£{(net / 100).toFixed(2)}</td>
                   <td className="px-5 py-4"><StatusIcon status={order.refund_status} /></td>
-                  <td className="px-5 py-4 text-right">
-                    <button
-                      type="button"
-                      title={net > 0 ? "Refund this order" : "Order fully refunded"}
-                      aria-label={net > 0 ? `Refund order ${order.id.slice(0, 8)}` : `Order ${order.id.slice(0, 8)} fully refunded`}
-                      disabled={net <= 0}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setExpanded(order.id);
-                      }}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border text-neutral-700 transition-colors hover:border-[#189458] hover:bg-[#189458] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                    >
-                      <CircleDollarSign size={17} aria-hidden="true" />
-                    </button>
-                  </td>
                 </tr>,
-                isOpen ? <tr key={`${order.id}-detail`} className="border-t bg-[#FBF8F4]"><td colSpan={8} className="px-5 py-5">
+                isOpen ? <tr key={`${order.id}-detail`} className="border-t bg-[#FBF8F4]"><td colSpan={7} className="px-5 py-5">
                   <div className="flex flex-col gap-5">
-                    <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-base font-semibold">Items in order {order.id.slice(0, 8)}</h3><p className="mt-1 text-xs text-neutral-500">Purchased event and ticket details. Refund individual ticket quantities or the whole remaining order.</p></div>{net > 0 ? <AppCoreRefundButton scope="order" orderId={order.id} label="Refund remaining order" itemName={`Order ${order.id.slice(0, 8)}`} amountPence={net} /> : null}</div>
+                    <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-base font-semibold">Items in order {order.id.slice(0, 8)}</h3><p className="mt-1 text-xs text-neutral-500">Purchased event and ticket details. Refund actions require an explicit confirmation before Stripe is called.</p></div>{net > 0 ? <AppCoreRefundButton scope="order" orderId={order.id} label="Refund remaining order" itemName={`Order ${order.id.slice(0, 8)}`} amountPence={net} /> : null}</div>
                     <div className="grid gap-3">
                       {order.lines.map((line) => {
                         const refundedQty = Number(line.refunded_quantity ?? 0);
