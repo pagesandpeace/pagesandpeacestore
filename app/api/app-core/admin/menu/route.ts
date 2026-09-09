@@ -19,7 +19,7 @@ export async function GET() {
 
   const [{ data: sections, error: sectionError }, { data: categories, error: categoryError }, { data: items, error: itemError }] = await Promise.all([
     db.from("menu_sections").select("id, name, slug, position, is_visible").order("position").order("name"),
-    db.from("menu_categories").select("id, name, position, section_id").order("position").order("name"),
+    db.from("menu_categories").select("id, name, description, position, section_id").order("position").order("name"),
     db.from("menu_items").select("id, category_id, name, price, position, note, is_visible").order("position").order("name"),
   ]);
 
@@ -52,9 +52,10 @@ export async function POST(req: Request) {
   if (type === "category") {
     const section_id = String(body?.section_id || "");
     const name = String(body?.name || "").trim();
+    const description = body?.description == null ? null : String(body.description).trim() || null;
     if (!section_id || !name) return NextResponse.json({ error: "Tab and category name are required" }, { status: 400 });
     const { data: last } = await db.from("menu_categories").select("position").eq("section_id", section_id).order("position", { ascending: false }).limit(1).maybeSingle();
-    const { data, error } = await db.from("menu_categories").insert({ name, section_id, position: Number(last?.position ?? -1) + 1 }).select("id, name, position, section_id").single();
+    const { data, error } = await db.from("menu_categories").insert({ name, description, section_id, position: Number(last?.position ?? -1) + 1 }).select("id, name, description, position, section_id").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true, category: data });
   }
@@ -108,8 +109,9 @@ export async function PATCH(req: Request) {
     const id = String(body?.id || "");
     const name = String(body?.name || "").trim();
     const section_id = String(body?.section_id || "");
+    const description = body?.description == null ? null : String(body.description).trim() || null;
     if (!id || !name || !section_id) return NextResponse.json({ error: "Invalid category" }, { status: 400 });
-    const { data, error } = await db.from("menu_categories").update({ name, section_id }).eq("id", id).select("id, name, position, section_id").single();
+    const { data, error } = await db.from("menu_categories").update({ name, description, section_id }).eq("id", id).select("id, name, description, position, section_id").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true, category: data });
   }
