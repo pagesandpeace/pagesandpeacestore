@@ -21,7 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const db = supabaseService().schema("app_core");
   const [{ data: customer, error: customerErr }, { data: admin, error: adminErr }] = await Promise.all([
     db.from("customers")
-      .select("id,auth_user_id,email,display_name,profile_image")
+      .select("auth_user_id,email,display_name,profile_image")
       .eq("auth_user_id", user.id)
       .maybeSingle(),
     db.from("admins")
@@ -38,7 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (adminErr || !admin) redirect("/dashboard");
 
   const profile = {
-    id: customer.id,
+    id: customer.auth_user_id,
     auth_user_id: customer.auth_user_id,
     email: customer.email,
     name: customer.display_name,
