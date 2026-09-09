@@ -1,4 +1,14 @@
 import { redirect } from "next/navigation";
+import {
+  BadgeCheck,
+  CircleHelp,
+  Crown,
+  MailCheck,
+  MailWarning,
+  MailX,
+  TicketCheck,
+  UserRoundCheck,
+} from "lucide-react";
 
 import Pagination from "@/components/admin/Pagination";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
@@ -93,9 +103,14 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       </div>
 
       <section className="rounded-2xl border bg-white p-6">
-        <div>
-          <h2 className="text-xl font-bold">Top spenders</h2>
-          <p className="mt-1 text-sm text-foreground/60">Highest net event spend, after refunds.</p>
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+            <Crown className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="text-xl font-bold">Top spenders</h2>
+            <p className="mt-1 text-sm text-foreground/60">Highest net event spend, after refunds.</p>
+          </div>
         </div>
         {topSpenders.length ? (
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -106,7 +121,10 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     <p className="truncate font-semibold">{spender.name}</p>
                     <p className="truncate text-xs text-foreground/55">{spender.email || "No email"}</p>
                   </div>
-                  <span className="rounded-full bg-black px-2 py-1 text-xs font-semibold text-white">#{index + 1}</span>
+                  <span className="inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-full bg-black px-2 text-xs font-semibold text-white">
+                    <Crown className="h-3.5 w-3.5" aria-hidden="true" />
+                    {index + 1}
+                  </span>
                 </div>
                 <p className="mt-4 text-2xl font-bold">{money(spender.netPence)}</p>
                 <p className="mt-1 text-xs text-foreground/55">{spender.orders} event order{spender.orders === 1 ? "" : "s"}</p>
@@ -146,28 +164,48 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                   <td className="px-5 py-4 text-foreground/65">
                     {new Date(user.created_at).toLocaleDateString("en-GB")}
                   </td>
-                  <td className="px-5 py-4 text-foreground/65">{user.email_confirmed_at ? "Confirmed" : "Unconfirmed"}</td>
+                  <td className="px-5 py-4">
+                    {user.email_confirmed_at ? (
+                      <StatusBadge className="bg-emerald-100 text-emerald-800" icon={<BadgeCheck className="h-3.5 w-3.5" />}>
+                        Confirmed
+                      </StatusBadge>
+                    ) : (
+                      <StatusBadge className="bg-amber-100 text-amber-800" icon={<MailWarning className="h-3.5 w-3.5" />}>
+                        Unconfirmed
+                      </StatusBadge>
+                    )}
+                  </td>
                   <td className="px-5 py-4">
                     {hasEventPurchase ? (
-                      <div className="space-y-1">
-                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                      <div className="space-y-1.5">
+                        <StatusBadge className="bg-emerald-100 text-emerald-800" icon={<TicketCheck className="h-3.5 w-3.5" />}>
                           Event buyer
-                        </span>
+                        </StatusBadge>
                         <p className="text-xs text-foreground/55">{money(spend?.netPence ?? 0)} net</p>
                       </div>
                     ) : (
-                      <span className="text-foreground/45">—</span>
+                      <StatusBadge className="bg-stone-100 text-stone-500" icon={<UserRoundCheck className="h-3.5 w-3.5" />}>
+                        No purchases
+                      </StatusBadge>
                     )}
                   </td>
                   <td className="px-5 py-4">
                     {subscribed ? (
-                      <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">✓ Subscribed</span>
+                      <StatusBadge className="bg-emerald-100 text-emerald-800" icon={<MailCheck className="h-3.5 w-3.5" />}>
+                        Subscribed
+                      </StatusBadge>
                     ) : consentedButNotSynced ? (
-                      <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Consent saved · not synced</span>
+                      <StatusBadge className="bg-amber-100 text-amber-800" icon={<MailWarning className="h-3.5 w-3.5" />}>
+                        Consent saved
+                      </StatusBadge>
                     ) : declined ? (
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">No thanks</span>
+                      <StatusBadge className="bg-rose-50 text-rose-700" icon={<MailX className="h-3.5 w-3.5" />}>
+                        No thanks
+                      </StatusBadge>
                     ) : (
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Not chosen</span>
+                      <StatusBadge className="bg-stone-100 text-stone-600" icon={<CircleHelp className="h-3.5 w-3.5" />}>
+                        Not chosen
+                      </StatusBadge>
                     )}
                   </td>
                 </tr>
@@ -179,5 +217,22 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
         <Pagination page={safePage} totalPages={totalPages} basePath="/admin/users" />
       </div>
     </main>
+  );
+}
+
+function StatusBadge({
+  children,
+  icon,
+  className,
+}: {
+  children: React.ReactNode;
+  icon: React.ReactNode;
+  className: string;
+}) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${className}`}>
+      {icon}
+      <span>{children}</span>
+    </span>
   );
 }
