@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 
 type Props = { initialUrl?: string | null };
 
@@ -8,6 +8,16 @@ export function EventImageUpload({ initialUrl = null }: Props) {
   const [imageUrl, setImageUrl] = useState(initialUrl ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    function applyTemplate(event: Event) {
+      const detail = (event as CustomEvent<{ imageUrl?: string }>).detail;
+      setImageUrl(detail?.imageUrl ?? "");
+      setMessage(detail?.imageUrl ? "Series image applied. You can replace it for this event." : null);
+    }
+    window.addEventListener("event-series-template-image", applyTemplate as EventListener);
+    return () => window.removeEventListener("event-series-template-image", applyTemplate as EventListener);
+  }, []);
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
