@@ -6,6 +6,27 @@ import { requireAdminUser } from "@/lib/auth/require-admin-user";
 const money = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
+function canonicalEventName(seriesName: string | null | undefined, title: string | null | undefined, fallback: string) {
+  if (seriesName?.trim()) return seriesName.trim();
+  const normalized = (title || fallback).toLowerCase();
+
+  if (normalized.includes("silent reading")) return "Silent Read";
+  if (normalized.includes("medium")) return "Mediumship";
+  if (normalized.includes("d&d") || normalized.includes("d & d")) return "D&D";
+  if (normalized.includes("bingo")) return "Bingo";
+  if (normalized.includes("bookish creative")) return "Bookish Creative Club";
+  if (normalized.includes("book of the month")) return "Book of the Month Book Club";
+  if (normalized.includes("monthly chapter")) return "Monthly Chapter Book Club";
+  if (normalized.includes("book chatter")) return "Book Chatter Club";
+  if (normalized.includes("dark romance book club")) return "Dark Romance Book Club";
+  if (normalized.includes("quiz night")) return "Quiz Night";
+  if (normalized.includes("pamper night")) return "Pamper Night";
+  if (normalized.includes("paint & sip")) return "Paint & Sip";
+  if (normalized.includes("secret hungry hippo")) return "Secret Hungry Hippo";
+
+  return title || fallback;
+}
+
 export default async function AppCoreEventSalesSummary() {
   const admin = await requireAdminUser();
   if (!admin) return null;
@@ -13,7 +34,7 @@ export default async function AppCoreEventSalesSummary() {
   const { orders } = await getAdminEventOrders();
   const lines = orders.flatMap((order) => order.lines.map((line) => ({
     orderId: order.id,
-    name: line.event?.series_name || line.event?.title || line.item_name,
+    name: canonicalEventName(line.event?.series_name, line.event?.title, line.item_name),
     createdAt: order.created_at,
     quantity: Number(line.quantity),
     refundedQuantity: Number(line.refunded_quantity ?? 0),
@@ -77,7 +98,7 @@ export default async function AppCoreEventSalesSummary() {
     </section>
 
     <section className="rounded-2xl border bg-white p-6">
-      <div><h2 className="text-xl font-bold">Revenue by event type</h2><p className="mt-1 text-sm text-foreground/60">All event sales and ticket counts, net of refunds.</p></div>
+      <div><h2 className="text-xl font-bold">Revenue by event type</h2><p className="mt-1 text-sm text-foreground/60">Like-for-like event series grouped together, net of refunds.</p></div>
       {events.length ? <div className="mt-6 space-y-4">{events.map((event) => <div key={event.name}><div className="flex justify-between gap-4 text-sm"><span className="font-medium">{event.name} <span className="text-foreground/60">· {event.tickets} ticket{event.tickets === 1 ? "" : "s"}</span></span><span className="font-semibold">{money(event.revenue)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-[#f1ede7]"><div className="h-full rounded-full bg-emerald-700" style={{ width: `${(event.revenue / maxEventRevenue) * 100}%` }} /></div></div>)}</div> : <p className="mt-6 text-sm text-foreground/60">No paid event revenue yet.</p>}
     </section>
   </div>;

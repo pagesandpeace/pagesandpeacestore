@@ -2,17 +2,27 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import EventOrdersTable from "@/components/admin/event-orders-table";
+import Pagination from "@/components/admin/Pagination";
 import { getAdminEventOrders } from "@/lib/app-core/event-orders";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminEventBookingsPage() {
+const PAGE_SIZE = 25;
+
+export default async function AdminEventBookingsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const admin = await requireAdminUser();
   if (!admin) redirect("/sign-in");
 
+  const requestedPage = Number((await searchParams).page ?? "1");
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
+
   const { orders, customers } = await getAdminEventOrders();
-  const groupedOrders = orders.map((order) => {
+  const totalPages = Math.max(1, Math.ceil(orders.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedOrders = orders.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const groupedOrders = pagedOrders.map((order) => {
     const customer = order.auth_user_id ? customers.get(order.auth_user_id) : undefined;
     return {
       id: order.id,
@@ -45,8 +55,9 @@ export default async function AdminEventBookingsPage() {
           Each row is one customer purchase. Open an order to see the events inside it, refund one event, or refund the remaining order in full.
         </p>
 
-        <div className="mt-8">
+        <div className="mt-8 overflow-hidden rounded-2xl border bg-white">
           <EventOrdersTable orders={groupedOrders} />
+          <Pagination page={safePage} totalPages={totalPages} basePath="/admin/events/bookings" />
         </div>
 
         {!orders.length ? <p className="mt-6 text-sm text-neutral-600">No paid event orders yet.</p> : null}
