@@ -5,9 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 type Section = { id: string; name: string; slug: string; position: number; is_visible: boolean };
 type Category = { id: string; name: string; position: number; section_id: string | null };
 type Item = { id: string; category_id: string; name: string; price: number; position: number; note: string | null; is_visible: boolean };
-type Draft = { kind: "section" | "category" | "item"; id: string; data: Record<string, string | number | boolean | null> } | null;
-
-const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+type Kind = "section" | "category" | "item";
+type Draft = { kind: Kind; id: string; name: string; is_visible?: boolean; section_id?: string; price?: string; note?: string } | null;
 
 export default function AdminMenuPage() {
   const [sections, setSections] = useState<Section[]>([]);
@@ -15,250 +14,89 @@ export default function AdminMenuPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [selectedSectionId, setSelectedSectionId] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [newSection, setNewSection] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [newItem, setNewItem] = useState({ name: "", price: "", note: "" });
   const [draft, setDraft] = useState<Draft>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [newSectionName, setNewSectionName] = useState("");
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newItem, setNewItem] = useState({ name: "", price: "", note: "" });
 
-  async function load(preferredSectionId?: string, preferredCategoryId?: string) {
+  async function load(preferredSection?: string, preferredCategory?: string) {
     const res = await fetch("/api/app-core/admin/menu", { cache: "no-store" });
     const data = await res.json();
-    if (!res.ok) return setMessage(data?.error || "Could not load menu editor");
+    if (!res.ok) return setMessage(data?.error || "Could not load menu");
     const nextSections: Section[] = data.sections ?? [];
     const nextCategories: Category[] = data.categories ?? [];
     const nextItems: Item[] = data.items ?? [];
-    setSections(nextSections);
-    setCategories(nextCategories);
-    setItems(nextItems);
-
-    const sectionId = preferredSectionId && nextSections.some((s) => s.id === preferredSectionId)
-      ? preferredSectionId
-      : selectedSectionId && nextSections.some((s) => s.id === selectedSectionId)
-        ? selectedSectionId
-        : nextSections[0]?.id ?? "";
-    setSelectedSectionId(sectionId);
-
-    const sectionCategories = nextCategories.filter((c) => c.section_id === sectionId);
-    const categoryId = preferredCategoryId && sectionCategories.some((c) => c.id === preferredCategoryId)
-      ? preferredCategoryId
-      : selectedCategoryId && sectionCategories.some((c) => c.id === selectedCategoryId)
-        ? selectedCategoryId
-        : sectionCategories[0]?.id ?? "";
-    setSelectedCategoryId(categoryId);
+    setSections(nextSections); setCategories(nextCategories); setItems(nextItems);
+    const sid = preferredSection && nextSections.some((s) => s.id === preferredSection) ? preferredSection : selectedSectionId && nextSections.some((s) => s.id === selectedSectionId) ? selectedSectionId : nextSections[0]?.id ?? "";
+    setSelectedSectionId(sid);
+    const cats = nextCategories.filter((c) => c.section_id === sid);
+    const cid = preferredCategory && cats.some((c) => c.id === preferredCategory) ? preferredCategory : selectedCategoryId && cats.some((c) => c.id === selectedCategoryId) ? selectedCategoryId : cats[0]?.id ?? "";
+    setSelectedCategoryId(cid);
   }
 
   useEffect(() => { void load(); }, []);
 
   const selectedSection = sections.find((s) => s.id === selectedSectionId) ?? null;
-  const sectionCategories = useMemo(
-    () => categories.filter((category) => category.section_id === selectedSectionId),
-    [categories, selectedSectionId],
-  );
+  const sectionCategories = useMemo(() => categories.filter((c) => c.section_id === selectedSectionId), [categories, selectedSectionId]);
   const selectedCategory = sectionCategories.find((c) => c.id === selectedCategoryId) ?? null;
-  const categoryItems = useMemo(
-    () => items.filter((item) => item.category_id === selectedCategoryId),
-    [items, selectedCategoryId],
-  );
-  const visibleItemsInSection = useMemo(() => {
-    const categoryIds = new Set(sectionCategories.map((c) => c.id));
-    return items.filter((item) => categoryIds.has(item.category_id) && item.is_visible).length;
-  }, [items, sectionCategories]);
+  const categoryItems = useMemo(() => items.filter((i) => i.category_id === selectedCategoryId), [items, selectedCategoryId]);
 
-  function chooseSection(id: string) {
-    setSelectedSectionId(id);
-    const firstCategory = categories.find((c) => c.section_id === id)?.id ?? "";
-    setSelectedCategoryId(firstCategory);
-    setDraft(null);
-    setMessage("");
-  }
-
-  function chooseCategory(id: string) {
-    setSelectedCategoryId(id);
-    setDraft(null);
-    setMessage("");
-  }
-
-  async function post(body: Record<string, unknown>, success: string, preferredSectionId?: string, preferredCategoryId?: string) {
-    setBusy(true);
-    setMessage("");
-    const res = await fetch("/api/app-core/admin/menu", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => null);
+  async function request(method: "POST" | "PATCH" | "DELETE", body: Record<string, unknown>, success: string, preferredSection?: string, preferredCategory?: string) {
+    setBusy(true); setMessage("");
+    const res = await fetch("/api/app-core/admin/menu", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) {
-      setMessage(data?.error || "Could not save");
-      return null;
-    }
-    setMessage(success);
-    await load(preferredSectionId ?? data?.section?.id, preferredCategoryId ?? data?.category?.id);
+    if (!res.ok) { setMessage(data?.error || "Could not save menu"); return null; }
+    setMessage(success); setDraft(null);
+    await load(preferredSection, preferredCategory);
     return data;
   }
 
-  async function patch() {
-    if (!draft) return;
-    setBusy(true);
-    setMessage("");
-    const res = await fetch("/api/app-core/admin/menu", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: draft.kind, id: draft.id, ...draft.data }),
-    });
-    const data = await res.json().catch(() => null);
-    setBusy(false);
-    if (!res.ok) return setMessage(data?.error || "Could not save changes");
-    setDraft(null);
-    setMessage("Changes saved");
-    await load(selectedSectionId, selectedCategoryId);
+  async function reorder(level: Kind, rows: { id: string }[], index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= rows.length) return;
+    const reordered = [...rows];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    await request("PATCH", { type: "reorder", level, orderedIds: reordered.map((r) => r.id) }, "Order updated", selectedSectionId, selectedCategoryId);
   }
 
-  async function addSection() {
-    const name = newSectionName.trim();
-    if (!name) return;
-    const slug = slugify(name);
-    const existing = sections.find((s) => s.slug === slug);
-    if (existing) {
-      chooseSection(existing.id);
-      setNewSectionName("");
-      setMessage(`${existing.name} already exists, so I selected it for you.`);
-      return;
-    }
-    const data = await post({ type: "section", name }, "Menu tab added");
-    if (data?.section?.id) {
-      setNewSectionName("");
-      setSelectedSectionId(data.section.id);
-      setSelectedCategoryId("");
-    }
+  async function deleteThing(kind: Kind, id: string, name: string) {
+    const childText = kind === "section" ? " This will also permanently delete every category and item inside this tab." : kind === "category" ? " This will also permanently delete every item inside this category." : "";
+    if (!window.confirm(`Delete ${name}?${childText}\n\nThis cannot be undone.`)) return;
+    const preferredSection = kind === "section" ? undefined : selectedSectionId;
+    const preferredCategory = kind === "category" || kind === "section" ? undefined : selectedCategoryId;
+    await request("DELETE", { type: kind, id }, `${name} deleted`, preferredSection, preferredCategory);
   }
 
-  async function addCategory() {
-    if (!selectedSection || !newCategoryName.trim()) return;
-    const data = await post(
-      { type: "category", section_id: selectedSection.id, name: newCategoryName.trim() },
-      `Category added to ${selectedSection.name}`,
-      selectedSection.id,
-    );
-    if (data?.category?.id) {
-      setNewCategoryName("");
-      setSelectedCategoryId(data.category.id);
-    }
+  async function saveDraft() {
+    if (!draft || !draft.name.trim()) return;
+    if (draft.kind === "section") await request("PATCH", { type: "section", id: draft.id, name: draft.name, is_visible: Boolean(draft.is_visible) }, "Tab updated", selectedSectionId, selectedCategoryId);
+    if (draft.kind === "category") await request("PATCH", { type: "category", id: draft.id, name: draft.name, section_id: draft.section_id }, "Category updated", draft.section_id, draft.id);
+    if (draft.kind === "item") await request("PATCH", { type: "item", id: draft.id, name: draft.name, price: Number(draft.price), note: draft.note, is_visible: Boolean(draft.is_visible) }, "Item updated", selectedSectionId, selectedCategoryId);
   }
 
-  async function addItem() {
-    if (!selectedSection || !selectedCategory || !newItem.name.trim() || newItem.price === "") return;
-    const data = await post(
-      { type: "item", category_id: selectedCategory.id, name: newItem.name.trim(), price: Number(newItem.price), note: newItem.note },
-      `Item added to ${selectedCategory.name}`,
-      selectedSection.id,
-      selectedCategory.id,
-    );
-    if (data) setNewItem({ name: "", price: "", note: "" });
-  }
+  return <main className="space-y-8">
+    <header><p className="text-sm font-medium text-foreground/60">Website content</p><h1 className="mt-1 text-3xl font-bold">Café menu</h1><p className="mt-2 max-w-3xl text-foreground/65">Manage the menu in three levels: tabs, categories, then items. Use the arrows to control the exact order customers see.</p></header>
+    {message ? <div className="rounded-xl border bg-white px-4 py-3 text-sm">{message}</div> : null}
 
-  const editing = (kind: "section" | "category" | "item", id: string) => draft?.kind === kind && draft.id === id;
-  const changeDraft = (key: string, value: string | number | boolean | null) => setDraft((current) => current ? { ...current, data: { ...current.data, [key]: value } } : current);
+    <section className="rounded-2xl border bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 1</p><h2 className="text-xl font-semibold">Menu tabs</h2></div><div className="flex gap-2"><input className="rounded-lg border px-3 py-2" placeholder="New tab" value={newSection} onChange={(e) => setNewSection(e.target.value)} /><button disabled={busy || !newSection.trim()} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={async () => { const data = await request("POST", { type: "section", name: newSection }, "Tab added"); if (data?.section?.id) { setNewSection(""); setSelectedSectionId(data.section.id); setSelectedCategoryId(""); } }}>Add tab</button></div></div>
+      <div className="mt-5 space-y-2">{sections.map((section, index) => <div key={section.id} className={`flex items-center gap-2 rounded-xl border p-2 ${section.id === selectedSectionId ? "border-[#189458] bg-[#189458]/5" : ""}`}><button className="min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-left font-semibold" onClick={() => { setSelectedSectionId(section.id); setSelectedCategoryId(categories.find((c) => c.section_id === section.id)?.id ?? ""); }}>{section.name}<span className="ml-2 text-xs font-normal text-foreground/45">{section.is_visible ? "public" : "hidden"}</span></button><button title="Move tab up" aria-label={`Move ${section.name} up`} disabled={busy || index === 0} className="rounded-lg border px-3 py-2 disabled:opacity-30" onClick={() => void reorder("section", sections, index, -1)}>↑</button><button title="Move tab down" aria-label={`Move ${section.name} down`} disabled={busy || index === sections.length - 1} className="rounded-lg border px-3 py-2 disabled:opacity-30" onClick={() => void reorder("section", sections, index, 1)}>↓</button><button className="rounded-lg border px-3 py-2 text-sm" onClick={() => setDraft({ kind: "section", id: section.id, name: section.name, is_visible: section.is_visible })}>Edit</button><button className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700" onClick={() => void deleteThing("section", section.id, section.name)}>Delete</button></div>)}</div>
+    </section>
 
-  return (
-    <main className="space-y-8">
-      <header>
-        <p className="text-sm font-medium text-foreground/60">Website content</p>
-        <h1 className="mt-1 text-3xl font-bold">Café menu</h1>
-        <p className="mt-2 max-w-3xl text-foreground/65">
-          Build the menu in order: create a menu tab, select it and add categories, then select a category and add its items.
-        </p>
-      </header>
+    {selectedSection ? <section className="rounded-2xl border bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 2</p><h2 className="text-xl font-semibold">Categories in {selectedSection.name}</h2></div><div className="flex gap-2"><input className="rounded-lg border px-3 py-2" placeholder="New category" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} /><button disabled={busy || !newCategory.trim()} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={async () => { const data = await request("POST", { type: "category", section_id: selectedSection.id, name: newCategory }, "Category added", selectedSection.id); if (data?.category?.id) { setNewCategory(""); setSelectedCategoryId(data.category.id); } }}>Add category</button></div></div>
+      <div className="mt-5 space-y-2">{sectionCategories.map((category, index) => <div key={category.id} className={`flex items-center gap-2 rounded-xl border p-2 ${category.id === selectedCategoryId ? "border-[#189458] bg-[#189458]/5" : ""}`}><button className="min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-left font-semibold" onClick={() => setSelectedCategoryId(category.id)}>{category.name}<span className="ml-2 text-xs font-normal text-foreground/45">{items.filter((i) => i.category_id === category.id).length} items</span></button><button title="Move category up" disabled={busy || index === 0} className="rounded-lg border px-3 py-2 disabled:opacity-30" onClick={() => void reorder("category", sectionCategories, index, -1)}>↑</button><button title="Move category down" disabled={busy || index === sectionCategories.length - 1} className="rounded-lg border px-3 py-2 disabled:opacity-30" onClick={() => void reorder("category", sectionCategories, index, 1)}>↓</button><button className="rounded-lg border px-3 py-2 text-sm" onClick={() => setDraft({ kind: "category", id: category.id, name: category.name, section_id: category.section_id ?? selectedSection.id })}>Edit</button><button className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700" onClick={() => void deleteThing("category", category.id, category.name)}>Delete</button></div>)}{!sectionCategories.length ? <p className="rounded-xl border border-dashed p-5 text-sm text-foreground/50">No categories yet.</p> : null}</div>
+    </section> : null}
 
-      {message ? <div className="rounded-xl border bg-white px-4 py-3 text-sm">{message}</div> : null}
+    {selectedSection && selectedCategory ? <section className="rounded-2xl border bg-white p-5 sm:p-6">
+      <div><p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 3</p><h2 className="text-xl font-semibold">Items in {selectedCategory.name}</h2><p className="mt-1 text-sm text-foreground/55">Order these exactly as you want them to appear on the public menu.</p></div>
+      <div className="mt-5 grid gap-2 md:grid-cols-[1fr_.35fr_1fr_auto]"><input className="rounded-lg border px-3 py-2" placeholder="Item name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} /><input className="rounded-lg border px-3 py-2" type="number" min="0" step="0.01" placeholder="Price" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} /><input className="rounded-lg border px-3 py-2" placeholder="Description / note" value={newItem.note} onChange={(e) => setNewItem({ ...newItem, note: e.target.value })} /><button disabled={busy || !newItem.name.trim() || newItem.price === ""} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={async () => { const data = await request("POST", { type: "item", category_id: selectedCategory.id, name: newItem.name, price: Number(newItem.price), note: newItem.note }, "Item added", selectedSection.id, selectedCategory.id); if (data) setNewItem({ name: "", price: "", note: "" }); }}>Add item</button></div>
+      <div className="mt-6 space-y-2">{categoryItems.map((item, index) => <div key={item.id} className="flex items-center gap-2 rounded-xl border p-3"><div className="min-w-0 flex-1"><p className="truncate font-medium">{item.name} <span className="font-normal text-foreground/50">£{Number(item.price).toFixed(2)}</span></p>{item.note ? <p className="truncate text-sm text-foreground/50">{item.note}</p> : null}<p className="text-xs text-foreground/40">{item.is_visible ? "Visible" : "Hidden"}</p></div><button title="Move item up" disabled={busy || index === 0} className="rounded-lg border px-3 py-2 disabled:opacity-30" onClick={() => void reorder("item", categoryItems, index, -1)}>↑</button><button title="Move item down" disabled={busy || index === categoryItems.length - 1} className="rounded-lg border px-3 py-2 disabled:opacity-30" onClick={() => void reorder("item", categoryItems, index, 1)}>↓</button><button className="rounded-lg border px-3 py-2 text-sm" onClick={() => setDraft({ kind: "item", id: item.id, name: item.name, price: String(item.price), note: item.note ?? "", is_visible: item.is_visible })}>Edit</button><button className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700" onClick={() => void deleteThing("item", item.id, item.name)}>Delete</button></div>)}{!categoryItems.length ? <p className="rounded-xl border border-dashed p-5 text-sm text-foreground/50">No items in this category yet.</p> : null}</div>
+    </section> : null}
 
-      <section className="rounded-2xl border bg-white p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 1</p>
-            <h2 className="text-xl font-semibold">Menu tabs</h2>
-            <p className="mt-1 text-sm text-foreground/60">These are the tabs customers see on the public menu, such as Drinks, Food and Snacks.</p>
-          </div>
-          <div className="flex w-full max-w-md gap-2 sm:w-auto">
-            <input className="min-w-0 flex-1 rounded-lg border px-3 py-2" placeholder="New tab name" value={newSectionName} onChange={(e) => setNewSectionName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addSection(); } }} />
-            <button className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !newSectionName.trim()} onClick={() => void addSection()}>Add tab</button>
-          </div>
-        </div>
-
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
-          {sections.map((section) => {
-            const categoryIds = new Set(categories.filter((c) => c.section_id === section.id).map((c) => c.id));
-            const visibleCount = items.filter((item) => categoryIds.has(item.category_id) && item.is_visible).length;
-            return <button key={section.id} onClick={() => chooseSection(section.id)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition ${selectedSectionId === section.id ? "border-[#189458] bg-[#189458] text-white" : "bg-white text-foreground hover:border-[#189458]"}`}>
-              {section.name} <span className="ml-1 opacity-70">{visibleCount}</span>
-            </button>;
-          })}
-        </div>
-        {!sections.length ? <p className="mt-4 text-sm text-foreground/55">No menu tabs yet. Add your first one above.</p> : null}
-      </section>
-
-      {selectedSection ? <section className="rounded-2xl border bg-white p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Selected tab</p>
-            {editing("section", selectedSection.id) ? <div className="mt-2 flex flex-wrap items-center gap-3"><input className="rounded-lg border px-3 py-2" value={String(draft?.data.name ?? "")} onChange={(e) => changeDraft("name", e.target.value)} /><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(draft?.data.is_visible)} onChange={(e) => changeDraft("is_visible", e.target.checked)} /> Visible</label></div> : <><h2 className="mt-1 text-2xl font-semibold">{selectedSection.name}</h2><p className="mt-1 text-sm text-foreground/60">{selectedSection.is_visible ? "Enabled for the public menu" : "Hidden from the public menu"} · {visibleItemsInSection} visible {visibleItemsInSection === 1 ? "item" : "items"}</p>{selectedSection.is_visible && visibleItemsInSection === 0 ? <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">This tab exists, but it is not shown publicly yet because it has no visible items.</p> : null}</>}
-          </div>
-          <div className="flex gap-2">
-            {editing("section", selectedSection.id) ? <><button className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white" onClick={() => void patch()} disabled={busy}>Save</button><button className="rounded-full border px-4 py-2 text-sm" onClick={() => setDraft(null)} disabled={busy}>Cancel</button></> : <button className="rounded-full border px-4 py-2 text-sm font-semibold" onClick={() => setDraft({ kind: "section", id: selectedSection.id, data: { name: selectedSection.name, slug: selectedSection.slug, is_visible: selectedSection.is_visible } })}>Edit tab</button>}
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 2</p>
-              <h3 className="text-lg font-semibold">Categories in {selectedSection.name}</h3>
-              <p className="mt-1 text-sm text-foreground/60">Choose a category to manage its items.</p>
-            </div>
-            <div className="flex w-full max-w-md gap-2 sm:w-auto">
-              <input className="min-w-0 flex-1 rounded-lg border px-3 py-2" placeholder={`New category in ${selectedSection.name}`} value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addCategory(); } }} />
-              <button className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !newCategoryName.trim()} onClick={() => void addCategory()}>Add category</button>
-            </div>
-          </div>
-
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-            {sectionCategories.map((category) => <button key={category.id} onClick={() => chooseCategory(category.id)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium ${selectedCategoryId === category.id ? "border-[#189458] bg-[#189458]/10 text-[#116b40]" : "bg-white"}`}>{category.name}</button>)}
-          </div>
-          {!sectionCategories.length ? <p className="mt-4 rounded-xl border border-dashed p-5 text-sm text-foreground/55">No categories in {selectedSection.name} yet. Add one above, then it will be selected automatically.</p> : null}
-        </div>
-      </section> : null}
-
-      {selectedSection && selectedCategory ? <section className="rounded-2xl border bg-white p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 3</p>
-            {editing("category", selectedCategory.id) ? <div className="mt-2 flex flex-wrap gap-2"><input className="rounded-lg border px-3 py-2" value={String(draft?.data.name ?? "")} onChange={(e) => changeDraft("name", e.target.value)} /><select className="rounded-lg border px-3 py-2" value={String(draft?.data.section_id ?? selectedSection.id)} onChange={(e) => changeDraft("section_id", e.target.value)}>{sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div> : <><h2 className="mt-1 text-2xl font-semibold">{selectedCategory.name}</h2><p className="mt-1 text-sm text-foreground/60">Add and manage items in {selectedSection.name} → {selectedCategory.name}.</p></>}
-          </div>
-          <div className="flex gap-2">{editing("category", selectedCategory.id) ? <><button className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white" onClick={() => void patch()} disabled={busy}>Save</button><button className="rounded-full border px-4 py-2 text-sm" onClick={() => setDraft(null)}>Cancel</button></> : <button className="rounded-full border px-4 py-2 text-sm font-semibold" onClick={() => setDraft({ kind: "category", id: selectedCategory.id, data: { name: selectedCategory.name, section_id: selectedCategory.section_id ?? selectedSection.id } })}>Edit category</button>}</div>
-        </div>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-[1.3fr_.55fr_1.4fr_auto]">
-          <input className="rounded-lg border px-3 py-2" placeholder="Item name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} />
-          <input className="rounded-lg border px-3 py-2" type="number" min="0" step="0.01" placeholder="Price" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} />
-          <input className="rounded-lg border px-3 py-2" placeholder="Note / description (optional)" value={newItem.note} onChange={(e) => setNewItem({ ...newItem, note: e.target.value })} />
-          <button className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !newItem.name.trim() || newItem.price === ""} onClick={() => void addItem()}>Add item</button>
-        </div>
-
-        <div className="mt-6 space-y-2">
-          {categoryItems.map((item) => <div key={item.id} className="rounded-xl border bg-[#FAF6F1] p-4">
-            {editing("item", item.id) ? <div className="grid gap-2 md:grid-cols-[1.2fr_.5fr_1.3fr_.55fr_auto]">
-              <input className="rounded-lg border bg-white px-3 py-2" value={String(draft?.data.name ?? "")} onChange={(e) => changeDraft("name", e.target.value)} />
-              <input className="rounded-lg border bg-white px-3 py-2" type="number" step="0.01" min="0" value={Number(draft?.data.price ?? 0)} onChange={(e) => changeDraft("price", Number(e.target.value))} />
-              <input className="rounded-lg border bg-white px-3 py-2" value={String(draft?.data.note ?? "")} onChange={(e) => changeDraft("note", e.target.value)} />
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(draft?.data.is_visible)} onChange={(e) => changeDraft("is_visible", e.target.checked)} /> Visible</label>
-              <div className="flex gap-2"><button className="rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-white" onClick={() => void patch()} disabled={busy}>Save</button><button className="rounded-full border px-3 py-1.5 text-sm" onClick={() => setDraft(null)}>Cancel</button></div>
-            </div> : <div className="flex items-center justify-between gap-4"><div><p className="font-medium">{item.name} <span className="font-normal text-foreground/55">£{Number(item.price).toFixed(2)}</span></p>{item.note ? <p className="text-sm text-foreground/55">{item.note}</p> : null}<p className="mt-1 text-xs text-foreground/45">{item.is_visible ? "Visible" : "Hidden"}</p></div><button className="rounded-full border px-3 py-1.5 text-sm" onClick={() => setDraft({ kind: "item", id: item.id, data: { name: item.name, price: item.price, note: item.note ?? "", is_visible: item.is_visible, position: item.position } })}>Edit</button></div>}
-          </div>)}
-          {!categoryItems.length ? <p className="rounded-xl border border-dashed p-5 text-sm text-foreground/55">No items in this category yet. Add the first item above.</p> : null}
-        </div>
-      </section> : null}
-    </main>
-  );
+    {draft ? <section className="rounded-2xl border border-[#189458]/30 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#116b40]">Editing {draft.kind}</p><h2 className="mt-1 text-xl font-semibold">{draft.name}</h2></div><button className="text-sm underline" onClick={() => setDraft(null)}>Cancel</button></div><div className="mt-5 grid gap-3 md:grid-cols-2"><label className="text-sm font-medium">Name<input className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>{draft.kind === "section" ? <label className="flex items-center gap-2 self-end rounded-lg border px-3 py-2 text-sm"><input type="checkbox" checked={Boolean(draft.is_visible)} onChange={(e) => setDraft({ ...draft, is_visible: e.target.checked })} />Visible on public menu</label> : null}{draft.kind === "category" ? <label className="text-sm font-medium">Menu tab<select className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" value={draft.section_id} onChange={(e) => setDraft({ ...draft, section_id: e.target.value })}>{sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label> : null}{draft.kind === "item" ? <><label className="text-sm font-medium">Price<input className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" type="number" min="0" step="0.01" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} /></label><label className="text-sm font-medium md:col-span-2">Description / note<input className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} /></label><label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"><input type="checkbox" checked={Boolean(draft.is_visible)} onChange={(e) => setDraft({ ...draft, is_visible: e.target.checked })} />Visible on public menu</label></> : null}</div><button disabled={busy || !draft.name.trim()} className="mt-5 rounded-full bg-accent px-5 py-2.5 font-semibold text-white disabled:opacity-50" onClick={() => void saveDraft()}>Save changes</button></section> : null}
+  </main>;
 }
