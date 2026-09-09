@@ -14,23 +14,34 @@ async function saveSeries(formData: FormData) {
   if (!admin) redirect("/sign-in?callbackURL=/admin/events/series");
   const id = value(formData, "id");
   if (!isUuid(id)) throw new Error("Invalid event series");
-  const capacity = Number(value(formData, "default_capacity"));
-  const pricePence = Math.round(Number(value(formData, "default_ticket_price")) * 100);
-  if (!value(formData, "name") || !value(formData, "default_title") || !value(formData, "default_description") || !Number.isInteger(capacity) || capacity < 1 || !Number.isInteger(pricePence) || pricePence < 0) throw new Error("Please complete the required template fields.");
+
+  const name = value(formData, "name");
+  if (!name) throw new Error("Series name is required.");
+
+  const seriesShort = value(formData, "series_short_description");
+  const seriesDescription = value(formData, "series_description");
+  const defaultTitle = value(formData, "default_title") || name;
+  const defaultDescription = value(formData, "default_description") || seriesDescription || seriesShort || name;
+
+  const requestedCapacity = Number(value(formData, "default_capacity"));
+  const capacity = Number.isInteger(requestedCapacity) && requestedCapacity > 0 ? requestedCapacity : 20;
+
+  const requestedPrice = Number(value(formData, "default_ticket_price"));
+  const pricePence = Number.isFinite(requestedPrice) && requestedPrice >= 0 ? Math.round(requestedPrice * 100) : 0;
 
   const imageUrl = value(formData, "image_url") || null;
   const { error } = await appCoreDb().from("event_series").update({
-    name: value(formData, "name"),
-    short_description: value(formData, "series_short_description") || null,
-    description: value(formData, "series_description") || null,
+    name,
+    short_description: seriesShort || null,
+    description: seriesDescription || null,
     image_url: imageUrl,
     seo_title: value(formData, "seo_title") || null,
     seo_description: value(formData, "seo_description") || null,
     is_public: formData.get("is_public") === "on",
-    default_title: value(formData, "default_title"),
+    default_title: defaultTitle,
     default_subtitle: value(formData, "default_subtitle") || null,
     default_short_description: value(formData, "default_short_description") || null,
-    default_description: value(formData, "default_description"),
+    default_description: defaultDescription,
     default_image_url: imageUrl,
     default_capacity: capacity,
     default_ticket_name: value(formData, "default_ticket_name") || "General admission",
@@ -64,12 +75,12 @@ export default async function EditSeriesPage({ params }: { params: Promise<{ id:
         <label className="flex items-center gap-3 text-sm font-medium"><input name="is_public" type="checkbox" defaultChecked={series.is_public} className="h-4 w-4" />Public series landing page</label>
       </section>
 
-      <section className="space-y-4 border-t pt-8"><div><h2 className="text-lg font-semibold">New-event template</h2><p className="mt-1 text-sm text-foreground/60">These values pre-fill Create event when this series is selected. Date and time are always entered per occurrence.</p></div>
-        <label className="block text-sm font-medium">Default event title<input name="default_title" required defaultValue={series.default_title ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
+      <section className="space-y-4 border-t pt-8"><div><h2 className="text-lg font-semibold">New-event template</h2><p className="mt-1 text-sm text-foreground/60">These values pre-fill Create event when this series is selected. Date and time are always entered per occurrence. Older series can be saved even if some defaults are blank; sensible fallbacks will be used.</p></div>
+        <label className="block text-sm font-medium">Default event title<input name="default_title" defaultValue={series.default_title ?? ""} placeholder={series.name} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
         <label className="block text-sm font-medium">Default subtitle<input name="default_subtitle" defaultValue={series.default_subtitle ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
         <label className="block text-sm font-medium">Default short description<textarea name="default_short_description" rows={3} defaultValue={series.default_short_description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
-        <label className="block text-sm font-medium">Default full description<textarea name="default_description" required rows={7} defaultValue={series.default_description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
-        <div className="grid gap-4 sm:grid-cols-3"><label className="block text-sm font-medium">Capacity<input name="default_capacity" type="number" min="1" required defaultValue={series.default_capacity ?? 20} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="block text-sm font-medium">Ticket name<input name="default_ticket_name" required defaultValue={series.default_ticket_name ?? "General admission"} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="block text-sm font-medium">Price (£)<input name="default_ticket_price" type="number" min="0" step="0.01" required defaultValue={((series.default_ticket_price_pence ?? 0) / 100).toFixed(2)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label></div>
+        <label className="block text-sm font-medium">Default full description<textarea name="default_description" rows={7} defaultValue={series.default_description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
+        <div className="grid gap-4 sm:grid-cols-3"><label className="block text-sm font-medium">Capacity<input name="default_capacity" type="number" min="1" defaultValue={series.default_capacity ?? 20} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="block text-sm font-medium">Ticket name<input name="default_ticket_name" defaultValue={series.default_ticket_name ?? "General admission"} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="block text-sm font-medium">Price (£)<input name="default_ticket_price" type="number" min="0" step="0.01" defaultValue={((series.default_ticket_price_pence ?? 0) / 100).toFixed(2)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label></div>
         <label className="block text-sm font-medium">Ticket description<input name="default_ticket_description" defaultValue={series.default_ticket_description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       </section>
       <div className="flex items-center gap-4 border-t pt-6"><button type="submit" className="rounded-lg bg-black px-5 py-3 font-semibold text-white">Save series template</button><Link href="/admin/events/series" className="text-sm underline underline-offset-4">Cancel</Link></div>
