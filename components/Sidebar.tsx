@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import { TicketIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 
@@ -21,9 +21,10 @@ type SidebarProps = {
   handleNav: (href: string) => void;
   user: User;
   profile: UserProfile | null;
+  basketCount: number;
 };
 
-export default function Sidebar({ sidebarOpen, setSidebarOpen, handleNav, user, profile }: SidebarProps) {
+export default function Sidebar({ sidebarOpen, setSidebarOpen, handleNav, user, profile, basketCount }: SidebarProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [localProfile, setLocalProfile] = useState<UserProfile | null>(profile);
@@ -68,6 +69,11 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, handleNav, user, 
           <button onClick={() => handleNav("/dashboard/events")} className="block hover:text-[#5DA865]">My events</button>
           <button onClick={() => handleNav("/dashboard/orders")} className="block hover:text-[#5DA865]">Order history</button>
           <button onClick={() => handleNav("/events")} className="block hover:text-[#5DA865]">Browse events</button>
+          <button onClick={() => handleNav("/events/checkout")} className="flex items-center gap-2 hover:text-[#5DA865]" aria-label={`Ticket basket${basketCount ? `, ${basketCount} ticket${basketCount === 1 ? "" : "s"}` : ""}`}>
+            <TicketIcon className="h-5 w-5" />
+            <span>Ticket basket</span>
+            {basketCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-[#17221f] px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white">{basketCount > 99 ? "99+" : basketCount}</span>}
+          </button>
         </nav>
       </div>
       <div ref={accountRef} className="border-t border-[#ded7cf] px-6 py-6 bg-[#FAF6F1]">
