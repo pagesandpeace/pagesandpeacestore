@@ -21,21 +21,27 @@ export default function AppCoreRefundButton({ scope, orderId, orderLineId, label
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState("customer_requested");
   const [notes, setNotes] = useState("");
+  const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
   const isLineRefund = scope === "order_line";
   const availableQuantity = Math.max(1, Number(maxQuantity ?? 1));
   const [refundQuantity, setRefundQuantity] = useState(availableQuantity);
 
   useEffect(() => {
-    if (open) setRefundQuantity(availableQuantity);
+    if (open) {
+      setRefundQuantity(availableQuantity);
+      setConfirmation("");
+      setError("");
+    }
   }, [open, availableQuantity]);
 
   const refundAmountPence = isLineRefund && unitAmountPence
     ? Math.max(0, refundQuantity * unitAmountPence)
     : amountPence;
+  const confirmed = confirmation.trim().toUpperCase() === "REFUND";
 
   async function submit() {
-    if (busy) return;
+    if (busy || !confirmed) return;
     setBusy(true);
     setError("");
     try {
@@ -65,8 +71,8 @@ export default function AppCoreRefundButton({ scope, orderId, orderLineId, label
   return <>
     <button type="button" disabled={disabled || amountPence <= 0} onClick={() => setOpen(true)} className="rounded-full border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">{label}</button>
     {open ? <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <h2 className="text-xl font-semibold text-red-800">Confirm refund</h2>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="refund-confirm-title">
+        <h2 id="refund-confirm-title" className="text-xl font-semibold text-red-800">Confirm refund</h2>
         <p className="mt-2 text-sm text-neutral-600">This sends a real refund through Stripe. It cannot be undone from this screen.</p>
         <div className="mt-4 rounded-xl border bg-neutral-50 p-4 text-sm">
           <p><span className="text-neutral-500">Refund:</span> <strong>{itemName}</strong></p>
@@ -95,10 +101,13 @@ export default function AppCoreRefundButton({ scope, orderId, orderLineId, label
         <label className="mt-3 block text-sm font-medium">Notes <span className="font-normal text-neutral-500">(optional)</span>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 min-h-20 w-full rounded-lg border px-3 py-2" />
         </label>
+        <label className="mt-4 block text-sm font-medium text-red-800">Type REFUND to enable the final action
+          <input value={confirmation} onChange={(e) => setConfirmation(e.target.value)} autoComplete="off" className="mt-1 w-full rounded-lg border border-red-300 px-3 py-2 uppercase tracking-widest" placeholder="REFUND" />
+        </label>
         {error ? <p className="mt-3 text-sm font-medium text-red-700">{error}</p> : null}
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" disabled={busy} onClick={() => setOpen(false)} className="rounded-full border px-4 py-2 text-sm">Cancel</button>
-          <button type="button" disabled={busy} onClick={submit} className="rounded-full bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? "Refunding…" : `Refund £${(refundAmountPence / 100).toFixed(2)}`}</button>
+          <button type="button" disabled={busy || !confirmed} onClick={submit} className="rounded-full bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{busy ? "Refunding…" : `Refund £${(refundAmountPence / 100).toFixed(2)}`}</button>
         </div>
       </div>
     </div> : null}
