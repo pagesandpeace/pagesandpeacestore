@@ -1,73 +1,8 @@
 "use client";
-
-import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-
-type Order = { status: string; total_pence: number; currency: string };
-
-function BookingSuccessContent() {
-  const searchParams = useSearchParams();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [message, setMessage] = useState("Checking your booking confirmation…");
-
-  useEffect(() => {
-    const sessionId = searchParams.get("session_id");
-    if (!sessionId) {
-      setMessage("We could not identify this checkout.");
-      return;
-    }
-
-    let attempts = 0;
-    let cancelled = false;
-    let timer: number | undefined;
-
-    const check = async () => {
-      attempts += 1;
-      const response = await fetch(`/api/app-core/orders/status?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
-      const data = await response.json().catch(() => ({}));
-
-      if (cancelled) return true;
-
-      if (data.order?.status === "paid") {
-        setOrder(data.order);
-        setMessage("Your booking is confirmed.");
-        window.localStorage.removeItem("app_core_event_basket_v1");
-        window.dispatchEvent(new Event("app-core-basket-changed"));
-        return true;
-      }
-
-      if (attempts >= 12) {
-        setMessage("We have not yet received payment confirmation from Stripe. Please do not pay again; we will confirm your booking by email once it arrives.");
-        return true;
-      }
-
-      return false;
-    };
-
-    void check().then((done) => {
-      if (done || cancelled) return;
-      timer = window.setInterval(() => {
-        void check().then((complete) => {
-          if (complete && timer) window.clearInterval(timer);
-        });
-      }, 2500);
-    });
-
-    return () => {
-      cancelled = true;
-      if (timer) window.clearInterval(timer);
-    };
-  }, [searchParams]);
-
-  return <main className="mx-auto min-h-screen max-w-xl px-6 py-20 text-center">
-    <h1 className="text-3xl font-bold">{order ? "Booking confirmed" : "Confirming booking"}</h1>
-    <p className="mt-4 text-foreground/70">{message}</p>
-    {order ? <p className="mt-5 text-lg font-semibold">Total paid: £{(order.total_pence / 100).toFixed(2)}</p> : null}
-    <Link href="/events" className="mt-8 inline-flex rounded-lg bg-black px-5 py-3 font-semibold text-white">Browse events</Link>
-  </main>;
-}
-
-export default function BookingSuccessPage() {
-  return <Suspense fallback={<main className="mx-auto min-h-screen max-w-xl px-6 py-20 text-center">Confirming your booking…</main>}><BookingSuccessContent /></Suspense>;
-}
+import Link from "next/link";import {Suspense,useEffect,useState} from "react";import {useSearchParams} from "next/navigation";
+type Order={status:string;total_pence:number;currency:string};type BookedEvent={id:string;slug:string;title:string;starts_at:string};
+const stamp=(v:string)=>new Date(v).toISOString().replace(/[-:]/g,"").replace(/\.\d{3}/,"");
+function googleUrl(e:BookedEvent){const start=stamp(e.starts_at);const end=stamp(new Date(new Date(e.starts_at).getTime()+2*60*60*1000).toISOString());return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(e.title)}&dates=${start}/${end}&location=${encodeURIComponent("Pages & Peace")}&details=${encodeURIComponent(`Booking confirmed. Event details: https://pagesandpeace.co.uk/events/${e.slug}`)}`;}
+function ics(e:BookedEvent){const start=stamp(e.starts_at);const end=stamp(new Date(new Date(e.starts_at).getTime()+2*60*60*1000).toISOString());const body=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Pages and Peace//Events//EN","BEGIN:VEVENT",`UID:${e.id}@pagesandpeace.co.uk`,`DTSTART:${start}`,`DTEND:${end}`,`SUMMARY:${e.title.replace(/,/g,"\\,")}`,"LOCATION:Pages & Peace",`URL:https://pagesandpeace.co.uk/events/${e.slug}`,"END:VEVENT","END:VCALENDAR"].join("\r\n");const blob=new Blob([body],{type:"text/calendar;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${e.slug}.ics`;a.click();URL.revokeObjectURL(url);}
+function Content(){const sp=useSearchParams();const[order,setOrder]=useState<Order|null>(null);const[events,setEvents]=useState<BookedEvent[]>([]);const[message,setMessage]=useState("Checking your booking confirmation…");useEffect(()=>{const id=sp.get("session_id");if(!id){setMessage("We could not identify this checkout.");return;}let attempts=0,cancelled=false,timer:number|undefined;const check=async()=>{attempts++;const r=await fetch(`/api/app-core/orders/status?session_id=${encodeURIComponent(id)}`,{cache:"no-store"});const d=await r.json().catch(()=>({}));if(cancelled)return true;if(d.order?.status==="paid"){setOrder(d.order);setEvents(d.events??[]);setMessage("Your booking is confirmed.");localStorage.removeItem("app_core_event_basket_v1");window.dispatchEvent(new window.Event("app-core-basket-changed"));return true;}if(attempts>=12){setMessage("We have not yet received payment confirmation from Stripe. Please do not pay again; we will confirm your booking by email once it arrives.");return true;}return false;};void check().then(done=>{if(!done&&!cancelled)timer=window.setInterval(()=>void check().then(c=>{if(c&&timer)clearInterval(timer)}),2500)});return()=>{cancelled=true;if(timer)clearInterval(timer)}},[sp]);return <main className="mx-auto min-h-screen max-w-xl px-6 py-16 text-center"><div className="text-5xl" aria-hidden="true">✓</div><h1 className="mt-4 text-3xl font-bold">{order?"Booking confirmed":"Confirming booking"}</h1><p className="mt-4 text-foreground/70">{message}</p>{order?<><p className="mt-5 text-lg font-semibold">Total paid: £{(order.total_pence/100).toFixed(2)}</p>{events.length?<div className="mt-8 space-y-3 text-left"><h2 className="text-center text-lg font-bold">Add to your calendar</h2>{events.map(e=><div key={e.id} className="rounded-xl border bg-white p-4"><p className="font-semibold">{e.title}</p><div className="mt-3 flex flex-wrap gap-2"><a href={googleUrl(e)} target="_blank" rel="noreferrer" className="rounded-lg bg-black px-3 py-2 text-sm font-semibold text-white">Google Calendar</a><button onClick={()=>ics(e)} className="rounded-lg border px-3 py-2 text-sm font-semibold">Apple / Outlook</button></div></div>)}</div>:null}</>:null}<div className="mt-8 flex justify-center gap-3"><Link href="/dashboard" className="rounded-lg border px-5 py-3 font-semibold">My bookings</Link><Link href="/events" className="rounded-lg bg-black px-5 py-3 font-semibold text-white">Browse events</Link></div></main>}
+export default function BookingSuccessPage(){return <Suspense fallback={<main className="mx-auto min-h-screen max-w-xl px-6 py-20 text-center">Confirming your booking…</main>}><Content/></Suspense>}
