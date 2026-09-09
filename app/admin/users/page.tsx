@@ -104,7 +104,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
 
       <section className="rounded-2xl border bg-white p-6">
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-800" title="Top spenders">
             <Crown className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
@@ -121,7 +121,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     <p className="truncate font-semibold">{spender.name}</p>
                     <p className="truncate text-xs text-foreground/55">{spender.email || "No email"}</p>
                   </div>
-                  <span className="inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-full bg-black px-2 text-xs font-semibold text-white">
+                  <span className="inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-full bg-black px-2 text-xs font-semibold text-white" title={`Top spender rank ${index + 1}`}>
                     <Crown className="h-3.5 w-3.5" aria-hidden="true" />
                     {index + 1}
                   </span>
@@ -166,46 +166,30 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                   </td>
                   <td className="px-5 py-4">
                     {user.email_confirmed_at ? (
-                      <StatusBadge className="bg-emerald-100 text-emerald-800" icon={<BadgeCheck className="h-3.5 w-3.5" />}>
-                        Confirmed
-                      </StatusBadge>
+                      <StatusIcon label="Email confirmed" className="bg-emerald-100 text-emerald-800" icon={<BadgeCheck className="h-4 w-4" />} />
                     ) : (
-                      <StatusBadge className="bg-amber-100 text-amber-800" icon={<MailWarning className="h-3.5 w-3.5" />}>
-                        Unconfirmed
-                      </StatusBadge>
+                      <StatusIcon label="Email unconfirmed" className="bg-amber-100 text-amber-800" icon={<MailWarning className="h-4 w-4" />} />
                     )}
                   </td>
                   <td className="px-5 py-4">
                     {hasEventPurchase ? (
-                      <div className="space-y-1.5">
-                        <StatusBadge className="bg-emerald-100 text-emerald-800" icon={<TicketCheck className="h-3.5 w-3.5" />}>
-                          Event buyer
-                        </StatusBadge>
-                        <p className="text-xs text-foreground/55">{money(spend?.netPence ?? 0)} net</p>
+                      <div className="flex items-center gap-2">
+                        <StatusIcon label={`Event buyer · ${money(spend?.netPence ?? 0)} net spend`} className="bg-emerald-100 text-emerald-800" icon={<TicketCheck className="h-4 w-4" />} />
+                        <span className="text-xs text-foreground/55">{money(spend?.netPence ?? 0)}</span>
                       </div>
                     ) : (
-                      <StatusBadge className="bg-stone-100 text-stone-500" icon={<UserRoundCheck className="h-3.5 w-3.5" />}>
-                        No purchases
-                      </StatusBadge>
+                      <StatusIcon label="No event purchases" className="bg-stone-100 text-stone-500" icon={<UserRoundCheck className="h-4 w-4" />} />
                     )}
                   </td>
                   <td className="px-5 py-4">
                     {subscribed ? (
-                      <StatusBadge className="bg-emerald-100 text-emerald-800" icon={<MailCheck className="h-3.5 w-3.5" />}>
-                        Subscribed
-                      </StatusBadge>
+                      <StatusIcon label="Subscribed" className="bg-emerald-100 text-emerald-800" icon={<MailCheck className="h-4 w-4" />} />
                     ) : consentedButNotSynced ? (
-                      <StatusBadge className="bg-amber-100 text-amber-800" icon={<MailWarning className="h-3.5 w-3.5" />}>
-                        Consent saved
-                      </StatusBadge>
+                      <StatusIcon label="Marketing consent saved, not synced" className="bg-amber-100 text-amber-800" icon={<MailWarning className="h-4 w-4" />} />
                     ) : declined ? (
-                      <StatusBadge className="bg-rose-50 text-rose-700" icon={<MailX className="h-3.5 w-3.5" />}>
-                        No thanks
-                      </StatusBadge>
+                      <StatusIcon label="Marketing declined" className="bg-rose-50 text-rose-700" icon={<MailX className="h-4 w-4" />} />
                     ) : (
-                      <StatusBadge className="bg-stone-100 text-stone-600" icon={<CircleHelp className="h-3.5 w-3.5" />}>
-                        Not chosen
-                      </StatusBadge>
+                      <StatusIcon label="Marketing preference not chosen" className="bg-stone-100 text-stone-600" icon={<CircleHelp className="h-4 w-4" />} />
                     )}
                   </td>
                 </tr>
@@ -220,19 +204,22 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   );
 }
 
-function StatusBadge({
-  children,
+function StatusIcon({
+  label,
   icon,
   className,
 }: {
-  children: React.ReactNode;
+  label: string;
   icon: React.ReactNode;
   className: string;
 }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${className}`}>
+    <span
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${className}`}
+      title={label}
+      aria-label={label}
+    >
       {icon}
-      <span>{children}</span>
     </span>
   );
 }
