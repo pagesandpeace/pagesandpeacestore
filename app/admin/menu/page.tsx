@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Section = { id: string; name: string; slug: string; position: number; is_visible: boolean };
-type Category = { id: string; name: string; position: number; section_id: string | null };
+type Category = { id: string; name: string; description: string | null; position: number; section_id: string | null };
 type Item = { id: string; category_id: string; name: string; price: number; position: number; note: string | null; is_visible: boolean };
 type Kind = "section" | "category" | "item";
-type Draft = { kind: Kind; id: string; name: string; is_visible?: boolean; section_id?: string; price?: string; note?: string } | null;
+type Draft = { kind: Kind; id: string; name: string; description?: string; is_visible?: boolean; section_id?: string; price?: string; note?: string } | null;
 
 export default function AdminMenuPage() {
   const [sections, setSections] = useState<Section[]>([]);
@@ -15,7 +15,7 @@ export default function AdminMenuPage() {
   const [selectedSectionId, setSelectedSectionId] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [newSection, setNewSection] = useState("");
-  const [newCategory, setNewCategory] = useState("");
+  const [newCategory, setNewCategory] = useState({ name: "", description: "" });
   const [newItem, setNewItem] = useState({ name: "", price: "", note: "" });
   const [draft, setDraft] = useState<Draft>(null);
   const [message, setMessage] = useState("");
@@ -94,7 +94,7 @@ export default function AdminMenuPage() {
     if (draft.kind === "section") {
       await request("PATCH", { type: "section", id: draft.id, name: draft.name, is_visible: Boolean(draft.is_visible) }, "Tab updated", selectedSectionId, selectedCategoryId);
     } else if (draft.kind === "category") {
-      await request("PATCH", { type: "category", id: draft.id, name: draft.name, section_id: draft.section_id }, "Category updated", draft.section_id, draft.id);
+      await request("PATCH", { type: "category", id: draft.id, name: draft.name, description: draft.description ?? "", section_id: draft.section_id }, "Category updated", draft.section_id, draft.id);
     } else {
       await request("PATCH", { type: "item", id: draft.id, name: draft.name, price: Number(draft.price), note: draft.note, is_visible: Boolean(draft.is_visible) }, "Item updated", selectedSectionId, selectedCategoryId);
     }
@@ -139,24 +139,25 @@ export default function AdminMenuPage() {
     </section>
 
     {selectedSection ? <section className="rounded-2xl border bg-white p-5 sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 2</p><h2 className="text-xl font-semibold">Categories in {selectedSection.name}</h2></div>
-        <div className="flex gap-2"><input className={input} placeholder="New category" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} /><button disabled={busy || !newCategory.trim()} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={async () => { const data = await request("POST", { type: "category", section_id: selectedSection.id, name: newCategory }, "Category added", selectedSection.id); if (data?.category?.id) { setNewCategory(""); setSelectedCategoryId(data.category.id); } }}>Add category</button></div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 2</p><h2 className="text-xl font-semibold">Categories in {selectedSection.name}</h2><p className="mt-1 text-sm text-foreground/55">Descriptions appear below the category heading on the public menu.</p></div>
+        <div className="grid w-full gap-2 sm:max-w-xl sm:grid-cols-[.8fr_1.2fr_auto]"><input className={input} placeholder="New category" value={newCategory.name} onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })} /><input className={input} placeholder="Optional description, e.g. Add salad, chips or crisps for 50p each" value={newCategory.description} onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })} /><button disabled={busy || !newCategory.name.trim()} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={async () => { const data = await request("POST", { type: "category", section_id: selectedSection.id, name: newCategory.name, description: newCategory.description }, "Category added", selectedSection.id); if (data?.category?.id) { setNewCategory({ name: "", description: "" }); setSelectedCategoryId(data.category.id); } }}>Add category</button></div>
       </div>
       <div className="mt-5 space-y-2">
         {sectionCategories.map((category, index) => {
           const editing = draft?.kind === "category" && draft.id === category.id;
           return <div key={category.id} className={`rounded-xl border p-2 ${category.id === selectedCategoryId ? "border-[#189458] bg-[#189458]/5" : ""}`}>
-            {editing ? <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
+            {editing ? <div className="grid gap-2 md:grid-cols-[.8fr_1.4fr_.8fr_auto_auto]">
               <input className={input} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+              <input className={input} value={draft.description ?? ""} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Category description" />
               <select className={input} value={draft.section_id} onChange={(e) => setDraft({ ...draft, section_id: e.target.value })}>{sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
               <button className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white" disabled={busy} onClick={() => void saveDraft()}>Save</button>
               <button className={smallButton} disabled={busy} onClick={() => setDraft(null)}>Cancel</button>
             </div> : <div className="flex items-center gap-2">
-              <button className="min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-left font-semibold" onClick={() => setSelectedCategoryId(category.id)}>{category.name}<span className="ml-2 text-xs font-normal text-foreground/45">{items.filter((i) => i.category_id === category.id).length} items</span></button>
+              <button className="min-w-0 flex-1 rounded-lg px-3 py-2 text-left" onClick={() => setSelectedCategoryId(category.id)}><span className="font-semibold">{category.name}</span><span className="ml-2 text-xs font-normal text-foreground/45">{items.filter((i) => i.category_id === category.id).length} items</span>{category.description ? <span className="mt-1 block text-sm font-normal text-foreground/55">{category.description}</span> : null}</button>
               <button title="Move category up" disabled={busy || index === 0} className={`${smallButton} disabled:opacity-30`} onClick={() => void reorder("category", sectionCategories, index, -1)}>↑</button>
               <button title="Move category down" disabled={busy || index === sectionCategories.length - 1} className={`${smallButton} disabled:opacity-30`} onClick={() => void reorder("category", sectionCategories, index, 1)}>↓</button>
-              <button className={smallButton} onClick={() => setDraft({ kind: "category", id: category.id, name: category.name, section_id: category.section_id ?? selectedSection.id })}>Edit</button>
+              <button className={smallButton} onClick={() => setDraft({ kind: "category", id: category.id, name: category.name, description: category.description ?? "", section_id: category.section_id ?? selectedSection.id })}>Edit</button>
               <button className={dangerButton} onClick={() => void deleteThing("category", category.id, category.name)}>Delete</button>
             </div>}
           </div>;
@@ -166,7 +167,7 @@ export default function AdminMenuPage() {
     </section> : null}
 
     {selectedSection && selectedCategory ? <section className="rounded-2xl border bg-white p-5 sm:p-6">
-      <div><p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 3</p><h2 className="text-xl font-semibold">Items in {selectedCategory.name}</h2><p className="mt-1 text-sm text-foreground/55">Order these exactly as you want them to appear on the public menu.</p></div>
+      <div><p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Step 3</p><h2 className="text-xl font-semibold">Items in {selectedCategory.name}</h2>{selectedCategory.description ? <p className="mt-1 text-sm text-foreground/55">{selectedCategory.description}</p> : null}<p className="mt-1 text-sm text-foreground/55">Order these exactly as you want them to appear on the public menu.</p></div>
       <div className="mt-5 grid gap-2 md:grid-cols-[1fr_.35fr_1fr_auto]"><input className={input} placeholder="Item name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} /><input className={input} type="number" min="0" step="0.01" placeholder="Price" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} /><input className={input} placeholder="Description / note" value={newItem.note} onChange={(e) => setNewItem({ ...newItem, note: e.target.value })} /><button disabled={busy || !newItem.name.trim() || newItem.price === ""} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={async () => { const data = await request("POST", { type: "item", category_id: selectedCategory.id, name: newItem.name, price: Number(newItem.price), note: newItem.note }, "Item added", selectedSection.id, selectedCategory.id); if (data) setNewItem({ name: "", price: "", note: "" }); }}>Add item</button></div>
       <div className="mt-6 space-y-2">
         {categoryItems.map((item, index) => {
