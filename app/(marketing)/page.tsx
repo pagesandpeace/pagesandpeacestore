@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { listPublishedEvents } from "@/lib/app-core/events";
+import { getUser } from "@/lib/supabase/get-user";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -11,7 +12,7 @@ function eventDate(value: string) {
 }
 
 export default async function Home() {
-  const events = await listPublishedEvents();
+  const [events, user] = await Promise.all([listPublishedEvents(), getUser()]);
 
   return <main className="overflow-hidden bg-[#f8f5f1] text-[#17221f]">
     <section className="mx-auto grid min-h-[calc(100svh-4rem)] max-w-[1440px] lg:grid-cols-[1.05fr_.95fr]">
@@ -54,6 +55,6 @@ export default async function Home() {
       </div>
     </section>
 
-    <section className="mx-auto max-w-7xl px-6 py-20 sm:px-10 lg:px-16"><div className="rounded-[2rem] bg-[#17221f] px-7 py-12 text-[#f8f5f1] sm:px-12 sm:py-16"><p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b7d6c8]">Come in, stay awhile</p><div className="mt-6 flex flex-col justify-between gap-8 lg:flex-row lg:items-end"><div><h2 className="max-w-2xl font-serif text-4xl leading-tight sm:text-5xl">Good things happen when people gather.</h2><p className="mt-4 max-w-xl text-[#dce8e2]">Find an event, plan your visit or create an account to keep your bookings together.</p></div><div className="flex flex-wrap gap-3"><Link href="/events" className="rounded-full bg-[#dcebe5] px-6 py-3 text-sm font-semibold text-[#17221f]">Find an event</Link><Link href="/sign-in" className="rounded-full border border-white/50 px-6 py-3 text-sm font-semibold">Sign in</Link></div></div></div></section>
+    <section className="mx-auto max-w-7xl px-6 py-20 sm:px-10 lg:px-16"><div className="rounded-[2rem] bg-[#17221f] px-7 py-12 text-[#f8f5f1] sm:px-12 sm:py-16"><p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#b7d6c8]">Come in, stay awhile</p><div className="mt-6 flex flex-col justify-between gap-8 lg:flex-row lg:items-end"><div><h2 className="max-w-2xl font-serif text-4xl leading-tight sm:text-5xl">Good things happen when people gather.</h2><p className="mt-4 max-w-xl text-[#dce8e2]">Find an event, plan your visit or create an account to keep your bookings together.</p></div><div className="flex flex-wrap gap-3"><Link href="/events" className="rounded-full bg-[#dcebe5] px-6 py-3 text-sm font-semibold text-[#17221f]">Find an event</Link><Link href={user ? "/dashboard" : "/sign-in"} className="rounded-full border border-white/50 px-6 py-3 text-sm font-semibold">{user ? "My account" : "Sign in"}</Link></div></div></div></section>
   </main>;
 }
