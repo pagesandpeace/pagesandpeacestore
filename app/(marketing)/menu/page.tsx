@@ -4,7 +4,7 @@ import { supabaseService } from "@/lib/supabase/service";
 import Tabs from "./Tabs";
 
 type MenuSectionRow = { id: string; name: string; slug: string; position: number };
-type MenuCategory = { id: string; name: string; position: number; section_id: string | null };
+type MenuCategory = { id: string; name: string; description: string | null; position: number; section_id: string | null };
 type MenuItem = { id: string; category_id: string; name: string; price: number; position: number; note: string | null };
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export default async function MenuPage() {
 
   const [{ data: sections }, { data: categories }, { data: items }] = await Promise.all([
     supabase.from("menu_sections").select("id, name, slug, position").eq("is_visible", true).order("position"),
-    supabase.from("menu_categories").select("id, name, position, section_id").order("position"),
+    supabase.from("menu_categories").select("id, name, description, position, section_id").order("position"),
     supabase.from("menu_items").select("id, category_id, name, price, position, note").eq("is_visible", true).order("position"),
   ]);
 
