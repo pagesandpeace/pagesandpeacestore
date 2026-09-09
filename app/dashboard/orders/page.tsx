@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CheckCircle2, MailQuestion, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { getCustomerEventOrders } from "@/lib/app-core/event-orders";
 import { supabaseAuthServer } from "@/lib/supabase/server";
@@ -10,6 +11,16 @@ function money(pence: number) {
   return `£${(pence / 100).toFixed(2)}`;
 }
 
+function StatusIcon({ originalPayment, refunded }: { originalPayment: number; refunded: number }) {
+  if (originalPayment > 0 && refunded >= originalPayment) {
+    return <span title="Fully refunded" aria-label="Fully refunded" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-700"><RotateCcw className="h-4 w-4" aria-hidden="true" /></span>;
+  }
+  if (refunded > 0) {
+    return <span title="Partially refunded" aria-label="Partially refunded" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-800"><TriangleAlert className="h-4 w-4" aria-hidden="true" /></span>;
+  }
+  return <span title="Paid" aria-label="Paid" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 className="h-4 w-4" aria-hidden="true" /></span>;
+}
+
 export default async function OrdersPage() {
   const auth = await supabaseAuthServer();
   const { data: { user } } = await auth.auth.getUser();
@@ -18,57 +29,46 @@ export default async function OrdersPage() {
   const orders = await getCustomerEventOrders(user.id);
 
   return <main className="min-h-screen bg-[#FAF6F1] px-6 py-12 text-[#111]">
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-5xl">
       <Link href="/dashboard" className="text-sm underline">← Dashboard</Link>
-      <h1 className="mt-4 text-3xl font-semibold">My event orders</h1>
-      <p className="mt-1 text-sm text-neutral-600">Confirmed event bookings, payments and refunds.</p>
-      <div className="mt-8 space-y-4">
-        {orders.length ? orders.map((order) => {
-          const originalPayment = order.lines.reduce((total, line) => total + Number(line.quantity) * Number(line.unit_amount_pence), 0);
-          const refunded = order.lines.reduce((total, line) => total + Number(line.refunded_amount_pence ?? 0), 0);
-          const netPaid = Math.max(0, originalPayment - refunded);
-          const fullyRefunded = originalPayment > 0 && refunded >= originalPayment;
-          const badge = fullyRefunded
-            ? { label: "Fully refunded", className: "bg-red-100 text-red-800" }
-            : refunded > 0
-              ? { label: "Partially refunded", className: "bg-amber-100 text-amber-800" }
-              : { label: "Paid", className: "bg-green-100 text-green-800" };
+      <h1 className="mt-4 text-3xl font-semibold">Order history</h1>
+      <p className="mt-1 text-sm text-neutral-600">Confirmed event bookings, payments and refunds. Select an order for full details.</p>
 
-          return <article key={order.id} className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><p className="font-semibold">Order #{order.id.slice(0, 8)}</p><p className="text-sm text-neutral-600">{new Date(order.created_at).toLocaleDateString("en-GB")}</p></div>
-              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${badge.className}`}>{badge.label}</span>
-            </div>
+      <div className="mt-8 overflow-hidden rounded-2xl border bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] text-left text-sm">
+            <thead className="bg-[#F3ECE5] text-xs uppercase tracking-wide text-neutral-600">
+              <tr><th className="px-5 py-3">Order</th><th className="px-5 py-3">Purchased</th><th className="px-5 py-3">Items</th><th className="px-5 py-3">Paid</th><th className="px-5 py-3">Refunded</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Help</th></tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => {
+                const originalPayment = order.lines.reduce((total, line) => total + Number(line.quantity) * Number(line.unit_amount_pence), 0);
+                const refunded = order.lines.reduce((total, line) => total + Number(line.refunded_amount_pence ?? 0), 0);
+                const netPaid = Math.max(0, originalPayment - refunded);
+                const activeTickets = order.lines.reduce((total, line) => total + Math.max(0, Number(line.quantity) - Number(line.refunded_quantity ?? 0)), 0);
+                const href = `/dashboard/orders/${order.id}`;
+                const linkClass = "block h-full w-full py-4";
 
-            <ul className="mt-4 space-y-3">{order.lines.map((line) => {
-              const refundedQty = Number(line.refunded_quantity ?? 0);
-              const remainingQty = Math.max(0, Number(line.quantity) - refundedQty);
-              const refundedPence = Number(line.refunded_amount_pence ?? 0);
-              const lineFullyRefunded = refundedQty >= Number(line.quantity) && Number(line.quantity) > 0;
-
-              return <li key={line.id} className="border-t pt-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium">{line.event?.title ?? line.item_name}</p>
-                    <p className="text-sm text-neutral-600">{line.ticket?.name ?? "Ticket"} × {line.quantity}{line.event ? ` · ${new Date(line.event.starts_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}` : ""}</p>
-                    {refundedQty > 0 ? <p className="mt-1 text-sm font-medium text-red-700">{lineFullyRefunded ? "Refunded" : `${refundedQty} ticket${refundedQty === 1 ? "" : "s"} refunded`} · {money(refundedPence)}</p> : null}
-                    {!lineFullyRefunded && refundedQty > 0 ? <p className="text-xs text-neutral-500">{remainingQty} ticket{remainingQty === 1 ? "" : "s"} remain active</p> : null}
-                  </div>
-                  {lineFullyRefunded ? <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">Refunded</span> : null}
-                </div>
-              </li>;
-            })}</ul>
-
-            <div className="mt-5 rounded-xl bg-[#F8F5F1] p-4 text-sm">
-              <div className="flex justify-between gap-4"><span className="text-neutral-600">Original payment</span><strong>{money(originalPayment)}</strong></div>
-              {refunded > 0 ? <div className="mt-2 flex justify-between gap-4 text-red-700"><span>Refunded</span><strong>−{money(refunded)}</strong></div> : null}
-              <div className="mt-2 flex justify-between gap-4 border-t pt-2"><span className="font-medium">Net paid</span><strong>{money(netPaid)}</strong></div>
-            </div>
-
-            {refunded > 0 ? <p className="mt-3 text-xs text-neutral-500">Refunds are returned to the original payment method. Your bank or card provider may take a few working days to display the credit.</p> : null}
-          </article>;
-        }) : <section className="rounded-2xl border bg-white p-8 text-center"><p>No confirmed event orders yet.</p><Link href="/events" className="mt-3 inline-block underline">Browse events</Link></section>}
+                return <tr key={order.id} className="border-t align-middle transition-colors hover:bg-[#189458]/5 focus-within:bg-[#189458]/5">
+                  <td className="px-5"><Link href={href} className={linkClass}><p className="font-mono text-xs font-semibold">#{order.id.slice(0, 8)}</p></Link></td>
+                  <td className="px-5"><Link href={href} className={linkClass}>{new Date(order.created_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</Link></td>
+                  <td className="px-5"><Link href={href} className={linkClass}><p className="font-medium">{order.lines.length} event item{order.lines.length === 1 ? "" : "s"}</p><p className="text-xs text-neutral-500">{activeTickets} active ticket{activeTickets === 1 ? "" : "s"}</p></Link></td>
+                  <td className="px-5"><Link href={href} className={`${linkClass} font-semibold`}>{money(netPaid)}</Link></td>
+                  <td className="px-5"><Link href={href} className={`${linkClass} ${refunded > 0 ? "text-red-700" : "text-neutral-400"}`}>{refunded > 0 ? money(refunded) : "—"}</Link></td>
+                  <td className="px-5"><Link href={href} className={linkClass}><StatusIcon originalPayment={originalPayment} refunded={refunded} /></Link></td>
+                  <td className="px-5 py-4 text-right">
+                    <Link href={`/contact?order=${encodeURIComponent(order.id.slice(0, 8))}&topic=refund`} title={`Contact Pages & Peace about order ${order.id.slice(0, 8)}`} aria-label={`Contact Pages & Peace about order ${order.id.slice(0, 8)}`} className="inline-flex h-9 w-9 items-center justify-center rounded-full border text-neutral-700 transition-colors hover:border-[#189458] hover:bg-[#189458] hover:text-white">
+                      <MailQuestion className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  </td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        {!orders.length ? <div className="p-8 text-center"><p>No confirmed event orders yet.</p><Link href="/events" className="mt-3 inline-block underline">Browse events</Link></div> : null}
       </div>
+      <p className="mt-4 text-xs text-neutral-500">Refunds are returned to the original payment method and may take a few working days to appear.</p>
     </div>
   </main>;
 }

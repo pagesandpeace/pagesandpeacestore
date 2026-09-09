@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CalendarDays, ReceiptText, TicketCheck, WalletCards } from "lucide-react";
 
 import MarketingConsentCard from "@/app/dashboard/(ui)/MarketingConsentCard";
 import { getCustomerEventOrders } from "@/lib/app-core/event-orders";
@@ -30,6 +31,13 @@ export default async function DashboardPage() {
     .filter((line) => line.event && new Date(line.event.starts_at) > new Date() && Number(line.quantity) - Number(line.refunded_quantity ?? 0) > 0)
     .sort((a, b) => new Date(a.event!.starts_at).getTime() - new Date(b.event!.starts_at).getTime());
 
+  const netSpendPence = orders.reduce((orderTotal, order) => orderTotal + order.lines.reduce((lineTotal, line) => {
+    const original = Number(line.quantity) * Number(line.unit_amount_pence);
+    return lineTotal + Math.max(0, original - Number(line.refunded_amount_pence ?? 0));
+  }, 0), 0);
+  const activeTickets = orders.reduce((orderTotal, order) => orderTotal + order.lines.reduce((lineTotal, line) => lineTotal + Math.max(0, Number(line.quantity) - Number(line.refunded_quantity ?? 0)), 0), 0);
+  const nextEvent = upcoming[0]?.event?.starts_at ?? null;
+
   return <main className="flex-1 w-full bg-background text-foreground font-[Montserrat]">
     <div className="max-w-4xl mx-auto px-6 py-10">
       {showMarketingConsent ? <MarketingConsentCard /> : null}
@@ -42,7 +50,7 @@ export default async function DashboardPage() {
 
       <header className="mb-10"><h1 className="text-3xl font-semibold">Welcome back, {displayName} ☕</h1></header>
 
-      <section className="mb-10 rounded-2xl border border-border bg-white p-6">
+      <section className="mb-8 rounded-2xl border border-border bg-white p-6">
         <div className="flex items-center justify-between gap-4">
           <div><h2 className="text-xl font-semibold">Upcoming events</h2><p className="mt-1 text-sm text-foreground/70">Your confirmed Pages & Peace bookings.</p></div>
           <Link href="/dashboard/events" className="rounded-full border-2 border-accent px-4 py-2 text-sm font-semibold text-accent">View all events</Link>
@@ -53,22 +61,17 @@ export default async function DashboardPage() {
         })}</div> : <p className="mt-5 text-sm text-foreground/70">You have no upcoming bookings yet. <Link href="/events" className="underline">Browse events</Link>.</p>}
       </section>
 
-      <section className="py-6 border-b">
-        <p className="text-xs uppercase tracking-wide">Recent Orders</p>
-        <p className="text-sm text-[#555] max-w-sm">Track your latest purchases and their status.</p>
-        <Link href="/dashboard/orders" className="inline-block mt-3 px-6 py-3 rounded-full border-2 border-accent text-accent">View Orders →</Link>
-      </section>
-
-      <section className="py-6 border-b">
-        <p className="text-xs uppercase tracking-wide">Account</p>
-        <p className="text-sm max-w-sm text-[#555]">Update your personal information.</p>
-        <Link href="/dashboard/account" className="inline-block mt-3 px-6 py-3 rounded-full border-2 border-accent text-accent">Manage Account →</Link>
-      </section>
-
-      <section className="py-6">
-        <p className="text-xs uppercase tracking-wide">Preferences</p>
-        <p className="text-sm max-w-sm text-[#555]">Adjust settings and preferences.</p>
-        <Link href="/dashboard/settings" className="inline-block mt-3 px-6 py-3 rounded-full border-2 border-accent text-accent">Go to Settings →</Link>
+      <section className="rounded-2xl border border-border bg-white p-6" aria-labelledby="account-summary-heading">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div><h2 id="account-summary-heading" className="text-xl font-semibold">Your activity</h2><p className="mt-1 text-sm text-foreground/65">A quick summary of your Pages & Peace account.</p></div>
+          <Link href="/dashboard/orders" className="text-sm font-semibold text-accent underline underline-offset-4">View order history</Link>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl bg-muted/40 p-4"><ReceiptText className="h-5 w-5 text-accent" aria-hidden="true" /><p className="mt-3 text-2xl font-semibold">{orders.length}</p><p className="text-xs text-foreground/60">event order{orders.length === 1 ? "" : "s"}</p></div>
+          <div className="rounded-xl bg-muted/40 p-4"><TicketCheck className="h-5 w-5 text-accent" aria-hidden="true" /><p className="mt-3 text-2xl font-semibold">{activeTickets}</p><p className="text-xs text-foreground/60">active ticket{activeTickets === 1 ? "" : "s"}</p></div>
+          <div className="rounded-xl bg-muted/40 p-4"><WalletCards className="h-5 w-5 text-accent" aria-hidden="true" /><p className="mt-3 text-2xl font-semibold">£{(netSpendPence / 100).toFixed(2)}</p><p className="text-xs text-foreground/60">net event spend</p></div>
+          <div className="rounded-xl bg-muted/40 p-4"><CalendarDays className="h-5 w-5 text-accent" aria-hidden="true" /><p className="mt-3 text-sm font-semibold">{nextEvent ? new Date(nextEvent).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "None booked"}</p><p className="text-xs text-foreground/60">next event</p></div>
+        </div>
       </section>
     </div>
   </main>;

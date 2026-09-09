@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CheckCircle2, Copy, Pencil, FileClock } from "lucide-react";
 
 import Pagination from "@/components/admin/Pagination";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
@@ -18,6 +19,20 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function StatusIcon({ status }: { status: string }) {
+  const published = status === "published";
+  const label = published ? "Published" : status === "draft" ? "Draft" : status;
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${published ? "bg-emerald-100 text-emerald-800" : "bg-stone-100 text-stone-600"}`}
+    >
+      {published ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <FileClock className="h-4 w-4" aria-hidden="true" />}
+    </span>
+  );
 }
 
 export default async function AdminEventsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
@@ -68,7 +83,7 @@ export default async function AdminEventsPage({ searchParams }: { searchParams: 
         <tbody className="divide-y">{(events ?? []).map((event) => {
           const reserved = reservedByEvent.get(event.id) ?? 0;
           const available = Math.max(event.capacity - reserved, 0);
-          return <tr key={event.id}><td className="px-5 py-4"><p className="font-medium">{event.title}</p><p className="mt-1 text-xs text-foreground/55">/{event.slug}</p></td><td className="px-5 py-4 text-foreground/70">{event.series_name || "—"}</td><td className="px-5 py-4 text-foreground/70">{formatDate(event.starts_at)}</td><td className="px-5 py-4"><p className="font-medium">{available} available</p><p className="text-xs text-foreground/60">{reserved} reserved · {event.capacity} total</p></td><td className="px-5 py-4"><span className="rounded-full bg-[#f2eee8] px-2.5 py-1 text-xs font-medium capitalize">{event.status}</span></td><td className="px-5 py-4"><div className="flex gap-3"><Link href={`/admin/events/${event.id}/edit`} className="font-medium underline underline-offset-4">Edit</Link><Link href={`/admin/events/new?duplicate=${event.id}`} className="font-medium underline underline-offset-4">Duplicate</Link></div></td></tr>;
+          return <tr key={event.id}><td className="px-5 py-4"><p className="font-medium">{event.title}</p><p className="mt-1 text-xs text-foreground/55">/{event.slug}</p></td><td className="px-5 py-4 text-foreground/70">{event.series_name || "—"}</td><td className="px-5 py-4 text-foreground/70">{formatDate(event.starts_at)}</td><td className="px-5 py-4"><p className="font-medium">{available} available</p><p className="text-xs text-foreground/60">{reserved} reserved · {event.capacity} total</p></td><td className="px-5 py-4"><StatusIcon status={event.status} /></td><td className="px-5 py-4"><div className="flex gap-2"><Link href={`/admin/events/${event.id}/edit`} title={`Edit ${event.title}`} aria-label={`Edit ${event.title}`} className="inline-flex h-9 w-9 items-center justify-center rounded-full border text-neutral-700 transition-colors hover:border-black hover:bg-black hover:text-white"><Pencil className="h-4 w-4" aria-hidden="true" /></Link><Link href={`/admin/events/new?duplicate=${event.id}`} title={`Duplicate ${event.title}`} aria-label={`Duplicate ${event.title}`} className="inline-flex h-9 w-9 items-center justify-center rounded-full border text-neutral-700 transition-colors hover:border-black hover:bg-black hover:text-white"><Copy className="h-4 w-4" aria-hidden="true" /></Link></div></td></tr>;
         })}</tbody>
       </table></div>
       {!(events ?? []).length ? <p className="px-5 py-12 text-center text-foreground/60">No events yet.</p> : null}
