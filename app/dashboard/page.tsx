@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import MarketingConsentCard from "@/app/dashboard/(ui)/MarketingConsentCard";
 import { getCustomerEventOrders } from "@/lib/app-core/event-orders";
 import { supabaseAuthServer } from "@/lib/supabase/server";
+import { supabaseService } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,17 @@ export default async function DashboardPage() {
   if (!user) redirect("/sign-in");
 
   const [{ data: profile }, orders] = await Promise.all([
-    auth.from("users").select("marketing_consent, marketing_consent_at").eq("auth_user_id", user.id).maybeSingle(),
+    supabaseService()
+      .schema("app_core")
+      .from("customers")
+      .select("display_name,marketing_consent,marketing_consent_at")
+      .eq("auth_user_id", user.id)
+      .maybeSingle(),
     getCustomerEventOrders(user.id),
   ]);
+
   const showMarketingConsent = profile?.marketing_consent_at == null;
+  const displayName = profile?.display_name?.trim() || "Reader";
 
   const upcoming = orders.flatMap((order) => order.lines)
     .filter((line) => line.event && new Date(line.event.starts_at) > new Date() && Number(line.quantity) - Number(line.refunded_quantity ?? 0) > 0)
@@ -32,7 +40,7 @@ export default async function DashboardPage() {
         <a href="https://tally.so/r/Med4gl" target="_blank" rel="noopener noreferrer" className="inline-block px-6 py-3 rounded-full bg-accent text-white font-semibold">Pre-order now →</a>
       </section>
 
-      <header className="mb-10"><h1 className="text-3xl font-semibold">Welcome back, {user.user_metadata?.name || "Reader"} ☕</h1></header>
+      <header className="mb-10"><h1 className="text-3xl font-semibold">Welcome back, {displayName} ☕</h1></header>
 
       <section className="mb-10 rounded-2xl border border-border bg-white p-6">
         <div className="flex items-center justify-between gap-4">
