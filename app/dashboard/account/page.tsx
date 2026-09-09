@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { MailCheck, MailX } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
@@ -178,13 +179,15 @@ export default function AccountPage() {
                   </div>
 
                   <span
-                    className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${
+                    title={subscribedToMarketing ? "Subscribed" : "Not subscribed"}
+                    aria-label={subscribedToMarketing ? "Subscribed" : "Not subscribed"}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${
                       subscribedToMarketing
-                        ? "bg-[#e8f5ea] text-[#2f7c3e]"
-                        : "bg-[#f0ece6] text-[#6b665d]"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-stone-100 text-stone-600"
                     }`}
                   >
-                    {subscribedToMarketing ? "✓ Subscribed" : "Not subscribed"}
+                    {subscribedToMarketing ? <MailCheck className="h-4 w-4" aria-hidden="true" /> : <MailX className="h-4 w-4" aria-hidden="true" />}
                   </span>
                 </div>
               </CardHeader>
