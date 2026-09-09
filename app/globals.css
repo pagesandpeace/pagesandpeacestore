@@ -159,6 +159,21 @@ body {
   transform: translateY(-1px);
 }
 
+/* Consistent pointer-hover treatment for desktop controls. */
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled),
+  a[class*="rounded"][class*="px-"] {
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  }
+
+  button:not(:disabled):hover,
+  a[class*="rounded"][class*="px-"]:hover {
+    background-color: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: var(--background) !important;
+  }
+}
+
 /* --------------------------------------------
    🌙 Accessibility Tweaks
 --------------------------------------------- */
