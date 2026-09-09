@@ -1,276 +1,99 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/Button";
-import NeedRefundHelp from "@/components/NeedRefundHelp";
+import { notFound, redirect } from "next/navigation";
+import { CheckCircle2, Mail, RotateCcw, TriangleAlert } from "lucide-react";
 
-/* ---------------------------------------------
-   TYPES
---------------------------------------------- */
-type OrderItem = {
-  id: string;
-  kind?: string | null; // ✅ ADDED
-  productName: string | null;
-  quantity: number;
-  price: number;
-  refunded_quantity?: number | null;
-};
+import { getCustomerEventOrders } from "@/lib/app-core/event-orders";
+import { supabaseAuthServer } from "@/lib/supabase/server";
 
-type StoreOrder = {
-  id: string;
-  created_at: string | Date;
-  total: number;
-  status: string;
-  items: OrderItem[];
+export const dynamic = "force-dynamic";
 
-  stripe_payment_intent_id?: string | null;
-  stripe_checkout_session_id?: string | null;
-  stripe_receipt_url?: string | null;
-  stripe_card_brand?: string | null;
-  stripe_last4?: string | null;
+function money(pence: number) {
+  return `£${(pence / 100).toFixed(2)}`;
+}
 
-  refunded_amount?: number | null;
-  refund_processed_at?: string | null;
-};
-
-/* ---------------------------------------------
-   PAGE
---------------------------------------------- */
-export default function StoreOrderReceiptPage() {
-  const params = useParams<{ id: string }>();
-  const orderId = params?.id;
-
-  const [order, setOrder] = useState<StoreOrder | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  const FOOD_FORM_URL = "https://tally.so/r/Med4gl";
-
-  useEffect(() => {
-    if (!orderId) return;
-
-    const load = async () => {
-      try {
-        const res = await fetch(`/api/orders/get?id=${orderId}`, {
-          cache: "no-store",
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to load order");
-        }
-
-        setOrder(data.order);
-      } catch (e: unknown) {
-        const message =
-          e instanceof Error ? e.message : "Failed to load order";
-        setErr(message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [orderId]);
-
-  /* ---------------------------------------------
-     STATES
-  --------------------------------------------- */
-  if (loading) {
-    return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="text-sm opacity-70">Loading order…</p>
-      </main>
-    );
+function StatusIcon({ refundStatus }: { refundStatus: string }) {
+  if (refundStatus === "full") {
+    return <span title="Fully refunded" aria-label="Fully refunded" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-700"><RotateCcw size={17} aria-hidden="true" /></span>;
   }
-
-  if (err || !order) {
-    return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-        <h1 className="text-2xl font-semibold mb-2">Order not found</h1>
-        <p className="opacity-80 mb-6">{err || "Invalid order"}</p>
-
-        <Link href="/dashboard/orders">
-          <Button variant="neutral" size="md" className="w-full">
-            Back to orders
-          </Button>
-        </Link>
-      </main>
-    );
+  if (refundStatus === "partial") {
+    return <span title="Partially refunded" aria-label="Partially refunded" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-800"><TriangleAlert size={17} aria-hidden="true" /></span>;
   }
+  return <span title="Paid" aria-label="Paid" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><CheckCircle2 size={17} aria-hidden="true" /></span>;
+}
 
-  /* ---------------------------------------------
-     🔥 EVENT DETECTION (KEY)
-  --------------------------------------------- */
-  const hasEvent = order.items.some(
-    (item) => item.kind === "event"
-  );
+export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const auth = await supabaseAuthServer();
+  const { data: { user } } = await auth.auth.getUser();
+  if (!user) redirect("/sign-in");
 
-  const refundMessage =
-    order.status === "refunded"
-      ? "This order has been fully refunded"
-      : order.status === "partially_refunded"
-      ? "This order has been partially refunded"
-      : null;
+  const { id } = await params;
+  const orders = await getCustomerEventOrders(user.id);
+  const order = orders.find((candidate) => candidate.id === id);
+  if (!order) notFound();
 
-  const refundedTotal = order.items.reduce((sum, item) => {
-    const refundedQty = item.refunded_quantity ?? 0;
-    return sum + refundedQty * item.price;
-  }, 0);
+  const originalPayment = order.lines.reduce((total, line) => total + Number(line.quantity) * Number(line.unit_amount_pence), 0);
+  const refunded = order.lines.reduce((total, line) => total + Number(line.refunded_amount_pence ?? 0), 0);
+  const netPaid = Math.max(0, originalPayment - refunded);
 
-  const netPaid = order.total - refundedTotal;
-
-  /* ---------------------------------------------
-     RENDER
-  --------------------------------------------- */
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-[#FAF6F1]">
-      <div className="w-full max-w-xl rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="text-sm uppercase tracking-wide opacity-60 mb-1">
-          Pages & Peace
-        </div>
+    <main className="min-h-screen bg-[#FAF6F1] px-6 py-12 text-[#111]">
+      <div className="mx-auto max-w-4xl">
+        <Link href="/dashboard/orders" className="text-sm underline">← Order history</Link>
 
-        <h1 className="text-2xl font-semibold">Order Receipt</h1>
-
-        <p className="mt-3 text-sm">
-          Placed on:{" "}
-          <strong>{new Date(order.created_at).toLocaleString()}</strong>
-        </p>
-
-        <p className="mt-1 text-sm">
-          Status: <strong className="capitalize">{order.status}</strong>
-        </p>
-
-        {/* REFUND BANNER */}
-        {refundMessage && (
-          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <p className="font-medium">{refundMessage}</p>
-            <p className="mt-1">
-              Refunded items are returned to your original payment method.
-            </p>
+        <div className="mt-5 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold">Order #{order.id.slice(0, 8)}</h1>
+            <p className="mt-1 text-sm text-neutral-600">Placed {new Date(order.created_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p>
           </div>
-        )}
+          <StatusIcon refundStatus={order.refund_status} />
+        </div>
 
-        {/* ITEMS */}
-        <div className="mt-6 rounded-xl border p-4 bg-white">
-          <p className="text-sm font-semibold mb-3">Items</p>
+        <section className="mt-8 overflow-hidden rounded-2xl border bg-white shadow-sm">
+          <div className="border-b bg-[#F3ECE5] px-5 py-4">
+            <h2 className="font-semibold">Event tickets</h2>
+          </div>
 
-          {order.items.map((item, idx) => {
-            const refundedQty = item.refunded_quantity ?? 0;
-            const purchasedQty = item.quantity;
-            const netQty = purchasedQty - refundedQty;
+          <div className="divide-y">
+            {order.lines.map((line) => {
+              const refundedQty = Number(line.refunded_quantity ?? 0);
+              const remainingQty = Math.max(0, Number(line.quantity) - refundedQty);
+              const gross = Number(line.quantity) * Number(line.unit_amount_pence);
+              const lineRefunded = Number(line.refunded_amount_pence ?? 0);
+              const lineNet = Math.max(0, gross - lineRefunded);
 
-            const lineTotal = item.price * purchasedQty;
-            const refundedValue = refundedQty * item.price;
-
-            return (
-              <div
-                key={idx}
-                className="py-3 border-b last:border-b-0 space-y-1"
-              >
-                <div className="flex justify-between items-start gap-4">
-                  <p className="text-sm font-medium leading-snug">
-                    {item.productName || "Item"}{" "}
-                    <span className="opacity-70">× {purchasedQty}</span>
-                  </p>
-
-                  <p className="text-sm font-medium whitespace-nowrap">
-                    £{lineTotal.toFixed(2)}
-                  </p>
-                </div>
-
-                {refundedQty > 0 && (
-                  <div className="text-xs text-red-600 space-y-0.5">
-                    <p>
-                      Refunded: {refundedQty} × £{item.price.toFixed(2)} = −£
-                      {refundedValue.toFixed(2)}
-                    </p>
-                    <p>
-                      Remaining: {netQty} × £{item.price.toFixed(2)} = £
-                      {(netQty * item.price).toFixed(2)}
-                    </p>
+              return (
+                <article key={line.id} className="p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="font-semibold">{line.event?.title ?? line.item_name}</p>
+                      {line.event ? <p className="mt-1 text-sm text-neutral-600">{new Date(line.event.starts_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p> : null}
+                      <p className="mt-1 text-sm text-neutral-700">{line.ticket?.name ?? "Ticket"} × {line.quantity}</p>
+                      <p className="mt-1 text-xs text-neutral-500">{remainingQty} active{refundedQty > 0 ? ` · ${refundedQty} refunded` : ""}</p>
+                    </div>
+                    <div className="text-right text-sm">
+                      <p className="font-semibold">{money(gross)}</p>
+                      {lineRefunded > 0 ? <p className="mt-1 text-red-700">−{money(lineRefunded)} refunded</p> : null}
+                      {lineRefunded > 0 ? <p className="mt-1 text-xs text-neutral-500">Net {money(lineNet)}</p> : null}
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
 
-        {/* TOTALS */}
-        <div className="mt-4 space-y-1 text-sm">
-          <p>Total paid: £{order.total.toFixed(2)}</p>
+        <section className="mt-6 rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex justify-between gap-4 text-sm"><span className="text-neutral-600">Original payment</span><strong>{money(originalPayment)}</strong></div>
+          {refunded > 0 ? <div className="mt-2 flex justify-between gap-4 text-sm text-red-700"><span>Refunded</span><strong>−{money(refunded)}</strong></div> : null}
+          <div className="mt-3 flex justify-between gap-4 border-t pt-3"><span className="font-medium">Net paid</span><strong>{money(netPaid)}</strong></div>
+          {refunded > 0 ? <p className="mt-3 text-xs text-neutral-500">Refunds are returned to the original payment method. Your bank or card provider may take a few working days to display the credit.</p> : null}
+        </section>
 
-          {refundedTotal > 0 && (
-            <>
-              <p className="text-red-600">
-                Refunded: −£{refundedTotal.toFixed(2)}
-              </p>
-              <p className="font-semibold">
-                Net paid: £{netPaid.toFixed(2)}
-              </p>
-            </>
-          )}
-        </div>
-
-        {/* PAYMENT DETAILS */}
-        <div className="mt-6 rounded-xl border bg-[#FAF6F1] p-4">
-          <p className="text-sm font-semibold mb-2">Payment Details</p>
-
-          {order.stripe_card_brand && (
-            <p className="text-sm">
-              Card: {order.stripe_card_brand.toUpperCase()} ••••{" "}
-              {order.stripe_last4}
-            </p>
-          )}
-
-          {order.stripe_payment_intent_id && (
-            <p className="text-sm">
-              Payment Intent: {order.stripe_payment_intent_id}
-            </p>
-          )}
-
-          {order.stripe_receipt_url && (
-            <a
-              href={order.stripe_receipt_url}
-              target="_blank"
-              className="text-sm underline text-accent mt-2 inline-block"
-            >
-              View payment receipt
-            </a>
-          )}
-        </div>
-
-        {/* NEED HELP */}
-        {order.status !== "refunded" && (
-          <NeedRefundHelp orderId={order.id} />
-        )}
-
-        {/* ACTIONS */}
-        <div className="mt-6 flex flex-col gap-3">
-
-          {/* 🍽️ PRE-ORDER FOOD (ONLY FOR EVENTS) */}
-          {hasEvent && (
-            <a
-              href={FOOD_FORM_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button variant="primary" size="md" className="w-full">
-                Pre-order food for your event →
-              </Button>
-            </a>
-          )}
-
-          {/* BACK TO ORDERS */}
-          <Link href="/dashboard/orders">
-            <Button variant="neutral" size="md" className="w-full">
-              Back to orders
-            </Button>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link href={`/contact?order=${encodeURIComponent(order.id)}`} className="inline-flex items-center gap-2 rounded-full border-2 border-accent px-5 py-2.5 text-sm font-semibold text-accent">
+            <Mail size={17} aria-hidden="true" /> Contact Pages &amp; Peace
           </Link>
-
+          <Link href="/dashboard/orders" className="inline-flex items-center rounded-full border px-5 py-2.5 text-sm font-semibold">Back to orders</Link>
         </div>
       </div>
     </main>
