@@ -5,7 +5,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import { completeAuthenticatedUser } from "@/lib/auth/complete-auth";
 
-const allowedPaths = new Set(["/dashboard", "/admin", "/account", "/reset-password"]);
+const allowedPaths = new Set(["/dashboard", "/admin", "/account", "/reset-password", "/events/checkout"]);
 const otpTypes = new Set(["magiclink", "signup", "recovery"]);
 function signInRedirect(request: Request, reason: string) { const url = new URL("/sign-in", request.url); url.searchParams.set("reason", reason); return NextResponse.redirect(url, 303); }
 
