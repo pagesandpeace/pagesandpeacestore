@@ -6,6 +6,7 @@ import { requireAdminUser } from "@/lib/auth/require-admin-user";
 import { CreateEventSubmit } from "@/components/app-core/create-event-submit";
 import { EventImageUpload } from "@/components/app-core/event-image-upload";
 import { EventSeriesTemplateSelector, type EventSeriesTemplate } from "@/components/app-core/event-series-template-selector";
+import { parseLondonDateTimeInput, toLondonDateTimeInput } from "@/lib/time/london";
 
 function value(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
@@ -59,7 +60,7 @@ async function createEvent(formData: FormData) {
     throw new Error("Please complete the required event and ticket details.");
   }
 
-  const startsAt = new Date(startsAtInput);
+  const startsAt = parseLondonDateTimeInput(startsAtInput);
   if (Number.isNaN(startsAt.getTime())) throw new Error("Please provide a valid event date and time.");
 
   const db = appCoreDb();
@@ -197,7 +198,7 @@ export default async function CreateEventPage({ searchParams }: CreateEventProps
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium">Date and time
-              <input name="starts_at" type="datetime-local" required defaultValue="" className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+              <input name="starts_at" type="datetime-local" required defaultValue={sourceEvent ? toLondonDateTimeInput(sourceEvent.starts_at) : ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
             </label>
             <label className="block text-sm font-medium">Total capacity
               <input name="capacity" type="number" min="1" defaultValue={sourceEvent?.capacity ?? 20} required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />

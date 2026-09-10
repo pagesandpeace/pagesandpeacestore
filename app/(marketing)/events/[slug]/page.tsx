@@ -5,11 +5,12 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { getPublishedEvent } from "@/lib/app-core/events";
 import { getPublicEventSeries } from "@/lib/app-core/event-series";
 import { EventTicketPicker } from "@/components/app-core/event-ticket-picker";
+import { formatLondonDateTime } from "@/lib/time/london";
 
 type PageProps={params:Promise<{slug:string}>};
 const SITE="https://pagesandpeace.co.uk";
-const fmt=(v:string)=>new Intl.DateTimeFormat("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(v));
-const dateParts=(v:string)=>{const d=new Date(v);return{day:new Intl.DateTimeFormat("en-GB",{day:"2-digit"}).format(d),month:new Intl.DateTimeFormat("en-GB",{month:"short"}).format(d).toUpperCase(),weekday:new Intl.DateTimeFormat("en-GB",{weekday:"short"}).format(d),time:new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit"}).format(d),year:new Intl.DateTimeFormat("en-GB",{year:"numeric"}).format(d)}};
+const fmt=(v:string)=>formatLondonDateTime(v,{weekday:"long",day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
+const dateParts=(v:string)=>({day:formatLondonDateTime(v,{day:"2-digit"}),month:formatLondonDateTime(v,{month:"short"}).toUpperCase(),weekday:formatLondonDateTime(v,{weekday:"short"}),time:formatLondonDateTime(v,{hour:"2-digit",minute:"2-digit"}),year:formatLondonDateTime(v,{year:"numeric"})});
 
 export async function generateMetadata({params}:PageProps):Promise<Metadata>{
  const {slug}=await params; const series=await getPublicEventSeries(slug);

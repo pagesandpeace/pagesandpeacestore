@@ -4,9 +4,10 @@ import { DeleteEventButton } from "@/components/app-core/delete-event-button";
 import { EventImageUpload } from "@/components/app-core/event-image-upload";
 import { appCoreDb } from "@/lib/app-core/service";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
+import { parseLondonDateTimeInput, toLondonDateTimeInput } from "@/lib/time/london";
 
 const read = (data: FormData, name: string) => String(data.get(name) ?? "").trim();
-const dateInput = (value: string) => new Date(value).toISOString().slice(0, 16);
+const dateInput = toLondonDateTimeInput;
 type Props = { params: Promise<{ id: string }> };
 
 export default async function EditEventPage({ params }: Props) {
@@ -33,7 +34,7 @@ export default async function EditEventPage({ params }: Props) {
     if (!await requireAdminUser()) redirect(`/sign-in?callbackURL=/admin/events/${id}/edit`);
     const title = read(formData, "title");
     const description = read(formData, "description");
-    const date = new Date(read(formData, "starts_at"));
+    const date = parseLondonDateTimeInput(read(formData, "starts_at"));
     const capacity = Number(read(formData, "capacity"));
     const requestedStatus = read(formData, "status");
     const status = ["draft", "published", "cancelled", "archived"].includes(requestedStatus) ? requestedStatus : "draft";

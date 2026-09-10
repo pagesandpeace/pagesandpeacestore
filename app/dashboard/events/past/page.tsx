@@ -3,12 +3,13 @@ import { redirect } from "next/navigation";
 
 import { getCustomerEventOrders } from "@/lib/app-core/event-orders";
 import { supabaseAuthServer } from "@/lib/supabase/server";
+import { formatLondonDateTime } from "@/lib/time/london";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type Props = { searchParams: Promise<{ page?: string }> };
-const formatDate = (value: string) => new Date(value).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+const formatDate = (value: string) => formatLondonDateTime(value, { dateStyle: "medium", timeStyle: "short" });
 
 export default async function PastBookingsPage({ searchParams }: Props) {
   const { page: pageValue } = await searchParams;
