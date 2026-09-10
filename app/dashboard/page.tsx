@@ -6,6 +6,7 @@ import MarketingConsentCard from "@/app/dashboard/(ui)/MarketingConsentCard";
 import { getCustomerEventOrders } from "@/lib/app-core/event-orders";
 import { supabaseAuthServer } from "@/lib/supabase/server";
 import { supabaseService } from "@/lib/supabase/service";
+import { formatLondonDateTime } from "@/lib/time/london";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function DashboardPage() {
         </div>
         {upcoming.length ? <div className="mt-5 space-y-3">{upcoming.slice(0, 3).map((line) => {
           const remainingQty = Number(line.quantity) - Number(line.refunded_quantity ?? 0);
-          return <article key={line.id} className="rounded-xl bg-muted/40 p-4"><p className="font-semibold">{line.event!.title}</p><p className="mt-1 text-sm text-foreground/70">{new Date(line.event!.starts_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</p><p className="mt-1 text-sm text-foreground/70">{line.ticket?.name ?? "Ticket"} × {remainingQty}</p></article>;
+          return <article key={line.id} className="rounded-xl bg-muted/40 p-4"><p className="font-semibold">{line.event!.title}</p><p className="mt-1 text-sm text-foreground/70">{formatLondonDateTime(line.event!.starts_at, { dateStyle: "medium", timeStyle: "short" })}</p><p className="mt-1 text-sm text-foreground/70">{line.ticket?.name ?? "Ticket"} × {remainingQty}</p></article>;
         })}</div> : <p className="mt-5 text-sm text-foreground/70">You have no upcoming bookings yet. <Link href="/events" className="underline">Browse events</Link>.</p>}
       </section>
 
@@ -70,7 +71,7 @@ export default async function DashboardPage() {
           <div className="rounded-xl bg-muted/40 p-4"><ReceiptText className="h-5 w-5 text-accent" aria-hidden="true" /><p className="mt-3 text-2xl font-semibold">{orders.length}</p><p className="text-xs text-foreground/60">event order{orders.length === 1 ? "" : "s"}</p></div>
           <div className="rounded-xl bg-muted/40 p-4"><TicketCheck className="h-5 w-5 text-accent" aria-hidden="true" /><p className="mt-3 text-2xl font-semibold">{activeTickets}</p><p className="text-xs text-foreground/60">active ticket{activeTickets === 1 ? "" : "s"}</p></div>
           <div className="rounded-xl bg-muted/40 p-4"><WalletCards className="h-5 w-5 text-accent" aria-hidden="true" /><p className="mt-3 text-2xl font-semibold">£{(netSpendPence / 100).toFixed(2)}</p><p className="text-xs text-foreground/60">net event spend</p></div>
-          <div className="rounded-xl bg-muted/40 p-4"><CalendarDays className="h-5 w-5 text-accent" aria-hidden="true" /><p className="mt-3 text-sm font-semibold">{nextEvent ? new Date(nextEvent).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "None booked"}</p><p className="text-xs text-foreground/60">next event</p></div>
+          <div className="rounded-xl bg-muted/40 p-4"><CalendarDays className="h-5 w-5 text-accent" aria-hidden="true" /><p className="mt-3 text-sm font-semibold">{nextEvent ? formatLondonDateTime(nextEvent, { day: "numeric", month: "short", year: "numeric" }) : "None booked"}</p><p className="text-xs text-foreground/60">next event</p></div>
         </div>
       </section>
     </div>

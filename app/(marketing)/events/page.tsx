@@ -2,18 +2,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import Link from "next/link";
+import { formatLondonDateTime } from "@/lib/time/london";
 import { listPublishedEvents } from "@/lib/app-core/events";
 import { listPublicEventSeries } from "@/lib/app-core/event-series";
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatLondonDateTime(value, {
+    weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 }
 
 export default async function EventsPage() {

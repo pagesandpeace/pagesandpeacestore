@@ -5,6 +5,7 @@ import { CheckCircle2, Copy, Pencil, FileClock } from "lucide-react";
 import Pagination from "@/components/admin/Pagination";
 import { requireAdminUser } from "@/lib/auth/require-admin-user";
 import { appCoreDb } from "@/lib/app-core/service";
+import { formatLondonDateTime } from "@/lib/time/london";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -12,13 +13,13 @@ export const revalidate = 0;
 const PAGE_SIZE = 25;
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
+  return formatLondonDateTime(value, {
     day: "numeric",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  });
 }
 
 function StatusIcon({ status }: { status: string }) {
