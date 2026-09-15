@@ -28,6 +28,8 @@ type CustomerProfile = {
   marketing_consent_at: string | null;
   beehiiv_subscribed: boolean | null;
   beehiiv_subscribed_at: string | null;
+  last_magic_link_sent_at: string | null;
+  last_magic_link_clicked_at: string | null;
 };
 
 type EventOrder = {
@@ -52,7 +54,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       service.auth.admin.listUsers({ perPage: 1000 }),
       db
         .from("customers")
-        .select("auth_user_id, display_name, email, marketing_consent, marketing_consent_at, beehiiv_subscribed, beehiiv_subscribed_at"),
+        .select("auth_user_id, display_name, email, marketing_consent, marketing_consent_at, beehiiv_subscribed, beehiiv_subscribed_at, last_magic_link_sent_at, last_magic_link_clicked_at"),
       db
         .from("orders")
         .select("auth_user_id, status, total_pence, refunded_total_pence")
@@ -208,6 +210,10 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                       </summary>
                       <div className="mt-3 w-60 rounded-lg border bg-[#fbf8f4] p-3 text-xs text-foreground/65 shadow-sm">
                         <p>This sends a fresh sign-in link to {profile?.email || user.email || "this customer"}.</p>
+                        <dl className="mt-3 space-y-1 border-t pt-3 text-foreground/60">
+                          <div className="flex justify-between gap-3"><dt>Last link sent</dt><dd className="text-right">{profile?.last_magic_link_sent_at ? new Date(profile.last_magic_link_sent_at).toLocaleString("en-GB") : "No record"}</dd></div>
+                          <div className="flex justify-between gap-3"><dt>Last link completed</dt><dd className="text-right">{profile?.last_magic_link_clicked_at ? new Date(profile.last_magic_link_clicked_at).toLocaleString("en-GB") : "No record"}</dd></div>
+                        </dl>
                         <form action={`/api/app-core/admin/users/${user.id}/magic-link`} method="post" className="mt-3">
                           <button type="submit" className="rounded-md bg-black px-3 py-2 text-xs font-semibold text-white hover:bg-black/80">
                             Send link now
