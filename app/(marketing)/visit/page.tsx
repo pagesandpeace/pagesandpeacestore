@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import MarketingSignup from "@/components/MarketingSignup";
+import OpeningHours from "@/components/OpeningHours";
 
 export const metadata: Metadata = {
   title: "Visit our bookshop café in Rossington, Doncaster",
@@ -8,11 +9,6 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://pagesandpeace.co.uk/visit" },
 };
 
-const hours = [
-  ["Monday–Wednesday", "9am–8pm"],
-  ["Thursday–Saturday", "9am–5pm"],
-  ["Sunday", "10am–4pm"],
-];
 
 export default function VisitPage() {
   return <main className="min-h-screen bg-[#f8f5f1] text-[#17221f]">
@@ -24,7 +20,7 @@ export default function VisitPage() {
     </section>
     <section className="mx-auto grid max-w-5xl gap-6 px-6 pb-16 md:grid-cols-2">
       <article className="rounded-[2rem] bg-white p-8 shadow-sm"><h2 className="font-serif text-3xl">Find us</h2><address className="mt-5 not-italic leading-7 text-[#40514a]">Pages &amp; Peace Coffee + Bookshop<br />8 Eva Building<br />Kings Avenue<br />Rossington, Doncaster<br />DN11 0PF</address><a href="tel:07395266100" className="mt-6 inline-block font-semibold underline underline-offset-4">Call 07395 266100</a><p className="mt-4"><a href="mailto:admin@pagesandpeace.co.uk" className="font-semibold underline underline-offset-4">admin@pagesandpeace.co.uk</a></p></article>
-      <article className="rounded-[2rem] bg-[#f1e2d6] p-8"><h2 className="font-serif text-3xl">Opening hours</h2><dl className="mt-5 space-y-3 text-[#40514a]">{hours.map(([day, time]) => <div key={day} className="flex justify-between gap-6 border-b border-[#17221f]/10 pb-3"><dt>{day}</dt><dd className="font-semibold">{time}</dd></div>)}</dl><p className="mt-6 text-sm leading-6 text-[#40514a]">Hours can change for special events or holidays. Please check before a special trip.</p></article>
+      <article className="rounded-[2rem] bg-[#f1e2d6] p-8"><h2 className="font-serif text-3xl">Opening hours</h2><div className="mt-5 text-[#40514a]"><OpeningHours /></div><p className="mt-6 text-sm leading-6 text-[#40514a]">Updated from our current shop hours. Hours can change for special events or holidays.</p></article>
     </section>
     <section className="mx-auto max-w-5xl px-6 pb-20"><MarketingSignup /></section>
   </main>;
