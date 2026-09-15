@@ -116,16 +116,6 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       {query.magic_link === "sent" ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">A new sign-in link has been sent to the customer.</p> : null}
       {query.magic_link === "failed" ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">The sign-in link could not be sent. Check the account email and try again.</p> : null}
 
-      <form action="/admin/users" method="get" className="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-4">
-        <label className="min-w-64 flex-1 text-sm font-medium">
-          Find a customer
-          <input name="q" defaultValue={search} placeholder="Search name or email" className="mt-2 w-full rounded-lg border px-3 py-2 font-normal" />
-        </label>
-        <button type="submit" className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-black/80">Search</button>
-        {search ? <a href="/admin/users" className="px-2 py-2.5 text-sm font-medium underline underline-offset-4">Clear</a> : null}
-        {search ? <p className="w-full text-sm text-foreground/60">{matchingUsers.length} matching customer{matchingUsers.length === 1 ? "" : "s"}</p> : null}
-      </form>
-
       <section className="rounded-2xl border bg-white p-6">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-800" title="Top spenders">
@@ -159,6 +149,16 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
           <p className="mt-5 text-sm text-foreground/60">No paid event customers yet.</p>
         )}
       </section>
+
+      <form action="/admin/users" method="get" className="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-4">
+        <label className="min-w-64 flex-1 text-sm font-medium">
+          Find a customer
+          <input name="q" defaultValue={search} placeholder="Search name or email" className="mt-2 w-full rounded-lg border px-3 py-2 font-normal" />
+        </label>
+        <button type="submit" className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-black/80">Search</button>
+        {search ? <a href="/admin/users" className="px-2 py-2.5 text-sm font-medium underline underline-offset-4">Clear</a> : null}
+        {search ? <p className="w-full text-sm text-foreground/60">{matchingUsers.length} matching customer{matchingUsers.length === 1 ? "" : "s"}</p> : null}
+      </form>
 
       <div className="overflow-x-auto rounded-2xl border bg-white">
         <table className="w-full min-w-[1220px] text-left text-sm">
