@@ -39,13 +39,14 @@ type EventOrder = {
   refunded_total_pence: number | null;
 };
 
-export default async function UsersPage({ searchParams }: { searchParams: Promise<{ page?: string; magic_link?: string }> }) {
+export default async function UsersPage({ searchParams }: { searchParams: Promise<{ page?: string; magic_link?: string; q?: string }> }) {
   const admin = await requireAdminUser();
   if (!admin) redirect("/sign-in?callbackURL=/admin/users");
 
   const query = await searchParams;
   const requestedPage = Number(query.page ?? "1");
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
+  const search = typeof query.q === "string" ? query.q.trim().slice(0, 120) : "";
 
   const service = supabaseService();
   const db = service.schema("app_core");
@@ -79,9 +80,16 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   }
 
   const allUsers = authData.users;
-  const totalPages = Math.max(1, Math.ceil(allUsers.length / PAGE_SIZE));
+  const matchingUsers = search
+    ? allUsers.filter((user) => {
+      const profile = profiles.get(user.id);
+      const haystack = [profile?.display_name, profile?.email, user.email].filter(Boolean).join(" ").toLocaleLowerCase("en-GB");
+      return haystack.includes(search.toLocaleLowerCase("en-GB"));
+    })
+    : allUsers;
+  const totalPages = Math.max(1, Math.ceil(matchingUsers.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const users = allUsers.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const users = matchingUsers.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const topSpenders = [...spendByUser.entries()]
     .filter(([, spend]) => spend.netPence > 0)
@@ -141,6 +149,16 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
           <p className="mt-5 text-sm text-foreground/60">No paid event customers yet.</p>
         )}
       </section>
+
+      <form action="/admin/users" method="get" className="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-4">
+        <label className="min-w-64 flex-1 text-sm font-medium">
+          Find a customer
+          <input name="q" defaultValue={search} placeholder="Search name or email" className="mt-2 w-full rounded-lg border px-3 py-2 font-normal" />
+        </label>
+        <button type="submit" className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-black/80">Search</button>
+        {search ? <a href="/admin/users" className="px-2 py-2.5 text-sm font-medium underline underline-offset-4">Clear</a> : null}
+        {search ? <p className="w-full text-sm text-foreground/60">{matchingUsers.length} matching customer{matchingUsers.length === 1 ? "" : "s"}</p> : null}
+      </form>
 
       <div className="overflow-x-auto rounded-2xl border bg-white">
         <table className="w-full min-w-[1220px] text-left text-sm">
@@ -227,8 +245,8 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
             })}
           </tbody>
         </table>
-        {!users.length ? <p className="p-8 text-center text-foreground/60">No authenticated users yet.</p> : null}
-        <Pagination page={safePage} totalPages={totalPages} basePath="/admin/users" />
+        {!users.length ? <p className="p-8 text-center text-foreground/60">{search ? "No customers match that name or email." : "No authenticated users yet."}</p> : null}
+        <Pagination page={safePage} totalPages={totalPages} basePath="/admin/users" query={{ q: search }} />
       </div>
     </main>
   );
