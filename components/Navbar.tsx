@@ -9,6 +9,7 @@ import { useUser } from "@/hooks/useUser";
 const NAV_LINKS = [
   { label: "Home", href: "/" },
   { label: "Events", href: "/events" },
+  { label: "Visit", href: "/visit" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
