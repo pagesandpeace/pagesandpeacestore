@@ -39,7 +39,7 @@ export default function ContactPage() {
             <li>
               <strong>Phone:</strong>{" "}
               <a
-                href="tel:07486313261"
+                href="tel:07395266100"
                 className="text-[var(--accent)] font-medium hover:underline"
               >
                 07395266100
