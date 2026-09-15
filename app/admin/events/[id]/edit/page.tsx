@@ -17,7 +17,7 @@ export default async function EditEventPage({ params }: Props) {
 
   const db = appCoreDb();
   const [{ data: event, error }, { data: tickets, error: ticketError }, { count: bookingCount, error: countError }] = await Promise.all([
-    db.from("events").select("id,title,series_name,subtitle,short_description,description,starts_at,capacity,image_url,status").eq("id", id).maybeSingle(),
+    db.from("events").select("id,title,series_name,subtitle,short_description,description,starts_at,ends_at,capacity,image_url,status").eq("id", id).maybeSingle(),
     db.from("ticket_types").select("id,name,description,price_pence,is_active").eq("event_id", id).order("created_at", { ascending: true }).limit(1),
     db.from("bookings").select("id", { count: "exact", head: true }).eq("event_id", id),
   ]);
@@ -35,10 +35,12 @@ export default async function EditEventPage({ params }: Props) {
     const title = read(formData, "title");
     const description = read(formData, "description");
     const date = parseLondonDateTimeInput(read(formData, "starts_at"));
+    const endInput = read(formData, "ends_at");
+    const endDate = endInput ? parseLondonDateTimeInput(endInput) : null;
     const capacity = Number(read(formData, "capacity"));
     const requestedStatus = read(formData, "status");
     const status = ["draft", "published", "cancelled", "archived"].includes(requestedStatus) ? requestedStatus : "draft";
-    if (!title || !description || Number.isNaN(date.getTime()) || !Number.isInteger(capacity) || capacity < 0) throw new Error("Please complete valid event details.");
+    if (!title || !description || Number.isNaN(date.getTime()) || (endDate && (Number.isNaN(endDate.getTime()) || endDate <= date)) || !Number.isInteger(capacity) || capacity < 0) throw new Error("Please complete valid event details.");
 
     const service = appCoreDb();
     const { data: bookings, error: bookingError } = await service.from("bookings").select("quantity").eq("event_id", id).in("status", ["pending", "confirmed"]);
@@ -47,7 +49,7 @@ export default async function EditEventPage({ params }: Props) {
     if (capacity < reserved) throw new Error(`Capacity cannot be lower than the ${reserved} reserved tickets.`);
 
     const { error: updateError } = await service.from("events").update({
-      title, description, capacity, status, starts_at: date.toISOString(),
+      title, description, capacity, status, starts_at: date.toISOString(), ends_at: endDate?.toISOString() ?? null,
       series_name: read(formData, "series_name") || null,
       subtitle: read(formData, "subtitle") || null,
       short_description: read(formData, "short_description") || null,
@@ -91,8 +93,9 @@ export default async function EditEventPage({ params }: Props) {
       <label className="block text-sm font-medium">Subtitle<input name="subtitle" defaultValue={event.subtitle ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       <label className="block text-sm font-medium">Short description<textarea name="short_description" rows={2} defaultValue={event.short_description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       <label className="block text-sm font-medium">Full description<textarea name="description" required rows={6} defaultValue={event.description} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block text-sm font-medium">Date and time<input name="starts_at" type="datetime-local" required defaultValue={dateInput(event.starts_at)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <label className="block text-sm font-medium">Start date and time<input name="starts_at" type="datetime-local" required defaultValue={dateInput(event.starts_at)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
+        <label className="block text-sm font-medium">End date and time<input name="ends_at" type="datetime-local" defaultValue={event.ends_at ? dateInput(event.ends_at) : ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
         <label className="block text-sm font-medium">Total capacity<input name="capacity" type="number" min="0" required defaultValue={event.capacity} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label>
       </div>
       <div><p className="text-sm font-medium">Event image</p><div className="mt-1"><EventImageUpload initialUrl={event.image_url} /></div></div>
