@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Contact & opening hours | Rossington, Doncaster",
+  title: "Contact | Rossington, Doncaster",
   description: "Contact Pages & Peace, the independent bookshop, café and event space in Rossington, Doncaster.",
 };
 
