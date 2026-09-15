@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatLondonDateTime } from "@/lib/time/london";
 import { listPublishedEvents } from "@/lib/app-core/events";
 import { listPublicEventSeries } from "@/lib/app-core/event-series";
+import MarketingSignup from "@/components/MarketingSignup";
 
 function formatDate(value: string) {
   return formatLondonDateTime(value, {
@@ -89,6 +90,9 @@ export default async function EventsPage() {
             ))}
           </div>
         )}
+      </section>
+      <section className="mx-auto max-w-7xl px-6 pb-16">
+        <MarketingSignup />
       </section>
     </main>
   );
