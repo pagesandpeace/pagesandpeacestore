@@ -1,8 +1,15 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 
 import { listPublishedEvents } from "@/lib/app-core/events";
 import { getUser } from "@/lib/supabase/get-user";
+
+export const metadata: Metadata = {
+  title: "Independent bookshop, café & events in Rossington",
+  description: "Visit Pages & Peace in Rossington, Doncaster for thoughtfully chosen books, good coffee and community events.",
+  alternates: { canonical: "https://pagesandpeace.co.uk" },
+};
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -22,10 +29,11 @@ export default async function Home() {
         <div className="relative z-10 max-w-xl py-14">
           <p className="mb-5 font-serif text-lg italic text-[#477460]">Coffee, books &amp; calm</p>
           <h1 className="text-balance font-serif text-5xl leading-[.96] tracking-[-0.04em] sm:text-6xl lg:text-7xl">Every community needs a chapter.</h1>
-          <p className="mt-7 max-w-md text-lg leading-8 text-[#40514a]">A welcoming corner for good coffee, great reads and the kind of events that bring people together.</p>
+          <p className="mt-7 max-w-md text-lg leading-8 text-[#40514a]">A welcoming Rossington corner for good coffee, great reads and the kind of events that bring people together.</p>
           <div className="mt-9 flex flex-wrap gap-3">
             <Link href="/events" className="rounded-full bg-[#17221f] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#477460]">Explore events</Link>
             <Link href="/menu" className="rounded-full border border-[#17221f] px-6 py-3 text-sm font-semibold transition hover:bg-white">View the menu</Link>
+            <Link href="/visit" className="rounded-full border border-[#17221f] px-6 py-3 text-sm font-semibold transition hover:bg-white">Plan your visit</Link>
           </div>
         </div>
         <div className="relative z-10 flex items-center gap-3 text-sm text-[#40514a]"><span className="h-px w-10 bg-[#477460]" />A little place for big conversations.</div>
