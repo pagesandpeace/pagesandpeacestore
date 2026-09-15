@@ -28,6 +28,8 @@ type CustomerProfile = {
   marketing_consent_at: string | null;
   beehiiv_subscribed: boolean | null;
   beehiiv_subscribed_at: string | null;
+  last_magic_link_sent_at: string | null;
+  last_magic_link_clicked_at: string | null;
 };
 
 type EventOrder = {
@@ -37,11 +39,12 @@ type EventOrder = {
   refunded_total_pence: number | null;
 };
 
-export default async function UsersPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+export default async function UsersPage({ searchParams }: { searchParams: Promise<{ page?: string; magic_link?: string }> }) {
   const admin = await requireAdminUser();
   if (!admin) redirect("/sign-in?callbackURL=/admin/users");
 
-  const requestedPage = Number((await searchParams).page ?? "1");
+  const query = await searchParams;
+  const requestedPage = Number(query.page ?? "1");
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
 
   const service = supabaseService();
@@ -51,7 +54,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       service.auth.admin.listUsers({ perPage: 1000 }),
       db
         .from("customers")
-        .select("auth_user_id, display_name, email, marketing_consent, marketing_consent_at, beehiiv_subscribed, beehiiv_subscribed_at"),
+        .select("auth_user_id, display_name, email, marketing_consent, marketing_consent_at, beehiiv_subscribed, beehiiv_subscribed_at, last_magic_link_sent_at, last_magic_link_clicked_at"),
       db
         .from("orders")
         .select("auth_user_id, status, total_pence, refunded_total_pence")
@@ -102,6 +105,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
         <p className="mt-2 text-foreground/65">Authenticated customer accounts and event purchasing activity.</p>
       </div>
 
+      {query.magic_link === "sent" ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">A new sign-in link has been sent to the customer.</p> : null}
+      {query.magic_link === "failed" ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">The sign-in link could not be sent. Check the account email and try again.</p> : null}
+
       <section className="rounded-2xl border bg-white p-6">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-800" title="Top spenders">
@@ -137,15 +143,17 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       </section>
 
       <div className="overflow-x-auto rounded-2xl border bg-white">
-        <table className="w-full min-w-[1040px] text-left text-sm">
+        <table className="w-full min-w-[1220px] text-left text-sm">
           <thead className="bg-[#f8f5f1] text-foreground/60">
             <tr>
               <th className="px-5 py-4">Customer</th>
               <th className="px-5 py-4">Email</th>
               <th className="px-5 py-4">Joined</th>
+              <th className="px-5 py-4">Last sign-in</th>
               <th className="px-5 py-4">Email verified</th>
               <th className="px-5 py-4">Purchases</th>
               <th className="px-5 py-4">Marketing</th>
+              <th className="px-5 py-4">Account help</th>
             </tr>
           </thead>
           <tbody>
@@ -163,6 +171,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                   <td className="px-5 py-4">{profile?.email || user.email || "—"}</td>
                   <td className="px-5 py-4 text-foreground/65">
                     {new Date(user.created_at).toLocaleDateString("en-GB")}
+                  </td>
+                  <td className="px-5 py-4 text-foreground/65">
+                    {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString("en-GB") : "Never"}
                   </td>
                   <td className="px-5 py-4">
                     {user.email_confirmed_at ? (
@@ -191,6 +202,25 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     ) : (
                       <StatusIcon label="Marketing preference not chosen" className="bg-stone-100 text-stone-600" icon={<CircleHelp className="h-4 w-4" />} />
                     )}
+                  </td>
+                  <td className="px-5 py-4">
+                    <details className="group">
+                      <summary className="cursor-pointer text-sm font-medium text-foreground underline underline-offset-4 hover:text-foreground/70">
+                        Send sign-in link
+                      </summary>
+                      <div className="mt-3 w-60 rounded-lg border bg-[#fbf8f4] p-3 text-xs text-foreground/65 shadow-sm">
+                        <p>This sends a fresh sign-in link to {profile?.email || user.email || "this customer"}.</p>
+                        <dl className="mt-3 space-y-1 border-t pt-3 text-foreground/60">
+                          <div className="flex justify-between gap-3"><dt>Last link sent</dt><dd className="text-right">{profile?.last_magic_link_sent_at ? new Date(profile.last_magic_link_sent_at).toLocaleString("en-GB") : "No record"}</dd></div>
+                          <div className="flex justify-between gap-3"><dt>Last link completed</dt><dd className="text-right">{profile?.last_magic_link_clicked_at ? new Date(profile.last_magic_link_clicked_at).toLocaleString("en-GB") : "No record"}</dd></div>
+                        </dl>
+                        <form action={`/api/app-core/admin/users/${user.id}/magic-link`} method="post" className="mt-3">
+                          <button type="submit" className="rounded-md bg-black px-3 py-2 text-xs font-semibold text-white hover:bg-black/80">
+                            Send link now
+                          </button>
+                        </form>
+                      </div>
+                    </details>
                   </td>
                 </tr>
               );
