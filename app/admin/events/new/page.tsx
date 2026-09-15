@@ -52,6 +52,7 @@ async function createEvent(formData: FormData) {
   const title = value(formData, "title");
   const description = value(formData, "description");
   const startsAtInput = value(formData, "starts_at");
+  const endsAtInput = value(formData, "ends_at");
   const capacity = Number(value(formData, "capacity"));
   const ticketName = value(formData, "ticket_name");
   const pricePence = Math.round(Number(value(formData, "ticket_price")) * 100);
@@ -61,7 +62,8 @@ async function createEvent(formData: FormData) {
   }
 
   const startsAt = parseLondonDateTimeInput(startsAtInput);
-  if (Number.isNaN(startsAt.getTime())) throw new Error("Please provide a valid event date and time.");
+  const endsAt = endsAtInput ? parseLondonDateTimeInput(endsAtInput) : null;
+  if (Number.isNaN(startsAt.getTime()) || (endsAt && Number.isNaN(endsAt.getTime())) || (endsAt && endsAt <= startsAt)) throw new Error("Please provide valid event start and end times.");
 
   const db = appCoreDb();
   const { data: existingEvent, error: existingError } = await db.from("events").select("id").eq("id", eventId).maybeSingle();
@@ -87,6 +89,7 @@ async function createEvent(formData: FormData) {
       short_description: shortDescription,
       description,
       starts_at: startsAt.toISOString(),
+      ends_at: endsAt?.toISOString() ?? null,
       capacity,
       image_url: imageUrl,
       status,
@@ -148,7 +151,7 @@ export default async function CreateEventPage({ searchParams }: CreateEventProps
   const [{ data: seriesRows, error: seriesError }, { data: sourceEvent, error: sourceError }] = await Promise.all([
     db.from("event_series").select("id,name,default_title,default_subtitle,default_short_description,default_description,default_image_url,default_capacity,default_ticket_name,default_ticket_description,default_ticket_price_pence").order("name"),
     duplicateId
-      ? db.from("events").select("id,title,series_name,subtitle,short_description,description,starts_at,capacity,image_url").eq("id", duplicateId).maybeSingle()
+      ? db.from("events").select("id,title,series_name,subtitle,short_description,description,starts_at,ends_at,capacity,image_url").eq("id", duplicateId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ]);
   if (seriesError || sourceError) throw new Error("Unable to load event details.");
@@ -196,9 +199,12 @@ export default async function CreateEventPage({ searchParams }: CreateEventProps
             <textarea name="description" required rows={6} defaultValue={sourceEvent?.description ?? ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm font-medium">Date and time
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="block text-sm font-medium">Start date and time
               <input name="starts_at" type="datetime-local" required defaultValue={sourceEvent ? toLondonDateTimeInput(sourceEvent.starts_at) : ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
+            </label>
+            <label className="block text-sm font-medium">End date and time
+              <input name="ends_at" type="datetime-local" defaultValue={sourceEvent?.ends_at ? toLondonDateTimeInput(sourceEvent.ends_at) : ""} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
             </label>
             <label className="block text-sm font-medium">Total capacity
               <input name="capacity" type="number" min="1" defaultValue={sourceEvent?.capacity ?? 20} required className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
