@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import OpeningHours from "@/components/OpeningHours";
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
@@ -52,11 +51,6 @@ export default function ContactPage() {
               Kings Avenue<br />
               Doncaster<br />
               DN11 0PF
-            </li>
-
-            <li className="pt-2">
-              <strong>Opening Hours:</strong>
-              <OpeningHours />
             </li>
           </ul>
         </div>
