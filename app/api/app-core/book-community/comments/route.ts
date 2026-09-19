@@ -3,6 +3,69 @@ import { supabaseAuthServer } from "@/lib/supabase/server";
 import { supabaseService } from "@/lib/supabase/service";
 import { consumeCommunityRateLimit } from "@/lib/app-core/rate-limit";
 
+const COMMENT_PAGE_SIZE = 10;
+
+function parseCursor(value: string | null) {
+  if (!value) return null;
+  const split = value.lastIndexOf("|");
+  if (split <= 0) return null;
+  const createdAt = value.slice(0, split);
+  const id = value.slice(split + 1);
+  if (!createdAt || !id || Number.isNaN(Date.parse(createdAt))) return null;
+  return { createdAt, id };
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const reviewId = (url.searchParams.get("reviewId") ?? "").trim();
+  const cursor = parseCursor(url.searchParams.get("cursor"));
+  if (!reviewId) return NextResponse.json({ error: "Invalid review." }, { status: 400 });
+
+  const db = supabaseService().schema("app_core");
+  const { data: review } = await db.from("book_reviews").select("id").eq("id", reviewId).eq("status", "published").maybeSingle();
+  if (!review) return NextResponse.json({ error: "Review not found." }, { status: 404 });
+
+  let query = db.from("book_review_comments")
+    .select("id,customer_id,body,created_at")
+    .eq("review_id", reviewId)
+    .eq("status", "published")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(COMMENT_PAGE_SIZE + 1);
+
+  if (cursor) {
+    query = query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);
+  }
+
+  const { data: rows, error } = await query;
+  if (error) return NextResponse.json({ error: "Could not load comments." }, { status: 500 });
+
+  const hasMore = (rows?.length ?? 0) > COMMENT_PAGE_SIZE;
+  const pageRows = (rows ?? []).slice(0, COMMENT_PAGE_SIZE).reverse();
+  const customerIds = [...new Set(pageRows.map((row) => row.customer_id))];
+  const { data: customers } = customerIds.length
+    ? await db.from("customers").select("auth_user_id,display_name,profile_image").in("auth_user_id", customerIds)
+    : { data: [] };
+  const byCustomer = new Map((customers ?? []).map((customer) => [customer.auth_user_id, customer]));
+  const oldest = pageRows[0] ?? null;
+
+  return NextResponse.json({
+    comments: pageRows.map((comment) => ({
+      id: comment.id,
+      body: comment.body,
+      created_at: comment.created_at,
+      reviewer: {
+        name: byCustomer.get(comment.customer_id)?.display_name?.trim() || "Pages & Peace reader",
+        image: byCustomer.get(comment.customer_id)?.profile_image ?? null,
+      },
+    })),
+    pagination: {
+      hasMore,
+      cursor: hasMore && oldest ? `${oldest.created_at}|${oldest.id}` : null,
+    },
+  }, { headers: { "Cache-Control": "public, max-age=30, stale-while-revalidate=60" } });
+}
+
 export async function POST(request: Request) {
   const auth = await supabaseAuthServer();
   const { data: { user } } = await auth.auth.getUser();
