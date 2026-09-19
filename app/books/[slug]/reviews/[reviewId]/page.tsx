@@ -52,7 +52,7 @@ export default async function ReviewPage({ params }: Props) {
           {data.review.contains_spoilers ? <p className="mt-6 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">Contains spoilers</p> : null}
           <p className="mt-6 whitespace-pre-wrap text-lg leading-8 text-neutral-700">{data.review.body}</p>
           <div className="mt-7 flex flex-wrap items-center gap-3"><ShareReviewButton url={shareUrl} title={`${data.review.reviewer.name} reviews ${data.book.title}`} text={`A Pages & Peace reader review of ${data.book.title} by ${data.book.author}`} /><Link href="/dashboard/reviews/new" className="rounded-full bg-[#17221f] px-4 py-2 text-sm font-semibold text-white">Add your review</Link></div>
-          <ReviewCommunityActions reviewId={data.review.id} initialHelpful={data.review.helpful_count} initialLove={data.review.love_count} initialComments={data.comments} />
+          <ReviewCommunityActions reviewId={data.review.id} initialHelpful={data.review.helpful_count} initialLove={data.review.love_count} initialComments={data.comments} initialCommentCount={data.review.comment_count} initialHasMoreComments={data.commentPagination.hasMore} initialCommentCursor={data.commentPagination.cursor} />
         </div>
       </article>
     </div>
