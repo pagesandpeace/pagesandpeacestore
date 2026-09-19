@@ -12,7 +12,8 @@ export default function NewReviewPage() {
   const [book, setBook] = useState<SelectedBook | null>(null);
   const [rating, setRating] = useState(0);
   const [fileName, setFileName] = useState("");
-  const [busy, setBusy] = useState(false);\n  const [uploading, setUploading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
