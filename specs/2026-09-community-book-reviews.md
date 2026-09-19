@@ -131,3 +131,13 @@ Only after sufficient real usage: recommendation/ranking systems based on explic
 
 ## Release
 Migrations are additive. They are applied and verified on staging first. Production migration requires final code review, preview verification, human acceptance and rollback readiness. Application rollback is a code revert; additive tables can safely remain unused if a release is rolled back.
+
+## Quiet engagement policy
+Pages & Peace should feel like a reading community, not a social network.
+
+- Helpful/Love reactions are quiet feedback signals. They must not generate one-email-per-action notifications.
+- Reading-status changes are personal utility and aggregate discovery signals, not alerts to other readers.
+- Comments are the highest-value conversational signal, but Stage A sends **no automatic community emails**.
+- Future notification work should be account-first and aggregated: subtle new-comment indicators in My Reviews, with any email option batched or preference-controlled rather than sent per interaction.
+- Public comment threads are bounded: render the latest 10 comments initially and use cursor-based “Load earlier comments” pagination. Do not create indefinitely long review pages.
+- Competitive social mechanics such as follower counts, streaks, reviewer leaderboards and engagement scores are intentionally out of scope.
