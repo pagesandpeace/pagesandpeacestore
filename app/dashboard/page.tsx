@@ -40,7 +40,7 @@ export default async function DashboardPage() {
   const nextEvent = upcoming[0]?.event?.starts_at ?? null;
 
   return <main className="flex-1 w-full bg-background text-foreground font-[Montserrat]">
-    <div className="max-w-4xl mx-auto px-6 py-10">
+    <div className="mx-auto max-w-4xl px-1 py-2 sm:px-2 md:py-6">
       {showMarketingConsent ? <MarketingConsentCard /> : null}
 
       <section className="mb-10 p-6 rounded-2xl border border-border bg-muted/40 text-center">
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
         <a href="https://tally.so/r/Med4gl" target="_blank" rel="noopener noreferrer" className="inline-block px-6 py-3 rounded-full bg-accent text-white font-semibold">Pre-order now →</a>
       </section>
 
-      <header className="mb-8"><h1 className="text-3xl font-semibold">Welcome back, {displayName} ☕</h1></header>
+      <header className="mb-6"><h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Welcome back, {displayName} ☕</h1></header>
 
       <section className="mb-8 rounded-2xl bg-[#17221f] p-6 text-white md:flex md:items-center md:justify-between md:gap-6"><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-[#8bd39b]">Reading community</p><h2 className="mt-2 text-2xl font-semibold">What have you been reading?</h2><p className="mt-2 max-w-xl text-sm leading-6 text-white/70">Share a book with fellow Pages & Peace readers and help someone discover their next favourite.</p></div><div className="mt-5 flex flex-wrap gap-3 md:mt-0"><Link href="/dashboard/reviews/new" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#17221f]">Review a book</Link><Link href="/book-reviews" className="rounded-full border border-white/30 px-5 py-2.5 text-sm font-semibold">Explore reviews</Link></div></section>
 
