@@ -1,9 +1,10 @@
 "use client";
 
-import { ImagePlus, Send, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ImagePlus, Send, ShieldCheck, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BookSearchPicker, { type SelectedBook } from "@/components/community/BookSearchPicker";
 
 export default function NewReviewPage() {
@@ -12,9 +13,29 @@ export default function NewReviewPage() {
   const [book, setBook] = useState<SelectedBook | null>(null);
   const [rating, setRating] = useState(0);
   const [fileName, setFileName] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  function handleFileChange(file: File | null) {
+    setFileName(file?.name ?? "");
+    setPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return file ? URL.createObjectURL(file) : "";
+    });
+  }
+
+  function clearFile() {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    handleFileChange(null);
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -178,21 +199,38 @@ export default function NewReviewPage() {
                 name="file"
                 accept="image/jpeg,image/png,image/webp,image/avif"
                 className="sr-only"
-                onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")}
+                onChange={(event) => handleFileChange(event.target.files?.[0] ?? null)}
               />
 
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="mt-5 flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-[#fcfaf7] px-5 py-8 text-center transition hover:border-[#6c806f] hover:bg-[#f7f3ec] focus:outline-none focus:ring-2 focus:ring-[#6c806f]/20"
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef1ec] text-[#486553]">
-                  <ImagePlus className="h-6 w-6" aria-hidden="true" />
-                </span>
-                <span className="mt-4 text-sm font-semibold text-[#2d2a26]">Upload a photo</span>
-                <span className="mt-1 text-xs text-neutral-500">Click to browse · JPG, PNG, WebP or AVIF · max 8 MB</span>
-                {fileName ? <span className="mt-3 max-w-full truncate text-xs font-medium text-[#486553]">{fileName}</span> : null}
-              </button>
+              {previewUrl ? (
+                <div className="mt-5 overflow-hidden rounded-2xl border border-[#6c806f]/25 bg-[#f7f5f1]">
+                  <div className="relative aspect-[4/3] bg-[#f1eee8]">
+                    <Image src={previewUrl} alt="Selected review photo preview" fill unoptimized className="object-contain p-3" />
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-t bg-white px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold text-[#486553]"><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Photo ready</p>
+                      <p className="mt-1 truncate text-xs text-neutral-500">{fileName}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-full border px-3 py-1.5 text-xs font-semibold">Change</button>
+                      <button type="button" onClick={clearFile} className="flex h-8 w-8 items-center justify-center rounded-full border text-neutral-500" aria-label="Remove selected photo"><X className="h-4 w-4" /></button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mt-5 flex w-full flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-[#fcfaf7] px-5 py-8 text-center transition hover:border-[#6c806f] hover:bg-[#f7f3ec] focus:outline-none focus:ring-2 focus:ring-[#6c806f]/20"
+                >
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef1ec] text-[#486553]">
+                    <ImagePlus className="h-6 w-6" aria-hidden="true" />
+                  </span>
+                  <span className="mt-4 text-sm font-semibold text-[#2d2a26]">Upload a photo</span>
+                  <span className="mt-1 text-xs text-neutral-500">Click to browse · JPG, PNG, WebP or AVIF · max 8 MB</span>
+                </button>
+              )}
             </section>
 
             <section className="rounded-2xl border border-black/8 bg-[#f3f2eb] p-5 md:p-6">
