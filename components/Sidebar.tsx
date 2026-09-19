@@ -67,7 +67,10 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, handleNav, user, 
         <nav className="mt-6 space-y-4 text-sm text-left">
           <button onClick={() => handleNav("/dashboard")} className="block hover:text-[#5DA865]">Dashboard</button>
           <button onClick={() => handleNav("/dashboard/events")} className="block hover:text-[#5DA865]">My events</button>
-          <button onClick={() => handleNav("/dashboard/orders")} className="block hover:text-[#5DA865]">Order history</button>\n          <button onClick={() => handleNav("/dashboard/reviews")} className="block font-semibold text-[#189458] hover:text-[#5DA865]">My reviews</button>\n          <button onClick={() => handleNav("/dashboard/reviews/new")} className="block hover:text-[#5DA865]">Review a book</button>\n          <button onClick={() => handleNav("/book-reviews")} className="block hover:text-[#5DA865]">Community reviews</button>
+          <button onClick={() => handleNav("/dashboard/orders")} className="block hover:text-[#5DA865]">Order history</button>
+          <button onClick={() => handleNav("/dashboard/reviews")} className="block font-semibold text-[#189458] hover:text-[#5DA865]">My reviews</button>
+          <button onClick={() => handleNav("/dashboard/reviews/new")} className="block hover:text-[#5DA865]">Review a book</button>
+          <button onClick={() => handleNav("/book-reviews")} className="block hover:text-[#5DA865]">Community reviews</button>
           <button onClick={() => handleNav("/events")} className="block hover:text-[#5DA865]">Browse events</button>
           <button onClick={() => handleNav("/events/checkout")} className="flex items-center gap-2 hover:text-[#5DA865]" aria-label={`Ticket basket${basketCount ? `, ${basketCount} ticket${basketCount === 1 ? "" : "s"}` : ""}`}>
             <TicketIcon className="h-5 w-5" />
