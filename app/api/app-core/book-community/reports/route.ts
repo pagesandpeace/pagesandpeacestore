@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAuthServer } from "@/lib/supabase/server";
 import { supabaseService } from "@/lib/supabase/service";
+import { consumeCommunityRateLimit } from "@/lib/app-core/rate-limit";
 
 const REASONS = new Set(["spam","harassment","hate","sexual","privacy","copyright","other"]);
 
@@ -8,6 +9,7 @@ export async function POST(request: Request) {
   const auth = await supabaseAuthServer();
   const { data: { user } } = await auth.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in to report content." }, { status: 401 });
+  if (!await consumeCommunityRateLimit(`community:report:${user.id}`, 20)) return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
   const payload = await request.json().catch(() => null);
   const reviewId = typeof payload?.reviewId === "string" ? payload.reviewId : null;
   const commentId = typeof payload?.commentId === "string" ? payload.commentId : null;
