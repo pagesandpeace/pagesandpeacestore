@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAuthServer } from "@/lib/supabase/server";
 import { supabaseService } from "@/lib/supabase/service";
+import { consumeCommunityRateLimit } from "@/lib/app-core/rate-limit";
 import { bookSlug, normalizeBookValue, reviewShareSlug } from "@/lib/app-core/book-reviews";
 import cloudinary from "@/lib/cloudinary";
 
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
   const auth = await supabaseAuthServer();
   const { data: { user } } = await auth.auth.getUser();
   if (!user) return fail("Sign in to share a review.", 401);
+  if (!await consumeCommunityRateLimit(`community:review:${user.id}`, 10)) return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
 
   const form = await request.formData();
   const selected = safeSelectedBook(form.get("selectedBook"));
