@@ -12,6 +12,7 @@ export type SelectedBook = {
   workKey?: string | null;
   editionKey?: string | null;
   firstPublishYear?: number | null;
+  editionPublishedYear?: number | null;
   isbn10?: string | null;
   isbn13?: string | null;
   publisher?: string | null;
