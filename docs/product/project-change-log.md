@@ -32,3 +32,13 @@ Production Vercel project: `pagesandpeacestore` in the Pages & Peace team.
 
 ### Known gaps
 No dedicated automated test script or repository GitHub Actions workflow was identified during baseline discovery. Branch-protection policy was not established by the discovery evidence and remains unverified. Historical rationale outside evidenced cutover documentation remains pre-baseline/unknown.
+
+## 2026-09-20 — Community book reviews Phase 1
+### Decision
+Add a public reading-community feature where anyone can discover book reviews and authenticated customers can contribute reviews of any book, with optional imagery.
+
+### Architecture
+Model books separately from reviews so community content can grow into durable book pages and later reading/community features. Keep new tables inside server-only `app_core`; authenticated mutations derive ownership from Supabase Auth and execute server-side. Images reuse the existing Cloudinary boundary.
+
+### Growth principle
+Build the smallest useful community loop now while preserving expansion paths for reading lists, reactions, reviewer profiles, staff picks, event/shop relationships and recommendations. Do not prematurely build a full social network.
