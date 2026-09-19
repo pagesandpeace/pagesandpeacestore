@@ -17,6 +17,7 @@ type SelectedBook = {
   workKey?: string | null;
   editionKey?: string | null;
   firstPublishYear?: number | null;
+  editionPublishedYear?: number | null;
   isbn10?: string | null;
   isbn13?: string | null;
   publisher?: string | null;
@@ -147,7 +148,7 @@ export async function POST(request: Request) {
         isbn13,
         open_library_edition_key: selected?.editionKey ?? null,
         publisher: selected?.publisher ?? null,
-        published_year: selected?.firstPublishYear ?? null,
+        published_year: selected?.editionPublishedYear ?? null,
         language: selected?.language ?? null,
         cover_image_url: selected?.coverUrl ?? null,
         source_url: selected?.sourceUrl ?? null,
