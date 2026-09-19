@@ -210,7 +210,10 @@ export async function POST(request: Request) {
     share_slug: reviewShareSlug(reviewId),
   }).select("id,share_slug").single();
 
-  if (insertedReview.error) {\n    console.error("book review insert failed", { code: insertedReview.error.code, message: insertedReview.error.message, userId: user.id, bookId: book.id });\n    return fail("We could not publish your review.", 500);\n  }
+  if (insertedReview.error) {
+    console.error("book review insert failed", { code: insertedReview.error.code, message: insertedReview.error.message, userId: user.id, bookId: book.id });
+    return fail("We could not publish your review.", 500);
+  }
   return NextResponse.json({
     success: true,
     reviewId: insertedReview.data.id,
