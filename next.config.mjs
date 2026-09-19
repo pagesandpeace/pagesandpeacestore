@@ -30,6 +30,11 @@ const nextConfig = {
         hostname: "imgs.search.brave.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "covers.openlibrary.org",
+        pathname: "/**",
+      },
     ],
   },
 };
