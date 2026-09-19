@@ -15,11 +15,13 @@ export async function POST(request: Request) {
 
   if (action === "hide_review" || action === "remove_review") {
     if (!report.review_id) return NextResponse.json({ error: "Report is not for a review." }, { status: 400 });
-    await db.from("book_reviews").update({ status: action === "hide_review" ? "hidden" : "removed", updated_at: new Date().toISOString() }).eq("id", report.review_id);
+    const moderated = await db.from("book_reviews").update({ status: action === "hide_review" ? "hidden" : "removed", updated_at: new Date().toISOString() }).eq("id", report.review_id);
+    if (moderated.error) return NextResponse.json({ error: "Could not update review." }, { status: 500 });
   }
   if (action === "hide_comment" || action === "remove_comment") {
     if (!report.comment_id) return NextResponse.json({ error: "Report is not for a comment." }, { status: 400 });
-    await db.from("book_review_comments").update({ status: action === "hide_comment" ? "hidden" : "removed", updated_at: new Date().toISOString() }).eq("id", report.comment_id);
+    const moderated = await db.from("book_review_comments").update({ status: action === "hide_comment" ? "hidden" : "removed", updated_at: new Date().toISOString() }).eq("id", report.comment_id);
+    if (moderated.error) return NextResponse.json({ error: "Could not update comment." }, { status: 500 });
   }
   const status = action === "dismiss" ? "dismissed" : "actioned";
   const result = await db.from("book_community_reports").update({ status, reviewed_at: new Date().toISOString(), reviewed_by: admin.id }).eq("id", reportId);
