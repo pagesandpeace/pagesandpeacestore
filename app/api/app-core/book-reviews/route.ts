@@ -8,7 +8,7 @@ import cloudinary from "@/lib/cloudinary";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const MAX_BYTES = 8 * 1024 * 1024;
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
+const ALLOWED_IMAGE_FORMATS = new Set(["jpg", "jpeg", "png", "webp", "avif"]);
 
 type SelectedBook = {
   source?: "pages_and_peace" | "open_library";
@@ -164,21 +164,35 @@ export async function POST(request: Request) {
   if (existingReview.data) return fail("You have already reviewed this book. You can edit your existing review instead.", 409);
 
   let imageUrl: string | null = null;
-  const file = form.get("file");
-  if (file instanceof File && file.size > 0) {
-    if (!ALLOWED_TYPES.has(file.type)) return fail("Use a JPG, PNG, WebP or AVIF image.");
-    if (file.size > MAX_BYTES) return fail("Images must be smaller than 8 MB.");
+  const imagePublicId = String(form.get("imagePublicId") ?? "").trim();
+  if (imagePublicId) {
+    const expectedPrefix = `pages-and-peace/book-reviews/${user.id}/`;
+    if (!imagePublicId.startsWith(expectedPrefix)) return fail("Invalid review image.", 400);
     try {
-      const encoded = Buffer.from(await file.arrayBuffer()).toString("base64");
-      const upload = await cloudinary.uploader.upload(`data:${file.type};base64,${encoded}`, {
-        folder: `pages-and-peace/book-reviews/${user.id}`,
-        resource_type: "image",
-        allowed_formats: ["jpg", "jpeg", "png", "webp", "avif"],
-        transformation: [{ width: 1400, height: 1400, crop: "limit", quality: "auto", fetch_format: "auto" }],
+      const resource = await cloudinary.api.resource(imagePublicId, { resource_type: "image" }) as {
+        public_id?: string;
+        secure_url?: string;
+        bytes?: number;
+        format?: string;
+      };
+      if (
+        resource.public_id !== imagePublicId ||
+        !resource.secure_url ||
+        typeof resource.bytes !== "number" ||
+        resource.bytes <= 0 ||
+        resource.bytes > MAX_BYTES ||
+        !resource.format ||
+        !ALLOWED_IMAGE_FORMATS.has(resource.format.toLowerCase())
+      ) {
+        return fail("The review image is not valid.", 400);
+      }
+      imageUrl = resource.secure_url;
+    } catch (error) {
+      console.error("book review image verification failed", {
+        message: error instanceof Error ? error.message : "unknown",
+        userId: user.id,
       });
-      imageUrl = upload.secure_url;
-    } catch {
-      return fail("The image could not be uploaded. Please try again.", 502);
+      return fail("We could not verify the uploaded image. Please try again.", 502);
     }
   }
 
@@ -196,7 +210,7 @@ export async function POST(request: Request) {
     share_slug: reviewShareSlug(reviewId),
   }).select("id,share_slug").single();
 
-  if (insertedReview.error) return fail("We could not publish your review.", 500);
+  if (insertedReview.error) {\n    console.error("book review insert failed", { code: insertedReview.error.code, message: insertedReview.error.message, userId: user.id, bookId: book.id });\n    return fail("We could not publish your review.", 500);\n  }
   return NextResponse.json({
     success: true,
     reviewId: insertedReview.data.id,
