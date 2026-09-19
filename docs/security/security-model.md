@@ -62,3 +62,8 @@ Retain explicit human approval for:
 
 ## Baseline verification status
 Repository-level security migrations and code boundaries were inspected during discovery. On 2026-09-20 the correct production Supabase and Vercel projects became visible to the connected tools, but this bootstrap does not mutate or comprehensively re-audit their live configuration. Any future claim about live RLS policies, environment variables, webhook settings, branch protection or platform permissions should be verified at the time it matters.
+
+## Public user-generated book content
+Book reviews introduce public user-generated content. Review writes must authenticate server-side and derive ownership from the Supabase Auth user ID. Public reads may expose only the review, book metadata and the reviewer's chosen display name/profile image; email addresses, Auth IDs and internal customer identifiers must not be exposed.
+
+Review images use the privileged server-side Cloudinary integration with explicit MIME and size validation. `app_core.books` and `app_core.book_reviews` remain server-only with RLS enabled and no anon/authenticated grants. Review status must allow content to be hidden or removed without deleting the underlying audit/history row. Moderation/reporting controls should expand before higher-volume community interaction features are introduced.
