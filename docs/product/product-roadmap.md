@@ -45,3 +45,6 @@ The following are not commitments until separately planned and approved:
 
 ## Roadmap maintenance
 Every significant slice should state which confirmed roadmap objective it serves. New priorities and material scope changes must be recorded here and in the project change log.
+
+## Confirmed product direction — Community reading
+The product owner approved building a public book-review community surface on 2026-09-20. Phase 1 establishes public book/review discovery and authenticated customer contribution. The growth path is intentionally extensible toward book pages, reading lists, reactions, reviewer profiles, staff/event/shop connections and recommendations, with later phases driven by observed usage and separate approval.
