@@ -42,3 +42,10 @@ Model books separately from reviews so community content can grow into durable b
 
 ### Growth principle
 Build the smallest useful community loop now while preserving expansion paths for reading lists, reactions, reviewer profiles, staff picks, event/shop relationships and recommendations. Do not prematurely build a full social network.
+
+## 2026-09-20 — Quiet engagement and comment pagination
+### Decision
+Keep the book community deliberately low-noise. Reactions and reading-status changes remain useful community signals without individual email alerts. Comments are treated as conversation, but no automatic community email notifications are introduced in this stage.
+
+### Comment-feed behaviour
+Individual review pages load the latest 10 published comments initially and use cursor-based pagination to load earlier conversation on demand. This prevents long, heavy pages while preserving the full discussion history.
