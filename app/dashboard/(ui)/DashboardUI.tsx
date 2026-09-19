@@ -38,7 +38,7 @@ export default function DashboardUI({ children, user, profile }: DashboardUIProp
 
   useEffect(() => {
     if (!sidebarOpen) return;
-    ["/dashboard", "/dashboard/events", "/dashboard/orders", "/dashboard/settings", "/dashboard/account", "/events", "/events/checkout"].forEach((href) => router.prefetch(href));
+    ["/dashboard", "/dashboard/events", "/dashboard/orders", "/dashboard/settings", "/dashboard/account", "/dashboard/reviews", "/dashboard/reviews/new", "/book-reviews", "/events", "/events/checkout"].forEach((href) => router.prefetch(href));
   }, [sidebarOpen, router]);
 
   const handleNav = (href: string) => {
