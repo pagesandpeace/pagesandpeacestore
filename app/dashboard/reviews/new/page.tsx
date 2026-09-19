@@ -12,7 +12,7 @@ export default function NewReviewPage() {
   const [book, setBook] = useState<SelectedBook | null>(null);
   const [rating, setRating] = useState(0);
   const [fileName, setFileName] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false);\n  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -24,6 +24,52 @@ export default function NewReviewPage() {
     const form = new FormData(event.currentTarget);
     form.set("containsSpoilers", form.get("containsSpoilers") === "on" ? "true" : "false");
     if (book) form.set("selectedBook", JSON.stringify(book));
+
+    const file = fileInputRef.current?.files?.[0] ?? null;
+    form.delete("file");
+    if (file) {
+      const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
+      if (!allowed.has(file.type)) {
+        setBusy(false);
+        setError("Use a JPG, PNG, WebP or AVIF image.");
+        return;
+      }
+      if (file.size <= 0 || file.size > 8 * 1024 * 1024) {
+        setBusy(false);
+        setError("Images must be smaller than 8 MB.");
+        return;
+      }
+
+      setUploading(true);
+      try {
+        const signatureResponse = await fetch("/api/app-core/book-reviews/image-signature", { method: "POST" });
+        const signature = await signatureResponse.json().catch(() => null);
+        if (!signatureResponse.ok || !signature?.cloudName || !signature?.apiKey || !signature?.signature || !signature?.publicId || !signature?.timestamp) {
+          throw new Error(signature?.error || "Could not prepare image upload.");
+        }
+
+        const uploadForm = new FormData();
+        uploadForm.set("file", file);
+        uploadForm.set("api_key", signature.apiKey);
+        uploadForm.set("timestamp", String(signature.timestamp));
+        uploadForm.set("signature", signature.signature);
+        uploadForm.set("public_id", signature.publicId);
+
+        const cloudResponse = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signature.cloudName)}/image/upload`, {
+          method: "POST",
+          body: uploadForm,
+        });
+        const cloud = await cloudResponse.json().catch(() => null);
+        if (!cloudResponse.ok || !cloud?.public_id) throw new Error(cloud?.error?.message || "Image upload failed.");
+        form.set("imagePublicId", cloud.public_id);
+      } catch (uploadError) {
+        setUploading(false);
+        setBusy(false);
+        setError(uploadError instanceof Error ? uploadError.message : "The image could not be uploaded. Please try again.");
+        return;
+      }
+      setUploading(false);
+    }
 
     const response = await fetch("/api/app-core/book-reviews", { method: "POST", body: form });
     const data = await response.json().catch(() => null);
@@ -170,7 +216,7 @@ export default function NewReviewPage() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#354a3d] px-5 py-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2c3f34] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Send className="h-4 w-4" aria-hidden="true" />
-              {busy ? "Publishing…" : "Publish review"}
+              {uploading ? "Uploading photo…" : busy ? "Publishing…" : "Publish review"}
             </button>
 
             <p className="text-center text-xs text-neutral-500">You can edit or remove your review at any time.</p>
