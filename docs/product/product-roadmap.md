@@ -1,6 +1,7 @@
 # Product Roadmap
 
-**Baseline:** 2026-09-20
+**Baseline:** 2026-09-20  
+**Status:** Draft current-state roadmap reconstructed from repository evidence. The priority ordering below requires product-owner confirmation before it should be treated as committed product direction.
 
 This roadmap begins from the system observed at baseline. Earlier product intent is **unknown / pre-baseline** unless supported by repository evidence. It describes direction without inventing commitments.
 
@@ -15,7 +16,9 @@ Pages & Peace currently supports:
 
 The production event-commerce rebuild uses a server-only Supabase `app_core` schema while some historical/legacy information remains in `public`. The September 2026 cutover documentation remains the primary evidence for that transition.
 
-## Current priorities
+## Draft current priorities — confirmation required
+These priorities are inferred from the operational risk and recent repository work observed at baseline. They are proposed ordering, not reconstructed historical decisions.
+
 ### 1. Reliability and production safety
 Maintain correct event capacity, checkout, booking, refund and historical-order behaviour. Treat payment, webhook, auth and production-data changes as high consequence.
 
@@ -41,4 +44,4 @@ The following are not commitments until separately planned and approved:
 - destructive database cleanup.
 
 ## Roadmap maintenance
-Every significant slice should state which roadmap objective it serves. New priorities and material scope changes must be recorded here and in the project change log.
+Every significant slice should state which confirmed roadmap objective it serves. New priorities and material scope changes must be recorded here and in the project change log.
