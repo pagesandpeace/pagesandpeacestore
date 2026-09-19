@@ -116,11 +116,35 @@ export async function getPublicReview(bookSlugValue: string, reviewId: string) {
   const review = data.reviews.find((item) => item.id === reviewId || item.share_slug === reviewId);
   if (!review) return null;
   const db = supabaseService().schema("app_core");
-  const { data: comments } = await db.from("book_review_comments").select("id,customer_id,body,created_at").eq("review_id", review.id).eq("status", "published").order("created_at", { ascending: true });
-  const customerIds = [...new Set((comments ?? []).map((c) => c.customer_id))];
+  const { data: commentRows } = await db.from("book_review_comments")
+    .select("id,customer_id,body,created_at")
+    .eq("review_id", review.id)
+    .eq("status", "published")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(11);
+  const hasMoreComments = (commentRows?.length ?? 0) > 10;
+  const latestComments = (commentRows ?? []).slice(0, 10).reverse();
+  const customerIds = [...new Set(latestComments.map((c) => c.customer_id))];
   const { data: customers } = customerIds.length ? await db.from("customers").select("auth_user_id,display_name,profile_image").in("auth_user_id", customerIds) : { data: [] };
   const byCustomer = new Map((customers ?? []).map((c) => [c.auth_user_id, c]));
-  return { book: data.book, editions: data.editions, review, comments: (comments ?? []).map((comment) => ({ ...comment, reviewer: { name: byCustomer.get(comment.customer_id)?.display_name?.trim() || "Pages & Peace reader", image: byCustomer.get(comment.customer_id)?.profile_image ?? null } })) };
+  const oldestLoaded = latestComments[0] ?? null;
+  return {
+    book: data.book,
+    editions: data.editions,
+    review,
+    comments: latestComments.map((comment) => ({
+      ...comment,
+      reviewer: {
+        name: byCustomer.get(comment.customer_id)?.display_name?.trim() || "Pages & Peace reader",
+        image: byCustomer.get(comment.customer_id)?.profile_image ?? null,
+      },
+    })),
+    commentPagination: {
+      hasMore: hasMoreComments,
+      cursor: hasMoreComments && oldestLoaded ? `${oldestLoaded.created_at}|${oldestLoaded.id}` : null,
+    },
+  };
 }
 
 export async function getCustomerReviews(authUserId: string) {
