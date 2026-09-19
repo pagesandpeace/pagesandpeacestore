@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabaseAuthServer } from "@/lib/supabase/server";
 import { supabaseService } from "@/lib/supabase/service";
+import { consumeCommunityRateLimit } from "@/lib/app-core/rate-limit";
 
 export async function POST(request: Request) {
   const auth = await supabaseAuthServer();
   const { data: { user } } = await auth.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in to join the conversation." }, { status: 401 });
+  if (!await consumeCommunityRateLimit(`community:comment:${user.id}`, 40)) return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
   const payload = await request.json().catch(() => null);
   const reviewId = typeof payload?.reviewId === "string" ? payload.reviewId : "";
   const body = typeof payload?.body === "string" ? payload.body.trim() : "";
