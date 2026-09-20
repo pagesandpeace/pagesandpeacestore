@@ -66,7 +66,7 @@ export default function Navbar() {
     };
   }, [open]);
 
-  const accountHref = user?.role === "admin" ? "/admin" : "/dashboard/account";
+  const accountHref = user?.role === "admin" ? "/admin" : "/dashboard";
 
   return (
     <header className="sticky top-0 z-50 border-b border-black/5 bg-white/95 shadow-[0_1px_12px_rgba(0,0,0,.04)] backdrop-blur">
