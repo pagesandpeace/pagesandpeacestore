@@ -56,3 +56,10 @@ Simplify mobile navigation and remove nested account interactions. Customer My A
 
 ### UX behaviour
 Mobile navigation drawers own their scrolling and lock background scroll while open. The account page no longer shows a false signed-out state while client user data is loading, and profile changes provide explicit success/error feedback.
+
+## 2026-09-20 — Mobile menu viewport and browser-chrome refinement
+### Decision
+The public mobile menu is a static full-screen navigation surface rather than an independently scrolling drawer. The small number of primary destinations should remain visible at once, making the menu easier to scan and less susceptible to nested-scroll confusion.
+
+### Mobile browser chrome
+Dashboard sidebar account actions reserve additional bottom clearance beyond the CSS safe area so Settings and Sign out remain reachable above mobile browser tab/navigation controls.
