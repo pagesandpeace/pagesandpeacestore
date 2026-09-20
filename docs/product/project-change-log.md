@@ -70,3 +70,10 @@ For signed-in customers, the public navbar's My Account action leads to the dash
 
 ### Sidebar profile row
 The sidebar profile row uses the customer's uploaded profile image (or the standard fallback avatar) as its single identity icon. A second generic avatar glyph is intentionally omitted to reduce visual duplication.
+
+## 2026-09-20 — Event-series hero legibility
+### Decision
+Event-series pages must not rely on white text remaining readable over arbitrary photography. The series title and back-navigation now sit inside a translucent dark panel over the hero image, while the short description is rendered below the image on a solid page background.
+
+### Responsive behaviour
+The hero retains photography as the visual focus, but navigation/title contrast is guaranteed across mobile and desktop. Descriptive copy is separated from the image so it remains readable regardless of image brightness or crop.
