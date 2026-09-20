@@ -145,58 +145,55 @@ export default function Navbar() {
       </nav>
 
       {open ? (
-        <div className="fixed inset-0 z-[70] md:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/35 backdrop-blur-[1px]"
-            onClick={() => setOpen(false)}
-            aria-label="Close menu"
-          />
-          <aside className="absolute inset-y-0 left-0 flex w-[min(88vw,360px)] flex-col bg-[#FAF6F1] shadow-2xl">
-            <div className="safe-top flex items-center justify-between border-b border-black/8 px-5 pb-4 pt-4">
+        <div className="fixed inset-0 z-[70] bg-[#FAF6F1] md:hidden">
+          <div className="flex h-dvh flex-col">
+            <div className="safe-top flex items-center justify-between border-b border-black/8 px-5 pb-3 pt-3">
               <Link href="/" onClick={() => setOpen(false)} className="flex items-center">
-                <Image src="/p&p_logo_cream.svg" alt="Pages & Peace" width={84} height={52} />
+                <Image src="/p&p_logo_cream.svg" alt="Pages & Peace" width={88} height={54} />
               </Link>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm"
                 aria-label="Close menu"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5">
-              <p className="px-3 text-[11px] font-semibold uppercase tracking-[.18em] text-neutral-500">Explore</p>
-              <nav className="mt-2 space-y-1">
-                {NAV_LINKS.map((link) => {
-                  const Icon = link.icon;
-                  const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
-                  return (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setOpen(false)}
-                      className={`flex min-h-12 items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium ${active ? "bg-[#e7f3eb] text-[#166c43]" : "text-[#2d2a26] hover:bg-white"}`}
-                    >
-                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${active ? "bg-white" : "bg-[#f0ece6]"}`}>
-                        <Icon className="h-4.5 w-4.5" />
-                      </span>
-                      {link.label}
-                    </Link>
-                  );
-                })}
-              </nav>
+            <div className="flex flex-1 flex-col justify-center px-5 py-4">
+              <div>
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[.2em] text-neutral-500">Explore Pages & Peace</p>
+                <nav className="grid gap-2">
+                  {NAV_LINKS.map((link) => {
+                    const Icon = link.icon;
+                    const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setOpen(false)}
+                        className={`flex min-h-12 items-center gap-3 rounded-2xl border px-4 py-3 text-[15px] font-semibold shadow-sm ${active ? "border-[#b9d9c5] bg-[#e7f3eb] text-[#166c43]" : "border-black/5 bg-white text-[#2d2a26]"}`}
+                      >
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${active ? "bg-white" : "bg-[#f3efe9]"}`}>
+                          <Icon className="h-4.5 w-4.5" />
+                        </span>
+                        <span className="flex-1">{link.label}</span>
+                        <span className="text-neutral-300" aria-hidden="true">›</span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
             </div>
 
-            <div className="safe-bottom border-t border-black/8 bg-white/80 p-4">
+            <div className="border-t border-black/8 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4">
               {!loading ? (
                 user ? (
                   <Link
                     href={accountHref}
                     onClick={() => setOpen(false)}
-                    className="flex min-h-14 items-center gap-3 rounded-2xl bg-[#17221f] px-4 py-3 font-semibold text-white"
+                    className="flex min-h-14 items-center gap-3 rounded-2xl bg-[#17221f] px-4 py-3 font-semibold text-white shadow-sm"
                   >
                     <CircleUserRound className="h-5 w-5" />
                     <span className="flex-1">My Account</span>
@@ -206,7 +203,7 @@ export default function Navbar() {
                   <Link
                     href="/sign-in"
                     onClick={() => setOpen(false)}
-                    className="flex min-h-14 items-center justify-center rounded-2xl bg-[#17221f] px-4 py-3 font-semibold text-white"
+                    className="flex min-h-14 items-center justify-center rounded-2xl bg-[#17221f] px-4 py-3 font-semibold text-white shadow-sm"
                   >
                     Sign in
                   </Link>
@@ -215,7 +212,7 @@ export default function Navbar() {
                 <div className="h-14 animate-pulse rounded-2xl bg-neutral-100" />
               )}
             </div>
-          </aside>
+          </div>
         </div>
       ) : null}
     </header>
