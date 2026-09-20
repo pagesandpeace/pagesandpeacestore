@@ -4,7 +4,6 @@ import Image from "next/image";
 import {
   BookOpen,
   CalendarDays,
-  CircleUserRound,
   House,
   LogOut,
   Settings,
@@ -151,7 +150,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, handleNav, user, 
               <p className="truncate text-sm font-semibold">{profile?.name || user.email || "My account"}</p>
               <p className="mt-0.5 text-xs text-neutral-500">View profile</p>
             </div>
-            <CircleUserRound className="h-4.5 w-4.5 text-neutral-500" />
           </button>
 
           <div className="mt-2 grid grid-cols-2 gap-2">
