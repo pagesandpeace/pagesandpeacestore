@@ -26,8 +26,21 @@ export default async function EventOrSeriesPage({params}:PageProps){
   const now=Date.now();
   const upcoming=series.events.filter(e=>new Date(e.starts_at).getTime()>=now);
   return <main className="min-h-screen bg-background pb-20">
-    <section className="relative overflow-hidden bg-[#f5efe9]">
-      {series.image_url ? <div className="relative h-72 w-full sm:h-96"><Image src={series.image_url} alt={series.name} fill priority sizes="100vw" className="object-cover"/><div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent"/><div className="absolute inset-x-0 bottom-0 mx-auto max-w-5xl px-6 pb-8 text-white"><Link href="/events" className="text-sm underline">← All events</Link><p className="mt-6 text-sm font-semibold uppercase tracking-[.2em] text-white/75">Event series</p><h1 className="mt-2 text-4xl font-bold md:text-6xl">{series.name}</h1>{series.short_description?<p className="mt-4 max-w-3xl text-lg text-white/90 sm:text-xl">{series.short_description}</p>:null}</div></div> : <div className="mx-auto max-w-5xl px-6 py-16"><Link href="/events" className="text-sm underline">← All events</Link><p className="mt-8 text-sm font-semibold uppercase tracking-[.2em] text-neutral-500">Event series</p><h1 className="mt-2 text-4xl font-bold md:text-6xl">{series.name}</h1>{series.short_description?<p className="mt-5 max-w-3xl text-xl text-neutral-700">{series.short_description}</p>:null}</div>}
+    <section className="bg-[#f5efe9]">
+      {series.image_url ? <>
+        <div className="relative min-h-[22rem] w-full overflow-hidden sm:min-h-[28rem]">
+          <Image src={series.image_url} alt={series.name} fill priority sizes="100vw" className="object-cover"/>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10"/>
+          <div className="absolute inset-x-0 bottom-0 mx-auto max-w-5xl px-4 pb-4 sm:px-6 sm:pb-6">
+            <div className="max-w-4xl rounded-2xl border border-white/20 bg-black/60 p-4 text-white shadow-xl backdrop-blur-md sm:p-6">
+              <Link href="/events" className="inline-flex rounded-full bg-white/15 px-3 py-1.5 text-sm font-semibold text-white underline-offset-4 hover:bg-white/20 hover:underline">← All events</Link>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-[.2em] text-white/75 sm:text-sm">Event series</p>
+              <h1 className="mt-2 text-3xl font-bold leading-tight sm:text-5xl md:text-6xl">{series.name}</h1>
+            </div>
+          </div>
+        </div>
+        {series.short_description ? <div className="mx-auto max-w-5xl px-6 py-8 sm:py-10"><p className="max-w-3xl text-lg leading-8 text-neutral-700 sm:text-xl">{series.short_description}</p></div> : null}
+      </> : <div className="mx-auto max-w-5xl px-6 py-16"><Link href="/events" className="text-sm font-semibold underline">← All events</Link><p className="mt-8 text-sm font-semibold uppercase tracking-[.2em] text-neutral-500">Event series</p><h1 className="mt-2 text-4xl font-bold md:text-6xl">{series.name}</h1>{series.short_description?<p className="mt-5 max-w-3xl text-xl leading-8 text-neutral-700">{series.short_description}</p>:null}</div>}
     </section>
     <section className="mx-auto max-w-5xl px-6 py-12">
       {series.description?<p className="mb-10 max-w-3xl whitespace-pre-line text-lg leading-8 text-neutral-700">{series.description}</p>:null}
