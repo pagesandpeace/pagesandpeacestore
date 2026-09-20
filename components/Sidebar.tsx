@@ -135,7 +135,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, handleNav, user, 
           </nav>
         </div>
 
-        <div className="safe-bottom border-t border-[#ded7cf] bg-white/70 p-4">
+        <div className="border-t border-[#ded7cf] bg-white/90 px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:p-4">
           <button
             onClick={() => handleNav("/dashboard/account")}
             className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${isActive("/dashboard/account") ? "bg-[#e7f3eb]" : "hover:bg-white"}`}

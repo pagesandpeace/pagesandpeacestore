@@ -145,77 +145,83 @@ export default function Navbar() {
       </nav>
 
       {open ? (
-        <div className="fixed inset-0 z-[70] md:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/35 backdrop-blur-[1px]"
-            onClick={() => setOpen(false)}
-            aria-label="Close menu"
-          />
-          <aside className="absolute inset-y-0 left-0 flex w-[min(88vw,360px)] flex-col bg-[#FAF6F1] shadow-2xl">
-            <div className="safe-top flex items-center justify-between border-b border-black/8 px-5 pb-4 pt-4">
+        <div className="fixed inset-0 z-[70] bg-[#ede7de] md:hidden">
+          <div className="flex h-dvh flex-col">
+            <div className="safe-top flex items-center justify-between bg-[#FAF6F1] px-5 pb-3 pt-3">
               <Link href="/" onClick={() => setOpen(false)} className="flex items-center">
-                <Image src="/p&p_logo_cream.svg" alt="Pages & Peace" width={84} height={52} />
+                <Image src="/p&p_logo_cream.svg" alt="Pages & Peace" width={88} height={54} />
               </Link>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/8 bg-white"
                 aria-label="Close menu"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5">
-              <p className="px-3 text-[11px] font-semibold uppercase tracking-[.18em] text-neutral-500">Explore</p>
-              <nav className="mt-2 space-y-1">
-                {NAV_LINKS.map((link) => {
-                  const Icon = link.icon;
-                  const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
-                  return (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setOpen(false)}
-                      className={`flex min-h-12 items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-medium ${active ? "bg-[#e7f3eb] text-[#166c43]" : "text-[#2d2a26] hover:bg-white"}`}
-                    >
-                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${active ? "bg-white" : "bg-[#f0ece6]"}`}>
-                        <Icon className="h-4.5 w-4.5" />
-                      </span>
-                      {link.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
+            <div className="flex-1 bg-[#FAF6F1] px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-2">
+              <div className="overflow-hidden rounded-[1.6rem] border border-black/8 bg-white shadow-[0_12px_32px_rgba(46,38,31,.08)]">
+                <div className="px-5 pb-2 pt-5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[.2em] text-neutral-500">Explore Pages & Peace</p>
+                </div>
 
-            <div className="safe-bottom border-t border-black/8 bg-white/80 p-4">
-              {!loading ? (
-                user ? (
-                  <Link
-                    href={accountHref}
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-14 items-center gap-3 rounded-2xl bg-[#17221f] px-4 py-3 font-semibold text-white"
-                  >
-                    <CircleUserRound className="h-5 w-5" />
-                    <span className="flex-1">My Account</span>
-                    <span aria-hidden="true">→</span>
-                  </Link>
-                ) : (
-                  <Link
-                    href="/sign-in"
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-14 items-center justify-center rounded-2xl bg-[#17221f] px-4 py-3 font-semibold text-white"
-                  >
-                    Sign in
-                  </Link>
-                )
-              ) : (
-                <div className="h-14 animate-pulse rounded-2xl bg-neutral-100" />
-              )}
+                <nav>
+                  {NAV_LINKS.map((link) => {
+                    const Icon = link.icon;
+                    const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setOpen(false)}
+                        className={`flex min-h-[3.6rem] items-center gap-3 border-b border-black/6 px-5 py-3 text-[15px] font-semibold transition last:border-b-0 ${active ? "bg-[#eef6f0] text-[#166c43]" : "bg-white text-[#2d2a26]"}`}
+                      >
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${active ? "bg-[#dcecdf] text-[#166c43]" : "bg-[#f2eee8] text-[#514b44]"}`}>
+                          <Icon className="h-[18px] w-[18px]" />
+                        </span>
+                        <span className="flex-1">{link.label}</span>
+                        <span className="text-lg font-normal text-neutral-300" aria-hidden="true">›</span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+
+                <div className="border-t border-black/10 bg-[#f8f4ee] p-3">
+                  {!loading ? (
+                    user ? (
+                      <Link
+                        href={accountHref}
+                        onClick={() => setOpen(false)}
+                        className="flex min-h-[3.75rem] items-center gap-3 rounded-2xl bg-[#17221f] px-4 py-3 font-semibold text-white"
+                      >
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10">
+                          <CircleUserRound className="h-[18px] w-[18px]" />
+                        </span>
+                        <span className="flex-1">My Account</span>
+                        <span className="text-white/60" aria-hidden="true">→</span>
+                      </Link>
+                    ) : (
+                      <Link
+                        href="/sign-in"
+                        onClick={() => setOpen(false)}
+                        className="flex min-h-[3.75rem] items-center justify-center rounded-2xl bg-[#17221f] px-4 py-3 font-semibold text-white"
+                      >
+                        Sign in
+                      </Link>
+                    )
+                  ) : (
+                    <div className="h-[3.75rem] animate-pulse rounded-2xl bg-neutral-100" />
+                  )}
+                </div>
+              </div>
+
+              <div className="px-3 pt-4 text-center">
+                <p className="text-xs leading-5 text-neutral-500">Books, events and a quiet reading community.</p>
+              </div>
             </div>
-          </aside>
+          </div>
         </div>
       ) : null}
     </header>
