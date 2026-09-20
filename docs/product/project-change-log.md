@@ -49,3 +49,10 @@ Keep the book community deliberately low-noise. Reactions and reading-status cha
 
 ### Comment-feed behaviour
 Individual review pages load the latest 10 published comments initially and use cursor-based pagination to load earlier conversation on demand. This prevents long, heavy pages while preserving the full discussion history.
+
+## 2026-09-20 — Mobile account navigation and app-shell polish
+### Decision
+Simplify mobile navigation and remove nested account interactions. Customer My Account links now lead directly to the account profile, the authenticated dashboard behaves as a contained app shell without the public footer, and the public event basket uses the ticket icon used elsewhere.
+
+### UX behaviour
+Mobile navigation drawers own their scrolling and lock background scroll while open. The account page no longer shows a false signed-out state while client user data is loading, and profile changes provide explicit success/error feedback.

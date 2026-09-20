@@ -23,8 +23,10 @@ export default function Footer() {
     );
   }
 
+  if (isDashboard) return null;
+
   /* -----------------------------
-     PUBLIC + DASHBOARD FOOTER
+     PUBLIC FOOTER
   ----------------------------- */
   return (
     <footer
@@ -34,7 +36,6 @@ export default function Footer() {
         font-[Montserrat]
         w-full
         overflow-hidden
-        ${isDashboard ? "md:ml-64 md:w-[calc(100%-16rem)]" : ""}
       `}
     >
       <div className="flex flex-col items-center px-6 md:px-10 py-16 text-sm text-[var(--foreground)]/70">
