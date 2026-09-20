@@ -63,3 +63,10 @@ The public mobile menu is a static full-screen navigation surface rather than an
 
 ### Mobile browser chrome
 Dashboard sidebar account actions reserve additional bottom clearance beyond the CSS safe area so Settings and Sign out remain reachable above mobile browser tab/navigation controls.
+
+## 2026-09-20 — Account entry-point refinement
+### Decision
+For signed-in customers, the public navbar's My Account action leads to the dashboard as the primary account landing page. The dashboard then exposes My Events, Order History, My Reviews, profile and settings through the account sidebar.
+
+### Sidebar profile row
+The sidebar profile row uses the customer's uploaded profile image (or the standard fallback avatar) as its single identity icon. A second generic avatar glyph is intentionally omitted to reduce visual duplication.
